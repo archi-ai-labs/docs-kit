@@ -27,6 +27,7 @@ skill, hook, and template conforms to.
 | `/docs-kit:docs-init` | Scaffold 14 folders + templates + `docs/README.md` into the repo; optionally (always asks first) wire the rules into `CLAUDE.md`. Refuses to touch an existing `docs/`. |
 | `/docs-kit:docs-sync` | End-of-session reconcile: backlog statuses, audit entries, retroactive Issues, pending Architecture amendments. |
 | `/docs-kit:docs-check` | Read-only: run `scripts/docs_validate.sh` and explain each failure. Never fixes. |
+| `/docs-kit:brief` | Turn settled decisions into a delegation prompt (work brief) for a coding agent. Gates on a decision-freeze check first; cites `DECISION` ids when the repo uses the docs model. Manual invocation only. |
 
 ## Enforcement (warn-only, no LLM in hooks)
 
@@ -48,7 +49,7 @@ docs-kit/
 ├── .claude-plugin/plugin.json
 ├── STANDARD.md              # source of truth for the model
 ├── skills/                  # docs-init (entry point), docs-sync, docs-check
-├── commands/                # thin wrappers → /docs-kit:docs-*
+├── commands/                # thin wrappers → /docs-kit:docs-* + self-contained /docs-kit:brief
 ├── hooks/hooks.json         # 2 deterministic warn-only hooks
 ├── scripts/                 # docs_validate.sh, docs_scaffold.sh, hook workers
 └── templates/               # the 14-folder docs tree + CLAUDE.md snippet

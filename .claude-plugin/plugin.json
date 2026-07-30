@@ -1,9 +1,9 @@
 {
   "name": "docs-kit",
   "version": "0.1.0",
-  "description": "Three-layer docs workflow as an installable unit: scaffold the structure (docs-init), reconcile docs with what a session actually did (docs-sync), and validate structure deterministically (docs-check). Warn-only hooks keep the agent honest about Architecture amendments and undocumented sensitive changes.",
+  "description": "Three-layer docs workflow as an installable unit: scaffold the structure (docs-init), reconcile docs with what a session actually did (docs-sync), validate structure deterministically (docs-check), and turn settled decisions into a delegation prompt (brief). Warn-only hooks keep the agent honest about Architecture amendments and undocumented sensitive changes.",
   "author": {
     "name": "archimonde12"
   },
-  "keywords": ["docs", "documentation", "workflow", "traceability", "governance"]
+  "keywords": ["docs", "documentation", "workflow", "traceability", "governance", "delegation"]
 }
