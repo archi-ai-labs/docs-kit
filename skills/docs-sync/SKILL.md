@@ -76,8 +76,20 @@ bash "$PLUGIN_ROOT/scripts/docs_validate.sh" docs
 ```
 
 Fix only violations **introduced by this sync**; pre-existing ones belong to the
-report. Then summarize:
-- **Updated**: backlog statuses changed, audit lines appended, amendments applied.
+report.
+
+Then refresh the generated HTML views so they reflect the reconciled state:
+
+```bash
+bash "$PLUGIN_ROOT/scripts/docs_render.sh" "$(pwd)"
+```
+
+(Skip silently if `docs/index.html` does not exist and the user never asked for
+HTML views; if the script exits 3 — `python3` missing — mention it and move on.)
+
+Then summarize:
+- **Updated**: backlog statuses changed, audit lines appended, amendments
+  applied, HTML views refreshed.
 - **Created**: retroactive Issues (+ fast-lane Backlog items).
 - **Needs your decision**: full-lane work without a Decision, ambiguous mappings
   between work and Backlog items, unresolved validator failures. Ask — never guess.

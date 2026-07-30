@@ -238,3 +238,36 @@ Hooks are silent in repos that do not use docs-kit (no `docs/` skeleton).
 Patterns are matched with fnmatch against the repo-relative path; a leading
 `**/` also matches at the repo root. Paths under `docs/` are never treated as
 sensitive-zone code.
+
+## 10. Generated HTML views (read models)
+
+`scripts/docs_render.sh` (→ `docs_render.py`, Python 3.9 stdlib, no LLM, no
+network) generates three self-contained pages into `docs/`, styled per
+`design/design-system.html` ("change-control print"):
+
+| Page | Content |
+|---|---|
+| `docs/index.html` | Menu beside README.md: system map (clickable), sheet cards, Layer-3/Oversight listing, the one hard rule |
+| `docs/current.html` | Layer 1: product cards, roadmap board, components, data-flow graph, constraints, revision block |
+| `docs/changes.html` | Layer 2: issue/backlog boards, proposal & decision tables, trace chains, audit table |
+
+Rules:
+
+- **Read model only.** The renderer never edits markdown; the markdown stays
+  the source of truth. Generated pages carry a `GENERATED` header comment —
+  never hand-edit them; regenerate with `/docs-kit:docs-render`
+  (docs-init creates them, docs-sync refreshes them).
+- **Deterministic.** Same input docs → same output bytes; only the
+  generated-at stamp moves (override with `DOCS_KIT_NOW=<ISO>` for
+  reproducible output). Files sorted by name; logs newest-first.
+- **Data-flow syntax** (one edge per line in `data_flow`):
+  `a -> b` sync · `a ~> b` async (teal, dashed) · `a -> b : label` edge label.
+  Component entries may annotate a kind — `postgres [db]`, `jobs [queue]`,
+  `dashboard [ui]` — which sets the node icon/tint; unannotated entries are
+  services; nodes absent from `components` are drawn dashed as external.
+  Branching flows render as a layered graph (longest-path layering,
+  alphabetical within a column); >12 nodes → one figure per connected flow
+  group; unparseable or cyclic flows fall back to text — never a guessed
+  diagram.
+- The validator ignores `docs/*.html` (it only reads `.md`); check 4's
+  append-only rule is unaffected.

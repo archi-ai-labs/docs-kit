@@ -66,6 +66,16 @@ A fresh scaffold must pass clean (the shipped `-000` example chain is
 self-consistent by design). If it does not, report the raw FAIL lines to the
 user as a plugin bug — do not hand-patch the generated files silently.
 
+Then generate the HTML views (deterministic, read model — see STANDARD.md §10):
+
+```bash
+bash "$PLUGIN_ROOT/scripts/docs_render.sh" "$(pwd)"
+```
+
+This writes `docs/index.html` (menu, beside README.md), `docs/current.html`,
+and `docs/changes.html`. If the script exits 3 (`python3` missing), report that
+the HTML views were skipped and continue — it is not fatal.
+
 ## Step 4 — Wire the rules into CLAUDE.md (ASK FIRST — ALWAYS)
 
 The snippet lives at `$PLUGIN_ROOT/templates/claude-md-snippet.md` (trigger
@@ -93,7 +103,8 @@ table, "only Decision amends Architecture", the lane test, pointer to
 Summarize: folders/files created, validation result, CLAUDE.md action taken
 (or skipped and why), and next steps —
 
-- Read `docs/README.md` (30 seconds).
+- Read `docs/README.md` (30 seconds); open `docs/index.html` for the generated
+  visual map (regenerate anytime with `/docs-kit:docs-render`).
 - The `-000` files are a worked example chain; delete all four together or keep
   them as a format reference. Real IDs start at `001`.
 - `/docs-kit:docs-sync` reconciles docs after a working session;

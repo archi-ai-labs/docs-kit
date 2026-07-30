@@ -1,0 +1,599 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>docs-kit · design system — change-control print</title>
+<style>
+/* ============ docs-kit render design system v2 — "change-control print" ============ */
+:root {
+  --paper: #ffffff;      /* page */
+  --film: #f4f6f8;       /* panels, wells */
+  --well: #fbfcfd;       /* plot paper */
+  --grid-faint: #e9eef3; /* plot grid lines */
+  --line: #e2e8ee;       /* hairlines */
+  --line-2: #c8d2dc;     /* strong hairlines */
+  --ink: #16181d;        /* graphite — headings, marks, rails */
+  --ink-2: #454e5a;      /* body */
+  --ink-3: #7d8794;      /* labels, captions */
+  --mark: #c2410c;       /* redline — links, active, live */
+  --mark-2: #ea580c;     /* redline chunky (dots, underlines) */
+  --mark-wash: #fdf0e7;
+  --l1: #1d4ed8;         /* foundation line + datastore tint */
+  --l2: #7c3aed;         /* change line + async tint */
+  --fastc: #0d9488;      /* fast-lane track */
+  --approve: #15803d;    /* stamp only */
+  --reject: #b91c1c;     /* stamp only */
+  --mono: ui-monospace, "SF Mono", Menlo, "Cascadia Mono", Consolas, "Liberation Mono", monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --r: 2px;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--paper); color: var(--ink-2);
+  font: 15px/1.65 var(--sans); -webkit-font-smoothing: antialiased; }
+:focus-visible { outline: 2px solid var(--mark-2); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  * { transition: none !important; }
+}
+
+/* prose links: ink with a redline underline */
+a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--mark);
+  text-decoration-thickness: 1.5px; text-underline-offset: 3px; }
+a:hover { color: var(--mark); }
+
+/* ---- top nav: underline tabs ---- */
+.topnav { position: sticky; top: 0; z-index: 10; background: rgba(255,255,255,.94);
+  backdrop-filter: blur(6px); border-bottom: 1px solid var(--line); }
+.topnav-in { max-width: 1200px; margin: 0 auto; padding: 0 32px; height: 54px;
+  display: flex; align-items: center; gap: 28px; }
+.brand { font: 700 13px var(--mono); letter-spacing: -.01em; color: var(--ink); }
+.brand .dim { color: var(--ink-3); font-weight: 500; }
+.tabs { display: flex; gap: 22px; align-self: stretch; }
+.tabs a { display: flex; align-items: center; padding: 0 2px; margin-bottom: -1px;
+  border-bottom: 2px solid transparent; font: 500 13px var(--sans);
+  color: var(--ink-2); text-decoration: none; }
+.tabs a:hover { color: var(--ink); }
+.tabs a.active { color: var(--ink); border-bottom-color: var(--mark-2); font-weight: 600; }
+.nav-meta { margin-left: auto; font: 11px var(--mono); color: var(--ink-3); }
+
+/* ---- shell ---- */
+.page { max-width: 1200px; margin: 0 auto; padding: 0 32px;
+  display: grid; grid-template-columns: 224px minmax(0, 1fr); gap: 0 56px; }
+.sidebar { position: sticky; top: 54px; align-self: start;
+  max-height: calc(100vh - 54px); overflow-y: auto; padding: 34px 0 48px; }
+.toc-title { font: 700 10px var(--mono); letter-spacing: .12em; text-transform: uppercase;
+  color: var(--ink-3); margin: 0 0 10px 13px; }
+.toc { list-style: none; margin: 0 0 20px; padding: 0; }
+.toc a { display: block; padding: 4.5px 13px; border-left: 2px solid var(--line);
+  font-size: 13px; color: var(--ink-2); text-decoration: none; }
+.toc a:hover { color: var(--ink); border-left-color: var(--line-2); }
+.toc a.on { color: var(--ink); border-left-color: var(--mark-2); font-weight: 600; }
+.toc .sub a { padding-left: 27px; font-size: 12.5px; }
+.content { padding: 42px 0 96px; max-width: 880px; }
+
+/* ---- page header ---- */
+.kicker { display: flex; align-items: center; gap: 10px; margin: 0;
+  font: 700 11px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); }
+.kicker::before { content: ""; width: 22px; height: 2px; background: var(--mark-2); }
+h1 { font: 750 27px/1.25 var(--mono); letter-spacing: -.035em; color: var(--ink); margin: 10px 0 8px; }
+.lede { color: var(--ink-2); font-size: 15.5px; margin: 0 0 8px; max-width: 620px; }
+.meta-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  margin: 16px 0 0; padding-bottom: 28px; border-bottom: 1px solid var(--line); }
+
+/* ---- sections ---- */
+h2 { display: flex; align-items: baseline; gap: 12px;
+  font: 700 16.5px/1.3 var(--mono); letter-spacing: -.02em; color: var(--ink);
+  margin: 60px 0 8px; padding-top: 22px; border-top: 1px solid var(--line);
+  scroll-margin-top: 74px; }
+h2 .idx { flex: none; font: 700 11px var(--mono); color: var(--ink-3);
+  border: 1px solid var(--line-2); border-radius: var(--r); padding: 2px 7px;
+  background: var(--film); letter-spacing: .04em; }
+h2 .src { margin-left: auto; align-self: center; }
+h3 { font: 700 12px var(--mono); letter-spacing: .09em; text-transform: uppercase;
+  color: var(--ink); margin: 30px 0 10px; scroll-margin-top: 74px; }
+p { margin: 8px 0; color: var(--ink-2); max-width: 660px; }
+p strong, li strong { color: var(--ink); }
+
+/* ---- tags (identity) ---- */
+.tag { display: inline-flex; align-items: center; gap: 6px; padding: 1.5px 8px;
+  border: 1px solid var(--line-2); border-radius: var(--r); background: var(--paper);
+  font: 500 11.5px/1.7 var(--mono); color: var(--ink-2); white-space: nowrap; }
+.tag.id { color: var(--ink); background: var(--film); font-weight: 650; }
+.tag.lane-fast { border: 1.5px dashed var(--fastc); color: var(--fastc); font-weight: 700; letter-spacing: .05em; }
+.tag.lane-full { border: 1.5px solid var(--l2); color: var(--l2); font-weight: 700; letter-spacing: .05em; }
+a.tag { text-decoration: none; }
+a.tag:hover { border-color: var(--mark); color: var(--mark); }
+
+/* ---- status geometry: dot family ---- */
+.status { display: inline-flex; align-items: center; gap: 7px;
+  font: 650 11px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); }
+.dot { flex: none; width: 10px; height: 10px; border-radius: 50%;
+  border: 1.5px solid var(--ink); background: var(--paper); }
+.d-open      { }
+.d-progress  { border-color: var(--mark-2); background: linear-gradient(90deg, var(--mark-2) 50%, transparent 50%); }
+.d-done      { background: var(--ink); }
+.d-exploring { border-style: dashed; border-color: var(--ink-3); }
+.d-promoted  { background: var(--l2); border-color: var(--l2); box-shadow: inset 0 0 0 2.5px var(--paper); }
+.d-archived  { background: var(--line-2); border-color: var(--line-2); }
+.status.live { color: var(--mark); }
+
+/* ---- stamps (verdicts only) ---- */
+.stamp { display: inline-block; padding: 2px 9px; border: 1.5px solid currentColor;
+  border-radius: var(--r); font: 700 10.5px/1.8 var(--mono); letter-spacing: .1em;
+  text-transform: uppercase; }
+.st-approved { color: var(--approve); }
+.st-rejected { color: var(--reject); }
+
+/* ---- rails & stations (hero) ---- */
+.rail { display: flex; align-items: flex-start; margin: 30px 0 4px; }
+.rail .st { flex: none; display: flex; flex-direction: column; align-items: center;
+  gap: 9px; min-width: 116px; text-align: center; }
+.rail .st .c { width: 16px; height: 16px; border-radius: 50%; background: var(--l1); }
+.rail .st a { font: 700 12.5px var(--mono); color: var(--ink); text-decoration: none; }
+.rail .st a:hover { color: var(--mark); }
+.rail .st small { font: 400 11px var(--sans); color: var(--ink-3); margin-top: -4px; }
+.rail .trk { flex: 1; height: 2.5px; background: var(--l1); margin-top: 7px; }
+
+/* ---- plot wells (diagram paper) ---- */
+.plot { border: 1px solid var(--line); border-radius: var(--r); padding: 20px;
+  background-color: var(--well);
+  background-image: linear-gradient(var(--grid-faint) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-faint) 1px, transparent 1px);
+  background-size: 24px 24px; margin: 14px 0; }
+.plot figcaption, .figcap { font: 500 11px var(--mono); color: var(--ink-3); margin-top: 12px; }
+.flow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin: 10px 0; }
+.fnode { padding: 5px 12px; border: 1.5px solid var(--ink); border-radius: var(--r);
+  background: var(--paper); font: 600 12.5px var(--mono); color: var(--ink); }
+.fnode.ext { border: 1.5px dashed var(--line-2); color: var(--ink-2); }
+.farrow { flex: none; display: inline-flex; }
+.flow-label { width: 100%; font: 700 10px var(--mono); text-transform: uppercase;
+  letter-spacing: .1em; color: var(--ink-3); margin-top: 6px; }
+
+/* ---- boards ---- */
+.board { display: grid; grid-template-columns: repeat(auto-fit, minmax(185px, 1fr)); gap: 22px; margin: 18px 0; }
+.col-h { display: flex; align-items: center; justify-content: space-between;
+  border-top: 2px solid var(--ink); padding: 8px 0 10px;
+  font: 700 11px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--ink); }
+.col-h .n { font: 600 11px var(--mono); color: var(--ink-3); }
+.item { border: 1px solid var(--line); border-radius: var(--r); background: var(--paper);
+  padding: 9px 11px; margin-bottom: 8px; font-size: 13px; }
+.item .im { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.item .it { color: var(--ink); font-weight: 600; margin: 4px 0 0; line-height: 1.45; }
+.item.muted .it { color: var(--ink-3); font-weight: 500; }
+
+/* ---- tables ---- */
+table.spec { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+table.spec th { text-align: left; font: 650 10px var(--mono); text-transform: uppercase;
+  letter-spacing: .09em; color: var(--ink-3); padding: 7px 14px 7px 0; width: 124px;
+  vertical-align: top; border-bottom: 1px solid var(--film); }
+table.spec td { padding: 7px 0; color: var(--ink-2); border-bottom: 1px solid var(--film); }
+table.spec tr:last-child th, table.spec tr:last-child td { border-bottom: 0; }
+table.data { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+table.data th { text-align: left; font: 700 10px var(--mono); text-transform: uppercase;
+  letter-spacing: .09em; color: var(--ink-3); padding: 8px 12px 8px 0;
+  border-bottom: 1.5px solid var(--ink); }
+table.data td { padding: 9px 12px 9px 0; border-bottom: 1px solid var(--line);
+  color: var(--ink-2); vertical-align: top; }
+table.data tr:hover td { background: var(--well); }
+.mono { font-family: var(--mono); font-size: 12.5px; white-space: nowrap; }
+.dim { color: var(--ink-3); }
+
+/* ---- cards ---- */
+.card { border: 1px solid var(--line-2); border-radius: var(--r); background: var(--paper); margin: 14px 0; }
+.card-h { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.card-h .t { font: 700 14.5px var(--mono); letter-spacing: -.02em; color: var(--ink); }
+.card-b { padding: 12px 16px 14px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.scope { list-style: none; margin: 6px 0; padding: 0; font-size: 13.5px; }
+.scope li { padding: 3px 0 3px 22px; position: relative; color: var(--ink-2); }
+.scope.in li::before  { content: "✓"; position: absolute; left: 2px; color: var(--ink); font-weight: 700; }
+.scope.out li::before { content: "✕"; position: absolute; left: 2px; color: var(--ink-3); font-weight: 700; }
+details.more { margin-top: 10px; }
+details.more summary { cursor: pointer; font: 600 12px var(--mono); color: var(--mark);
+  list-style: none; text-transform: uppercase; letter-spacing: .06em; }
+details.more summary::before { content: "+ "; }
+details.more[open] summary::before { content: "− "; }
+
+/* ---- notes, constraints, empty ---- */
+.note { border: 1px solid var(--line); border-left: 3px solid var(--ink);
+  border-radius: var(--r); background: var(--film); padding: 10px 14px;
+  font-size: 13.5px; color: var(--ink-2); margin: 14px 0; }
+.note.dev { border-left-color: var(--mark-2); }
+.note .lbl { font: 700 10.5px var(--mono); letter-spacing: .09em; color: var(--ink);
+  text-transform: uppercase; margin-right: 8px; }
+.note.dev .lbl { color: var(--mark); }
+.constraints { list-style: none; margin: 10px 0; padding: 0; }
+.constraints li { border-left: 2px solid var(--ink); padding: 6px 12px; margin: 6px 0;
+  background: var(--film); border-radius: 0 var(--r) var(--r) 0;
+  font-size: 13.5px; color: var(--ink-2); }
+.empty { border: 1.5px dashed var(--line-2); border-radius: var(--r); padding: 18px;
+  text-align: center; color: var(--ink-3); font-size: 13px; }
+code, .md code { font: 12.5px var(--mono); background: var(--film);
+  border-radius: var(--r); padding: 1.5px 5px; color: var(--ink); }
+
+/* ---- component grid ---- */
+.comps { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; margin: 14px 0; }
+.comp { border: 1px solid var(--line); border-radius: var(--r); padding: 10px 13px; background: var(--paper); }
+.comp .cn { font: 650 13px var(--mono); color: var(--ink); }
+.comp .cr { font-size: 12.5px; color: var(--ink-2); margin-top: 3px; line-height: 1.5; }
+
+/* ---- title block ---- */
+.tblock { display: flex; flex-wrap: wrap;
+  gap: 1px; background: var(--line-2); border: 1.5px solid var(--ink);
+  border-radius: var(--r); overflow: hidden; margin-top: 72px; }
+.tb { flex: 1 1 150px; background: var(--paper); padding: 9px 13px; }
+.tb .tl { font: 650 9.5px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); }
+.tb .tv { font: 650 12px var(--mono); color: var(--ink); margin-top: 3px; }
+
+@media (max-width: 960px) {
+  .page { grid-template-columns: 1fr; }
+  .sidebar { position: static; max-height: none; padding-bottom: 0; }
+  .grid2 { grid-template-columns: 1fr; }
+  .rail .st { min-width: 84px; }
+}
+
+/* ============ styles used only by this design-system document ============ */
+.swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin: 14px 0; }
+.sw { border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+.sw .c { height: 44px; }
+.sw .l { padding: 7px 10px; font: 11px var(--mono); color: var(--ink-2); }
+.sw .l b { display: block; color: var(--ink); }
+.type-row { display: flex; align-items: baseline; gap: 18px; padding: 11px 0; border-bottom: 1px solid var(--film); }
+.type-row .spec-l { flex: none; width: 212px; font: 11px var(--mono); color: var(--ink-3); }
+.demo { border: 1px solid var(--line); border-radius: var(--r); padding: 18px; margin: 12px 0; background: var(--paper); }
+.demo-label { font: 700 10px var(--mono); text-transform: uppercase; letter-spacing: .1em;
+  color: var(--ink-3); margin: 0 0 12px; }
+.rowwrap { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.rule-p { font-size: 13.5px; color: var(--ink-2); }
+.rule-p b { color: var(--ink); }
+ol.principles { counter-reset: p; list-style: none; margin: 14px 0; padding: 0; max-width: 680px; }
+ol.principles li { counter-increment: p; position: relative; padding: 11px 0 11px 46px;
+  border-bottom: 1px solid var(--film); color: var(--ink-2); font-size: 14px; }
+ol.principles li::before { content: counter(p, decimal-leading-zero); position: absolute; left: 0; top: 13px;
+  font: 700 12px var(--mono); color: var(--mark); }
+ol.principles b { color: var(--ink); }
+</style>
+
+<nav class="topnav"><div class="topnav-in">
+  <span class="brand">docs-kit <span class="dim">/ render design system</span></span>
+  <span class="nav-meta">v2 · change-control print · for review</span>
+</div></nav>
+
+<div class="page">
+<aside class="sidebar">
+  <p class="toc-title">Contents</p>
+  <ul class="toc">
+    <li><a href="#direction">Direction</a></li>
+    <li><a href="#palette">Palette &amp; hue budget</a></li>
+    <li><a href="#type">Typography</a></li>
+    <li><a href="#geometry">Status geometry</a></li>
+    <li><a href="#primitives">Primitives</a></li>
+    <li class="sub"><a href="#p-tags">Tags &amp; stamps</a></li>
+    <li class="sub"><a href="#p-rail">Rails &amp; stations</a></li>
+    <li class="sub"><a href="#p-plot">Plot wells &amp; flows</a></li>
+    <li><a href="#map">The system map</a></li>
+    <li class="sub"><a href="#map-complex">Complex flows</a></li>
+    <li><a href="#shell">Shell &amp; title block</a></li>
+    <li><a href="#components">Components</a></li>
+    <li class="sub"><a href="#c-card">Product card</a></li>
+    <li class="sub"><a href="#c-board">Board</a></li>
+    <li class="sub"><a href="#c-tables">Tables &amp; rev block</a></li>
+    <li class="sub"><a href="#c-notes">Notes &amp; empty</a></li>
+    <li><a href="#access">Motion &amp; access</a></li>
+    <li><a href="#renderer">Renderer contract</a></li>
+  </ul>
+</aside>
+
+<main class="content">
+  <p class="kicker">docs-kit render</p>
+  <h1>Change-control print</h1>
+  <p class="lede">docs-kit is change control for documentation — so its pages borrow the visual
+  language of engineering drawings: cool paper, graphite ink, one redline marking color,
+  stamped verdicts, and a title block on every sheet.</p>
+  <div class="meta-row">
+    <span class="tag">audience: developers</span>
+    <span class="tag">light theme only</span>
+    <span class="tag">zero JS · zero network</span>
+    <span class="tag">single-file pages</span>
+  </div>
+
+  <h2 id="direction"><span class="idx">§1</span>Direction</h2>
+  <ol class="principles">
+    <li><b>One metaphor, carried through.</b> Every visual device is borrowed from drawing
+      control: the amendment table is a <i>revision block</i>, the footer is a <i>title block</i>,
+      decisions are <i>stamped</i>, diagrams sit on faint <i>grid paper</i>, and the pipeline is
+      drawn as a <i>line with stations</i>. Nothing is decorated for its own sake.</li>
+    <li><b>Hue is budgeted on the page, spent in the diagrams.</b> Page chrome keeps a single
+      accent — redline orange, the color of marked-up changes — for what is <i>live or
+      interactive</i>. The diagrams own the rest of the palette, transit-map style: every line has
+      its color (foundation blue, change violet, fast-lane teal), node kinds carry tints and icons,
+      and verdict greens/reds exist only inside stamps. Completion is still geometry (hollow /
+      half / filled dots) — color adds a second channel, never the only one.</li>
+    <li><b>Type is inverted.</b> Headings, ids, and labels are monospace — the ids <i>are</i> the
+      protagonists of this system. Body prose is a quiet system sans. This is the opposite of the
+      default docs look (sans display, mono details), and it is deliberate.</li>
+    <li><b>Deterministic, identical everywhere.</b> Tokens live inside the renderer; no per-project
+      theming, no dark mode, no webfonts, no scripts. Same input docs → the same sheet, offline,
+      in CI, on any machine.</li>
+    <li><b>The signature is the map.</b> Each page opens with its slice of one diagram family —
+      the model drawn as transit lines: Foundation as three stations, the Change pipeline with the
+      fast lane drawn as a literal bypass track, and the Decision→Architecture amendment edge in
+      redline. No template produces this; it is the model's own topology.</li>
+  </ol>
+
+  <h2 id="palette"><span class="idx">§2</span>Palette &amp; hue budget</h2>
+  <div class="swatches">
+    <div class="sw"><div class="c" style="background:#ffffff;border-bottom:1px solid var(--line)"></div><div class="l"><b>paper</b>#ffffff · page</div></div>
+    <div class="sw"><div class="c" style="background:#f4f6f8"></div><div class="l"><b>film</b>#f4f6f8 · panels</div></div>
+    <div class="sw"><div class="c" style="background:#fbfcfd;background-image:linear-gradient(#e9eef3 1px,transparent 1px),linear-gradient(90deg,#e9eef3 1px,transparent 1px);background-size:12px 12px"></div><div class="l"><b>well + grid</b>#fbfcfd / #e9eef3</div></div>
+    <div class="sw"><div class="c" style="background:#e2e8ee"></div><div class="l"><b>line</b>#e2e8ee · hairlines</div></div>
+    <div class="sw"><div class="c" style="background:#16181d"></div><div class="l"><b>ink</b>#16181d · graphite</div></div>
+    <div class="sw"><div class="c" style="background:#454e5a"></div><div class="l"><b>ink-2</b>#454e5a · body</div></div>
+    <div class="sw"><div class="c" style="background:#7d8794"></div><div class="l"><b>ink-3</b>#7d8794 · labels</div></div>
+    <div class="sw"><div class="c" style="background:#c2410c"></div><div class="l"><b>redline</b>#c2410c · links, live</div></div>
+    <div class="sw"><div class="c" style="background:#ea580c"></div><div class="l"><b>redline-2</b>#ea580c · dots, rules</div></div>
+    <div class="sw"><div class="c" style="background:#15803d"></div><div class="l"><b>approve</b>#15803d · stamp only</div></div>
+    <div class="sw"><div class="c" style="background:#b91c1c"></div><div class="l"><b>reject</b>#b91c1c · stamp only</div></div>
+  </div>
+  <h3>Lines &amp; tints — diagram palette</h3>
+  <div class="swatches">
+    <div class="sw"><div class="c" style="background:#1d4ed8"></div><div class="l"><b>foundation</b>#1d4ed8 · L1 line, datastores</div></div>
+    <div class="sw"><div class="c" style="background:#7c3aed"></div><div class="l"><b>change</b>#7c3aed · L2 line, full lane, async</div></div>
+    <div class="sw"><div class="c" style="background:#0d9488"></div><div class="l"><b>fast</b>#0d9488 · fast-lane track</div></div>
+    <div class="sw"><div class="c" style="background:#e8f0fe"></div><div class="l"><b>tint-db</b>#e8f0fe · datastore fill</div></div>
+    <div class="sw"><div class="c" style="background:#f1ecfe"></div><div class="l"><b>tint-async</b>#f1ecfe · worker/queue fill</div></div>
+  </div>
+  <p class="rule-p"><b>The budget:</b> orange = interactive or happening right now; green/red =
+  stamped verdicts; blue/violet/teal belong to the lines, lanes, and node kinds inside diagrams.
+  Text and tables stay ink on paper — the drawing is the colorful thing, exactly like a real
+  engineering sheet.</p>
+
+  <h2 id="type"><span class="idx">§3</span>Typography</h2>
+  <p>Two roles, deliberately inverted. Display and labels: the system <b>mono</b> stack
+  (SF Mono / Cascadia / Consolas — zero network, present everywhere). Body: the system sans.
+  Numerals in tables are tabular by nature of the mono face.</p>
+  <div class="demo">
+    <div class="type-row"><span class="spec-l">h1 · mono 27/750 · −.035em</span><span style="font:750 27px var(--mono);letter-spacing:-.035em;color:var(--ink)">Foundation — current state</span></div>
+    <div class="type-row"><span class="spec-l">h2 · mono 16.5/700 + § tab</span><span style="font:700 16.5px var(--mono);letter-spacing:-.02em;color:var(--ink)"><span style="font:700 11px var(--mono);color:var(--ink-3);border:1px solid var(--line-2);border-radius:2px;padding:2px 7px;background:var(--film);margin-right:10px">§2</span>Roadmap</span></div>
+    <div class="type-row"><span class="spec-l">h3 · mono 12/700 caps .09em</span><span style="font:700 12px var(--mono);letter-spacing:.09em;text-transform:uppercase;color:var(--ink)">Data flow</span></div>
+    <div class="type-row"><span class="spec-l">body · sans 15/1.65 · ink-2</span><span>Orders are accepted at the gateway and settled through one adapter.</span></div>
+    <div class="type-row"><span class="spec-l">kicker · mono 11/700 + tick</span><span class="kicker" style="margin:0">Layer 1 · Foundation</span></div>
+    <div class="type-row"><span class="spec-l">data · mono 12.5</span><span class="mono">DECISION-NNN · docs/02_architecture/ · 2026-07-30</span></div>
+  </div>
+  <p class="rule-p"><b>Rules:</b> anything machine-meaningful — ids, refs, paths, dates, counts,
+  column headers — is mono. Prose links are ink with a 1.5px redline underline; chrome links
+  (nav, TOC, tags) carry no underline.</p>
+
+  <h2 id="geometry"><span class="idx">§4</span>Status geometry</h2>
+  <p>Statuses are drawn, not painted. One dot family covers both Backlog and Issues —
+  readable in grayscale, unambiguous to color-blind readers, and calmer than colored pills:</p>
+  <div class="demo">
+    <p class="demo-label">Completion (backlog)</p>
+    <div class="rowwrap" style="margin-bottom:14px">
+      <span class="status"><span class="dot d-open"></span>open</span>
+      <span class="status live"><span class="dot d-progress"></span>in-progress</span>
+      <span class="status"><span class="dot d-done"></span>done</span>
+    </div>
+    <p class="demo-label">Issue lifecycle</p>
+    <div class="rowwrap" style="margin-bottom:14px">
+      <span class="status"><span class="dot d-exploring"></span>exploring</span>
+      <span class="status"><span class="dot d-open"></span>open</span>
+      <span class="status"><span class="dot d-promoted"></span>promoted</span>
+      <span class="status"><span class="dot d-archived"></span>archived</span>
+    </div>
+    <p class="demo-label">Lanes — pattern-coded, like the tracks</p>
+    <div class="rowwrap" style="margin-bottom:14px">
+      <span class="tag lane-fast">fast</span>
+      <span class="tag lane-full">full</span>
+      <span style="font:11.5px var(--sans);color:var(--ink-3)"><span style="color:var(--fastc);font-weight:600">teal dashed</span> = bypass track · <span style="color:var(--l2);font-weight:600">violet solid</span> = the long way</span>
+    </div>
+    <p class="demo-label">Verdicts — stamps</p>
+    <div class="rowwrap">
+      <span class="stamp st-approved">approved</span>
+      <span class="stamp st-rejected">rejected</span>
+    </div>
+  </div>
+  <p class="rule-p"><b>Grammar:</b> hollow = not started · half-filled redline = live now ·
+  filled = finished · dashed = tentative · ring = handed on · gray = shelved. The same grammar
+  the map uses for its tracks.</p>
+
+  <h2 id="primitives"><span class="idx">§5</span>Primitives</h2>
+
+  <h3 id="p-tags">Tags &amp; stamps</h3>
+  <div class="demo">
+    <div class="rowwrap">
+      <span class="tag id">DECISION-002</span>
+      <span class="tag id">ISSUE-004</span>
+      <span class="tag">→ PROPOSAL-002</span>
+      <span class="tag">docs/02_architecture/</span>
+      <span class="tag">main @ 3f2c9a1</span>
+      <span class="stamp st-approved">approved</span>
+    </div>
+  </div>
+  <p class="rule-p">Tags are rectangular print labels (2px radius, never pill-shaped): ids sit on
+  film with heavier weight; plain refs and paths stay outlined. Hover of a linked tag redlines it.</p>
+
+  <h3 id="p-rail">Rails &amp; stations — the hero of every sheet</h3>
+  <div class="demo" style="padding-bottom:24px">
+    <div class="rail" style="margin-top:12px">
+      <div class="st"><span class="c"></span><a href="#components">Products</a><small>2 documented</small></div>
+      <div class="trk"></div>
+      <div class="st"><span class="c"></span><a href="#components">Roadmap</a><small>2 now · 2 next</small></div>
+      <div class="trk"></div>
+      <div class="st"><span class="c"></span><a href="#components">Architecture</a><small>5 components · rev B</small></div>
+    </div>
+  </div>
+  <p class="rule-p">A 2px ink track with 14px stations; labels are links, sublabels carry live
+  counts. Foundation uses the straight HTML rail; the pipeline pages use the SVG map below.</p>
+
+  <h3 id="p-plot">Plot wells &amp; flow chains</h3>
+  <p>Diagrams sit on faint grid paper — the only textured surface in the system — so they read
+  as <i>drawn</i>, not floated:</p>
+  <div class="plot">
+    <div class="flow" style="margin:0">
+      <span class="fnode ext">client</span>
+      <span class="farrow"><svg width="26" height="10" viewBox="0 0 26 10" fill="none"><path d="M1 5h19" stroke="#16181d" stroke-width="1.5" stroke-linecap="round"/><path d="M17 1.5 21 5l-4 3.5" stroke="#16181d" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></span>
+      <span class="fnode">api-gateway</span>
+      <span class="farrow"><svg width="26" height="10" viewBox="0 0 26 10" fill="none"><path d="M1 5h19" stroke="#16181d" stroke-width="1.5" stroke-linecap="round"/><path d="M17 1.5 21 5l-4 3.5" stroke="#16181d" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></span>
+      <span class="fnode">order-service</span>
+      <span class="farrow"><svg width="26" height="10" viewBox="0 0 26 10" fill="none"><path d="M1 5h19" stroke="#16181d" stroke-width="1.5" stroke-linecap="round"/><path d="M17 1.5 21 5l-4 3.5" stroke="#16181d" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></span>
+      <span class="fnode ext">PSP</span>
+    </div>
+    <figcaption>FIG · order placement — solid nodes are ours, dashed nodes are external</figcaption>
+  </div>
+
+  <h2 id="map"><span class="idx">§6</span>The system map</h2>
+  <p>The master diagram — the whole model as two lines. Foundation runs along the top;
+  the Change line runs beneath it; the fast lane is a dashed bypass track around
+  Proposal → Decision; and the only edge allowed to touch Layer 1 — a Decision amending
+  Architecture — is drawn in redline. The index page opens with this exact figure:</p>
+  <div class="plot">
+    <svg viewBox="0 0 880 268" width="100%" role="img" aria-label="docs system map: blue foundation line, violet change line, teal fast-lane bypass, orange amendment edge"><defs><marker id="map-ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M1 1.5 8 5 1 8.5" fill="none" stroke="#c2410c" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></marker><symbol id="i-pkg" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="3" width="11" height="10" rx="1"/><path d="M2.5 6.2h11M8 6.2V13"/></g></symbol><symbol id="i-flag" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 13.5V2.5"/><path d="M4.5 3h7.5l-1.8 2.4L12 7.8H4.5"/></g></symbol><symbol id="i-layers" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="2.5" width="10" height="4.2" rx="1"/><rect x="3" y="9.3" width="10" height="4.2" rx="1"/></g></symbol><symbol id="i-issue" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5.5"/><path d="M8 5.2v3.4"/><path d="M8 10.9v.1"/></g></symbol><symbol id="i-doc" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 2.5H10l2.5 2.5v8.5h-8z"/><path d="M10 2.5V5h2.5"/><path d="M6.5 8.5h3.5M6.5 10.8h3.5"/></g></symbol><symbol id="i-seal" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5.5"/><path d="M5.6 8.1l1.7 1.7 3.1-3.4"/></g></symbol><symbol id="i-list" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 4.2h.01M6.5 4.2H13M3.5 8h.01M6.5 8H13M3.5 11.8h.01M6.5 11.8H13"/></g></symbol></defs><text x="30" y="62" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10" font-weight="700" fill="#1d4ed8" letter-spacing="1.5">L1</text><text x="30" y="196" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10" font-weight="700" fill="#7c3aed" letter-spacing="1.5">L2</text><line x1="140" y1="58" x2="760" y2="58" stroke="#1d4ed8" stroke-width="2.5"/><line x1="140" y1="192" x2="760" y2="192" stroke="#7c3aed" stroke-width="2.5"/><path d="M140 205 C 210 246, 690 246, 760 205" fill="none" stroke="#0d9488" stroke-width="2" stroke-dasharray="6 5"/><path d="M560 176 C 600 126, 664 96, 742 74" fill="none" stroke="#c2410c" stroke-width="1.7" stroke-dasharray="5 4" marker-end="url(#map-ah)"/><text x="650" y="116" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="9.5" font-weight="700" fill="#c2410c" letter-spacing="1.2">AMENDS</text><text x="450" y="262" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="9.5" font-weight="400" fill="#0d9488" text-anchor="middle" letter-spacing="1.2">FAST LANE · NO ARCHITECTURE CHANGE &amp; REVERT &lt; 1 DAY</text><a href="current.html#products"><circle cx="140" cy="58" r="13" fill="#1d4ed8"/><use href="#i-pkg" x="133" y="51" width="14" height="14" color="#ffffff"/><text x="140" y="34" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="700" fill="#16181d" text-anchor="middle">Products</text></a><a href="current.html#roadmap"><circle cx="450" cy="58" r="13" fill="#1d4ed8"/><use href="#i-flag" x="443" y="51" width="14" height="14" color="#ffffff"/><text x="450" y="34" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="700" fill="#16181d" text-anchor="middle">Roadmap</text></a><a href="current.html#architecture"><circle cx="760" cy="58" r="13" fill="#1d4ed8"/><use href="#i-layers" x="753" y="51" width="14" height="14" color="#ffffff"/><text x="760" y="34" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="700" fill="#16181d" text-anchor="middle">Architecture</text></a><a href="changes.html#issues"><circle cx="140" cy="192" r="13" fill="#7c3aed"/><use href="#i-issue" x="133" y="185" width="14" height="14" color="#ffffff"/><text x="140" y="168" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="700" fill="#16181d" text-anchor="middle">Issue</text></a><a href="changes.html#proposals"><circle cx="345" cy="192" r="13" fill="#7c3aed"/><use href="#i-doc" x="338" y="185" width="14" height="14" color="#ffffff"/><text x="345" y="168" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="700" fill="#16181d" text-anchor="middle">Proposal</text></a><a href="changes.html#decisions"><circle cx="550" cy="192" r="13" fill="#7c3aed"/><use href="#i-seal" x="543" y="185" width="14" height="14" color="#ffffff"/><text x="550" y="168" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="700" fill="#16181d" text-anchor="middle">Decision</text></a><a href="changes.html#backlog"><circle cx="760" cy="192" r="13" fill="#7c3aed"/><use href="#i-list" x="753" y="185" width="14" height="14" color="#ffffff"/><text x="760" y="168" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="700" fill="#16181d" text-anchor="middle">Backlog</text></a></svg>
+    <figcaption>FIG 1 · the three-layer model as a transit map — one color per line: <span style="color:#1d4ed8;font-weight:700">foundation</span> · <span style="color:#7c3aed;font-weight:700">change</span> · <span style="color:#0d9488;font-weight:700">fast lane</span> · <span style="color:#c2410c;font-weight:700">amendment</span></figcaption>
+  </div>
+  <p class="rule-p"><b>Diagram rules:</b> 2–2.5px tracks, each line owns its color · metro-style
+  stations: 13px circles filled with the line color, white icon inside · dashed = bypass or
+  tentative · redline dashed + chevron = the amendment edge (the only arrow on the map, because
+  it is the only directional privilege in the model) · labels mono ink, captions as
+  <code>FIG</code> lines. Graph nodes carry a 22px tinted <b>icon badge</b> (kind color) and
+  edge labels sit in small chips so they stay readable on the grid paper.</p>
+
+  <h3 id="map-complex">Complex flows — layered graphs</h3>
+  <p>When <code>data_flow</code> branches, the renderer stops chaining and <b>draws the graph</b>:
+  nodes are placed in topological columns (longest-path layering, alphabetical within a column —
+  fully deterministic, no layout engine), edges are drawn with the same ink strokes and chevrons.
+  Fan-out, fan-in, and async hops all read at a glance:</p>
+  <div class="plot">
+    <svg viewBox="0 0 1013 162" width="100%" role="img" aria-label="data flow graph"><defs><marker id="dag-a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M1 1.5 8 5 1 8.5" fill="none" stroke="#16181d" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></marker><marker id="dag-t" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M1 1.5 8 5 1 8.5" fill="none" stroke="#0d9488" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></marker><symbol id="i-bolt" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2.5 4.8 9h2.7L6.3 13.5 10.9 7H8.2z"/></g></symbol><symbol id="i-db" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="8" cy="4.2" rx="5" ry="1.9"/><path d="M3 4.2v7.6c0 1 2.2 1.9 5 1.9s5-.9 5-1.9V4.2"/></g></symbol><symbol id="i-globe" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5.5"/><path d="M2.5 8h11"/><path d="M8 2.5c1.9 1.6 1.9 9.4 0 11-1.9-1.6-1.9-9.4 0-11z"/></g></symbol><symbol id="i-svc" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2.8" y="2.8" width="10.4" height="10.4" rx="1.5"/><rect x="6" y="6" width="4" height="4"/></g></symbol><symbol id="i-ui" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="3" width="11" height="9" rx="1"/><path d="M2.5 5.8h11"/><path d="M4.3 4.4h.01"/></g></symbol></defs><path d="M105 63 H145" fill="none" stroke="#16181d" stroke-width="1.6" marker-end="url(#dag-a)"/><path d="M275 63 H315" fill="none" stroke="#16181d" stroke-width="1.6" marker-end="url(#dag-a)"/><path d="M459 63 C 477 63, 481 33, 499 33" fill="none" stroke="#16181d" stroke-width="1.6" marker-end="url(#dag-a)"/><path d="M657 33 H697" fill="none" stroke="#16181d" stroke-width="1.6" marker-end="url(#dag-a)"/><path d="M459 63 C 477 63, 481 93, 499 93" fill="none" stroke="#16181d" stroke-width="1.6" marker-end="url(#dag-a)"/><path d="M608 93 H697" fill="none" stroke="#0d9488" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#dag-t)"/><path d="M792 93 C 810 93, 814 63, 832 63" fill="none" stroke="#16181d" stroke-width="1.6" marker-end="url(#dag-a)"/><rect x="453.4" y="26" width="51.2" height="16" rx="2" fill="#ffffff" stroke="#e2e8ee"/><text x="479" y="38" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="9" font-weight="500" fill="#7d8794" text-anchor="middle" letter-spacing=".6">capture</text><rect x="629.7" y="70" width="45.6" height="16" rx="2" fill="#e6faf5" stroke="#7fd4c4"/><text x="652.5" y="82" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="9" font-weight="700" fill="#0d9488" text-anchor="middle" letter-spacing=".6">outbox</text><rect x="16" y="46" width="89" height="34" rx="2" fill="#ffffff" stroke="#c8d2dc" stroke-width="1.5" stroke-dasharray="5 4"/><rect x="22" y="52" width="22" height="22" rx="4" fill="#f4f6f8"/><use href="#i-ui" x="26" y="56" width="14" height="14" color="#7d8794"/><text x="52" y="67.5" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11.5" font-weight="650" fill="#454e5a">client</text><rect x="151" y="46" width="124" height="34" rx="2" fill="#ffffff" stroke="#16181d" stroke-width="1.5"/><rect x="157" y="52" width="22" height="22" rx="4" fill="#f4f6f8"/><use href="#i-svc" x="161" y="56" width="14" height="14" color="#454e5a"/><text x="187" y="67.5" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11.5" font-weight="650" fill="#16181d">api-gateway</text><rect x="321" y="46" width="138" height="34" rx="2" fill="#ffffff" stroke="#16181d" stroke-width="1.5"/><rect x="327" y="52" width="22" height="22" rx="4" fill="#f4f6f8"/><use href="#i-svc" x="331" y="56" width="14" height="14" color="#454e5a"/><text x="357" y="67.5" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11.5" font-weight="650" fill="#16181d">order-service</text><rect x="505" y="16" width="152" height="34" rx="2" fill="#ffffff" stroke="#16181d" stroke-width="1.5"/><rect x="511" y="22" width="22" height="22" rx="4" fill="#f4f6f8"/><use href="#i-svc" x="515" y="26" width="14" height="14" color="#454e5a"/><text x="541" y="37.5" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11.5" font-weight="650" fill="#16181d">payment-adapter</text><rect x="505" y="76" width="103" height="34" rx="2" fill="#ffffff" stroke="#1d4ed8" stroke-width="1.5"/><rect x="511" y="82" width="22" height="22" rx="4" fill="#e8f0fe"/><use href="#i-db" x="515" y="86" width="14" height="14" color="#1d4ed8"/><text x="541" y="97.5" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11.5" font-weight="650" fill="#16181d">postgres</text><rect x="703" y="16" width="68" height="34" rx="2" fill="#ffffff" stroke="#c8d2dc" stroke-width="1.5" stroke-dasharray="5 4"/><rect x="709" y="22" width="22" height="22" rx="4" fill="#f4f6f8"/><use href="#i-globe" x="713" y="26" width="14" height="14" color="#7d8794"/><text x="739" y="37.5" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11.5" font-weight="650" fill="#454e5a">PSP</text><rect x="703" y="76" width="89" height="34" rx="2" fill="#ffffff" stroke="#7c3aed" stroke-width="1.5"/><rect x="709" y="82" width="22" height="22" rx="4" fill="#f1ecfe"/><use href="#i-bolt" x="713" y="86" width="14" height="14" color="#7c3aed"/><text x="739" y="97.5" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11.5" font-weight="650" fill="#16181d">worker</text><rect x="838" y="46" width="159" height="34" rx="2" fill="#ffffff" stroke="#c8d2dc" stroke-width="1.5" stroke-dasharray="5 4"/><rect x="844" y="52" width="22" height="22" rx="4" fill="#f4f6f8"/><use href="#i-globe" x="848" y="56" width="14" height="14" color="#7d8794"/><text x="874" y="67.5" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11.5" font-weight="650" fill="#454e5a">merchant webhook</text></svg>
+    <figcaption>FIG 2 · <code>data_flow</code> with branches — <span style="color:#454e5a;font-weight:700">■ service</span> · <span style="color:#1d4ed8;font-weight:700">■ datastore</span> · <span style="color:#7c3aed;font-weight:700">■ async worker/queue</span> · dashed node = external · <span style="color:#0d9488;font-weight:700">teal dashed edge = async hop</span></figcaption>
+  </div>
+  <p class="rule-p"><b>Flow syntax the renderer parses</b> (one edge per line in <code>data_flow</code>):
+  <code>a -&gt; b</code> sync · <code>a ~&gt; b</code> async (drawn teal, dashed) · <code>a -&gt; b : label</code>
+  edge label. Node kind comes from an optional annotation on the <code>components</code> entry —
+  <code>postgres [db]</code>, <code>jobs [queue]</code>, <code>dashboard [ui]</code> — which sets the
+  icon and tint; unannotated components are services, and any node not listed in
+  <code>components</code> at all is automatically drawn dashed as an external system.
+  <b>Scale rule:</b> past ~12 nodes the renderer splits the graph into one figure per flow group
+  (<code>FIG 2a</code>, <code>2b</code>, …) instead of cramming; a <code>data_flow</code> it cannot
+  parse falls back to the markdown body verbatim — the renderer never guesses a diagram.</p>
+  <div class="demo">
+    <p class="demo-label">Icon set — 15px grid, 1.5px stroke, colored by line or kind</p>
+    <div class="rowwrap" style="gap:16px 22px">
+      <span class="status" style="text-transform:none;letter-spacing:0;gap:8px"><svg width="16" height="16" viewBox="0 0 16 16" color="#1d4ed8"><use href="#i-pkg"/></svg>products</span>
+      <span class="status" style="text-transform:none;letter-spacing:0;gap:8px"><svg width="16" height="16" viewBox="0 0 16 16" color="#1d4ed8"><use href="#i-flag"/></svg>roadmap</span>
+      <span class="status" style="text-transform:none;letter-spacing:0;gap:8px"><svg width="16" height="16" viewBox="0 0 16 16" color="#1d4ed8"><use href="#i-layers"/></svg>architecture</span>
+      <span class="status" style="text-transform:none;letter-spacing:0;gap:8px"><svg width="16" height="16" viewBox="0 0 16 16" color="#7c3aed"><use href="#i-issue"/></svg>issue</span>
+      <span class="status" style="text-transform:none;letter-spacing:0;gap:8px"><svg width="16" height="16" viewBox="0 0 16 16" color="#7c3aed"><use href="#i-doc"/></svg>proposal</span>
+      <span class="status" style="text-transform:none;letter-spacing:0;gap:8px"><svg width="16" height="16" viewBox="0 0 16 16" color="#7c3aed"><use href="#i-seal"/></svg>decision</span>
+      <span class="status" style="text-transform:none;letter-spacing:0;gap:8px"><svg width="16" height="16" viewBox="0 0 16 16" color="#7c3aed"><use href="#i-list"/></svg>backlog</span>
+      <span class="status" style="text-transform:none;letter-spacing:0;gap:8px"><svg width="16" height="16" viewBox="0 0 16 16" color="#454e5a"><use href="#i-svc"/></svg>service</span>
+      <span class="status" style="text-transform:none;letter-spacing:0;gap:8px"><svg width="16" height="16" viewBox="0 0 16 16" color="#1d4ed8"><use href="#i-db"/></svg>datastore</span>
+      <span class="status" style="text-transform:none;letter-spacing:0;gap:8px"><svg width="16" height="16" viewBox="0 0 16 16" color="#7c3aed"><use href="#i-bolt"/></svg>worker/queue</span>
+      <span class="status" style="text-transform:none;letter-spacing:0;gap:8px"><svg width="16" height="16" viewBox="0 0 16 16" color="#7d8794"><use href="#i-globe"/></svg>external</span>
+      <span class="status" style="text-transform:none;letter-spacing:0;gap:8px"><svg width="16" height="16" viewBox="0 0 16 16" color="#7d8794"><use href="#i-ui"/></svg>client/ui</span>
+    </div>
+  </div>
+
+  <h2 id="shell"><span class="idx">§7</span>Shell &amp; title block</h2>
+  <table class="spec">
+    <tr><th>top nav</th><td>54px hairline bar — mono brand (<b>project</b> <span class="dim">/ docs</span>), sans tabs with a 2px redline underline on the active view, generated stamp right in mono</td></tr>
+    <tr><th>sidebar</th><td>224px sticky TOC on a 2px rule spine; active item ticks redline. Collapses above content under 960px</td></tr>
+    <tr><th>header</th><td>redline tick + mono kicker → mono h1 → sans lede → tag row, closed by a hairline</td></tr>
+    <tr><th>sections</th><td>hairline-topped, <code>§n</code> index tabs (the layer order and pipeline order are real sequences), source-path tag right-aligned</td></tr>
+    <tr><th>title block</th><td>every sheet ends with a drawing-style title block instead of a footer:</td></tr>
+  </table>
+  <div class="tblock" style="margin-top:16px">
+    <div class="tb"><div class="tl">Project</div><div class="tv">orderhub</div></div>
+    <div class="tb"><div class="tl">Sheet</div><div class="tv">FOUNDATION — CURRENT</div></div>
+    <div class="tb"><div class="tl">Rev</div><div class="tv">main @ 3f2c9a1</div></div>
+    <div class="tb"><div class="tl">Generated</div><div class="tv">2026-07-30 14:45</div></div>
+    <div class="tb"><div class="tl">By</div><div class="tv">docs-kit render v0.2.0</div></div>
+  </div>
+
+  <h2 id="components"><span class="idx">§8</span>Components</h2>
+
+  <h3 id="c-card">Product card</h3>
+  <div class="card">
+    <div class="card-h"><span class="t">OrderHub API</span><span class="tag">orderhub-api.md</span>
+      <span class="tag" style="margin-left:auto;border-color:var(--ink);color:var(--ink);font-weight:650">TARGET · 99% ack &lt; 2s</span></div>
+    <div class="card-b">
+      <table class="spec">
+        <tr><th>users</th><td>Merchant developers integrating order intake</td></tr>
+        <tr><th>problem</th><td>Order intake is fragmented across three channels</td></tr>
+      </table>
+      <div class="grid2" style="margin-top:10px">
+        <div><p class="demo-label" style="margin-bottom:4px">In scope</p>
+          <ul class="scope in"><li>Order intake API</li><li>Status webhooks</li></ul></div>
+        <div><p class="demo-label" style="margin-bottom:4px">Out of scope</p>
+          <ul class="scope out"><li>Inventory management</li></ul></div>
+      </div>
+      <details class="more"><summary>Full document</summary><p style="font-size:14px">Rendered markdown body…</p></details>
+    </div>
+  </div>
+  <p class="rule-p">Card name in mono (a product is an entry in the registry); the success metric
+  rides the header as a <code>TARGET</code> tag — the one number a reader scans for.</p>
+
+  <h3 id="c-board">Board — one geometry for roadmap, issues, backlog</h3>
+  <p>Columns are drawing zones: a 2px ink rule with a mono header and count, cards beneath.
+  Status lives in the dot, lane in the tag pattern — no colored card borders:</p>
+  <div class="board">
+    <div><div class="col-h">Now <span class="n">2</span></div>
+      <div class="item"><div class="im"><span class="dot d-progress"></span><span class="tag id">BACKLOG-004</span><span class="tag lane-fast">fast</span></div>
+        <div class="it">Webhook retry with backoff</div></div>
+      <div class="item"><div class="im"><span class="dot d-open"></span><span class="tag id">BACKLOG-005</span></div>
+        <div class="it">Idempotent order intake</div></div></div>
+    <div><div class="col-h">Next <span class="n">2</span></div>
+      <div class="item"><div class="it" style="margin-top:0">Refund flow v2</div></div>
+      <div class="item"><div class="it" style="margin-top:0">Per-merchant rate limits</div></div></div>
+    <div><div class="col-h">Not doing <span class="n">1</span></div>
+      <div class="item muted"><div class="it" style="margin-top:0">Building our own PSP</div>
+        <div class="im" style="margin-top:5px"><span class="tag">DECISION-002</span></div></div></div>
+  </div>
+
+  <h3 id="c-tables">Tables &amp; the rev block</h3>
+  <p>Data tables are print tables: a 1.5px ink rule under mono headers, hairline rows, no fills.
+  The amendment history is literally a drawing <b>revision block</b> — revisions lettered A, B, C…
+  in order:</p>
+  <div class="demo">
+    <table class="data">
+      <tr><th style="width:56px">rev</th><th style="width:110px">date</th><th style="width:150px">decision</th><th>description</th></tr>
+      <tr><td class="mono" style="font-weight:700">B</td><td class="mono">2026-07-02</td><td><span class="tag id">DECISION-002</span></td><td>PSP calls only via <code>payment-adapter</code></td></tr>
+      <tr><td class="mono" style="font-weight:700">A</td><td class="mono">2026-06-14</td><td><span class="tag id">DECISION-001</span></td><td>Outbox + delivery worker</td></tr>
+    </table>
+  </div>
+
+  <h3 id="c-notes">Notes, deviations, empty states</h3>
+  <div class="demo">
+    <div class="note" style="margin-top:0"><span class="lbl">Note</span>Architecture is amended only through
+      the Decision workflow — this sheet is a read model; the markdown stays the source of truth.</div>
+    <div class="note dev"><span class="lbl">Deviation</span>Hotfix pushed before an Issue existed —
+      recorded retroactively on 2026-07-15.</div>
+    <div class="empty" style="margin-bottom:0">NO ENTRIES — add a file to <code>docs/01_products/</code> and re-run <code>/docs-kit:docs-render</code></div>
+  </div>
+
+  <h2 id="access"><span class="idx">§9</span>Motion &amp; access</h2>
+  <table class="spec">
+    <tr><th>motion</th><td>none by design — a drawing does not animate. Hover states change color/border only; <code>prefers-reduced-motion</code> also disables smooth scrolling</td></tr>
+    <tr><th>focus</th><td>2px redline <code>:focus-visible</code> outline on every link, tab, and summary</td></tr>
+    <tr><th>contrast</th><td>body ≥ 7:1, labels ≥ 4:1, redline text #c2410c on paper 4.9:1; statuses never rely on hue alone — the dot shape carries the meaning</td></tr>
+    <tr><th>responsive</th><td>sidebar folds above content &lt; 960px; boards and the title block reflow; SVG maps scale full-width</td></tr>
+  </table>
+
+  <h2 id="renderer"><span class="idx">§10</span>Renderer contract</h2>
+  <table class="spec">
+    <tr><th>pages</th><td><code>docs/index.html</code> (map + menu, beside README.md) · <code>docs/current.html</code> (Layer 1) · <code>docs/changes.html</code> (Layer 2 + audit)</td></tr>
+    <tr><th>engine</th><td><code>scripts/docs_render.sh</code> → <code>docs_render.py</code>, Python 3.9 stdlib — deterministic, 0 tokens, no LLM; same guarantees as the validator</td></tr>
+    <tr><th>markdown</th><td>subset: h1–h4, paragraphs, nested lists, fenced code, tables, blockquotes, bold/italic/inline code/links; anything else escapes to text — never broken HTML</td></tr>
+    <tr><th>mapping</th><td>roadmap <code>##</code> → board columns · product frontmatter → card · <code>components</code>/<code>data_flow</code> → chains, or layered graphs when flows branch (edge syntax in §6) · statuses → dot geometry · amendments → rev letters (A, B, …) · <code>ID-NNN</code> mentions → tags linked across sheets</td></tr>
+    <tr><th>invocation</th><td><code>/docs-kit:docs-render</code> · generated by docs-init · refreshed at the end of docs-sync</td></tr>
+    <tr><th>ordering</th><td>files sorted by name; logs newest-first; byte-identical output for identical input (only the generated stamp moves)</td></tr>
+  </table>
+
+  <div class="tblock">
+    <div class="tb"><div class="tl">Document</div><div class="tv">RENDER DESIGN SYSTEM</div></div>
+    <div class="tb"><div class="tl">Rev</div><div class="tv">v2 — change-control print</div></div>
+    <div class="tb"><div class="tl">Status</div><div class="tv">AWAITING APPROVAL</div></div>
+    <div class="tb"><div class="tl">By</div><div class="tv">docs-kit</div></div>
+  </div>
+</main>
+</div>

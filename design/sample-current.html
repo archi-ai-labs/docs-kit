@@ -1,0 +1,172 @@
+<!doctype html>
+<!-- SAMPLE — actual docs-render output on the fictional 'orderhub' fixture (links rewritten to sample-*) -->
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>orderhub · Foundation — current state</title><style>
+:root {
+  --paper: #ffffff; --film: #f4f6f8; --well: #fbfcfd; --grid-faint: #e9eef3;
+  --line: #e2e8ee; --line-2: #c8d2dc;
+  --ink: #16181d; --ink-2: #454e5a; --ink-3: #7d8794;
+  --mark: #c2410c; --mark-2: #ea580c;
+  --l1: #1d4ed8; --l2: #7c3aed; --fastc: #0d9488;
+  --approve: #15803d; --reject: #b91c1c;
+  --mono: ui-monospace, "SF Mono", Menlo, "Cascadia Mono", Consolas, "Liberation Mono", monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --r: 2px;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--paper); color: var(--ink-2); font: 15px/1.65 var(--sans); -webkit-font-smoothing: antialiased; }
+:focus-visible { outline: 2px solid var(--mark-2); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } * { transition: none !important; } }
+a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--mark); text-decoration-thickness: 1.5px; text-underline-offset: 3px; }
+a:hover { color: var(--mark); }
+.topnav { position: sticky; top: 0; z-index: 10; background: rgba(255,255,255,.94); backdrop-filter: blur(6px); border-bottom: 1px solid var(--line); }
+.topnav-in { max-width: 1200px; margin: 0 auto; padding: 0 32px; height: 54px; display: flex; align-items: center; gap: 28px; }
+.brand { font: 700 13px var(--mono); letter-spacing: -.01em; color: var(--ink); }
+.brand .dim { color: var(--ink-3); font-weight: 500; }
+.tabs { display: flex; gap: 22px; align-self: stretch; }
+.tabs a { display: flex; align-items: center; padding: 0 2px; margin-bottom: -1px; border-bottom: 2px solid transparent; font: 500 13px var(--sans); color: var(--ink-2); text-decoration: none; }
+.tabs a:hover { color: var(--ink); }
+.tabs a.active { color: var(--ink); border-bottom-color: var(--mark-2); font-weight: 600; }
+.nav-meta { margin-left: auto; font: 11px var(--mono); color: var(--ink-3); }
+.page { max-width: 1200px; margin: 0 auto; padding: 0 32px; display: grid; grid-template-columns: 224px minmax(0,1fr); gap: 0 56px; }
+.page.solo { display: block; max-width: 944px; }
+.sidebar { position: sticky; top: 54px; align-self: start; max-height: calc(100vh - 54px); overflow-y: auto; padding: 34px 0 48px; }
+.toc-title { font: 700 10px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); margin: 0 0 10px 13px; }
+.toc { list-style: none; margin: 0 0 20px; padding: 0; }
+.toc a { display: block; padding: 4.5px 13px; border-left: 2px solid var(--line); font-size: 13px; color: var(--ink-2); text-decoration: none; }
+.toc a:hover { color: var(--ink); border-left-color: var(--line-2); }
+.toc .sub a { padding-left: 27px; font-size: 12.5px; }
+.content { padding: 42px 0 96px; max-width: 880px; }
+.kicker { display: flex; align-items: center; gap: 10px; margin: 0; font: 700 11px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); }
+.kicker::before { content: ""; width: 22px; height: 2px; background: var(--mark-2); }
+h1 { font: 750 27px/1.25 var(--mono); letter-spacing: -.035em; color: var(--ink); margin: 10px 0 8px; }
+.lede { color: var(--ink-2); font-size: 15.5px; margin: 0 0 8px; max-width: 640px; }
+.meta-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 16px 0 0; padding-bottom: 28px; border-bottom: 1px solid var(--line); }
+h2 { display: flex; align-items: baseline; gap: 12px; font: 700 16.5px/1.3 var(--mono); letter-spacing: -.02em; color: var(--ink); margin: 60px 0 8px; padding-top: 22px; border-top: 1px solid var(--line); scroll-margin-top: 74px; }
+.page.solo h2 { font-size: 15px; border-top: 0; padding-top: 0; margin: 48px 0 14px; }
+h2 .idx { flex: none; font: 700 11px var(--mono); color: var(--ink-3); border: 1px solid var(--line-2); border-radius: var(--r); padding: 2px 7px; background: var(--film); letter-spacing: .04em; }
+h2 .src { margin-left: auto; align-self: center; }
+h2 .dim2 { font: 500 10.5px var(--mono); color: var(--ink-3); letter-spacing: .08em; }
+h3 { font: 700 12px var(--mono); letter-spacing: .09em; text-transform: uppercase; color: var(--ink); margin: 30px 0 10px; scroll-margin-top: 74px; }
+h3 .dim2 { font: 500 10.5px var(--mono); color: var(--ink-3); letter-spacing: .05em; }
+h4 { font-size: 13.5px; color: var(--ink); margin: 16px 0 4px; }
+p { margin: 8px 0; color: var(--ink-2); max-width: 660px; }
+p strong, li strong { color: var(--ink); }
+.tag { display: inline-flex; align-items: center; gap: 6px; padding: 1.5px 8px; border: 1px solid var(--line-2); border-radius: var(--r); background: var(--paper); font: 500 11.5px/1.7 var(--mono); color: var(--ink-2); white-space: nowrap; }
+.tag.id { color: var(--ink); background: var(--film); font-weight: 650; }
+.tag.hard { border-color: var(--ink); color: var(--ink); font-weight: 650; }
+.tag.lane-fast { border: 1.5px dashed var(--fastc); color: var(--fastc); font-weight: 700; letter-spacing: .05em; }
+.tag.lane-full { border: 1.5px solid var(--l2); color: var(--l2); font-weight: 700; letter-spacing: .05em; }
+a.tag { text-decoration: none; }
+a.tag:hover { border-color: var(--mark); color: var(--mark); }
+.status { display: inline-flex; align-items: center; gap: 7px; font: 650 11px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); }
+.dot { flex: none; width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid var(--ink); background: var(--paper); }
+.d-progress { border-color: var(--mark-2); background: linear-gradient(90deg, var(--mark-2) 50%, transparent 50%); }
+.d-done { background: var(--ink); }
+.d-exploring { border-style: dashed; border-color: var(--ink-3); }
+.d-promoted { background: var(--l2); border-color: var(--l2); box-shadow: inset 0 0 0 2.5px var(--paper); }
+.d-archived { background: var(--line-2); border-color: var(--line-2); }
+.status.live { color: var(--mark); }
+.stamp { display: inline-block; padding: 2px 9px; border: 1.5px solid currentColor; border-radius: var(--r); font: 700 10.5px/1.8 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+.st-approved { color: var(--approve); }
+.st-rejected { color: var(--reject); }
+.rail { display: flex; align-items: flex-start; margin: 30px 0 4px; }
+.rail .st { flex: none; display: flex; flex-direction: column; align-items: center; gap: 9px; min-width: 116px; text-align: center; }
+.rail .st .c { width: 16px; height: 16px; border-radius: 50%; background: var(--l1); }
+.rail .st a { font: 700 12.5px var(--mono); color: var(--ink); text-decoration: none; }
+.rail .st a:hover { color: var(--mark); }
+.rail .st small { font: 400 11px var(--sans); color: var(--ink-3); margin-top: -4px; }
+.rail .trk { flex: 1; height: 2.5px; background: var(--l1); margin-top: 6px; }
+.plot { border: 1px solid var(--line); border-radius: var(--r); padding: 20px; background-color: var(--well); background-image: linear-gradient(var(--grid-faint) 1px, transparent 1px), linear-gradient(90deg, var(--grid-faint) 1px, transparent 1px); background-size: 24px 24px; margin: 14px 0; overflow-x: auto; }
+.plot svg { min-width: 560px; }
+.plot svg a:hover text { fill: var(--mark); }
+.plot svg a:hover circle { stroke: var(--mark); }
+.figcap { font: 500 11px var(--mono); color: var(--ink-3); margin-top: 12px; }
+.flow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin: 10px 0; }
+.farrow { flex: none; display: inline-flex; }
+.flow-label { width: 100%; font: 700 10px var(--mono); text-transform: uppercase; letter-spacing: .1em; color: var(--ink-3); margin-top: 6px; }
+.board { display: grid; grid-template-columns: repeat(auto-fit, minmax(185px, 1fr)); gap: 22px; margin: 18px 0; }
+.col-h { display: flex; align-items: center; justify-content: space-between; border-top: 2px solid var(--ink); padding: 8px 0 10px; font: 700 11px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--ink); }
+.col-h .n { font: 600 11px var(--mono); color: var(--ink-3); }
+.item { border: 1px solid var(--line); border-radius: var(--r); background: var(--paper); padding: 9px 11px; margin-bottom: 8px; font-size: 13px; }
+.item .im { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.item .it { color: var(--ink); font-weight: 600; margin: 4px 0 0; line-height: 1.45; }
+.item.muted .it { color: var(--ink-3); font-weight: 500; }
+table.spec { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+table.spec th { text-align: left; font: 650 10px var(--mono); text-transform: uppercase; letter-spacing: .09em; color: var(--ink-3); padding: 7px 14px 7px 0; width: 124px; vertical-align: top; border-bottom: 1px solid var(--film); }
+table.spec td { padding: 7px 0; color: var(--ink-2); border-bottom: 1px solid var(--film); }
+table.spec tr:last-child th, table.spec tr:last-child td { border-bottom: 0; }
+table.data { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+table.data th { text-align: left; font: 700 10px var(--mono); text-transform: uppercase; letter-spacing: .09em; color: var(--ink-3); padding: 8px 12px 8px 0; border-bottom: 1.5px solid var(--ink); }
+table.data td { padding: 9px 12px 9px 0; border-bottom: 1px solid var(--line); color: var(--ink-2); vertical-align: top; }
+table.data tr:hover td { background: var(--well); }
+.mono { font-family: var(--mono); font-size: 12.5px; white-space: nowrap; }
+.dim { color: var(--ink-3); }
+.devtag { font: 700 10.5px var(--mono); letter-spacing: .09em; text-transform: uppercase; color: var(--mark); white-space: nowrap; }
+.card { border: 1px solid var(--line-2); border-radius: var(--r); background: var(--paper); margin: 14px 0; }
+.card-h { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.card-h .t { font: 700 14.5px var(--mono); letter-spacing: -.02em; color: var(--ink); }
+.card-b { padding: 12px 16px 14px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.klabel { font: 700 10px var(--mono); text-transform: uppercase; letter-spacing: .1em; color: var(--ink-3); margin: 0 0 4px; }
+.scope { list-style: none; margin: 6px 0; padding: 0; font-size: 13.5px; }
+.scope li { padding: 3px 0 3px 22px; position: relative; color: var(--ink-2); }
+.scope.in li::before { content: "\2713"; position: absolute; left: 2px; color: var(--ink); font-weight: 700; }
+.scope.out li::before { content: "\2715"; position: absolute; left: 2px; color: var(--ink-3); font-weight: 700; }
+details.more { margin-top: 10px; }
+details.more summary { cursor: pointer; font: 600 12px var(--mono); color: var(--mark); list-style: none; text-transform: uppercase; letter-spacing: .06em; }
+details.more summary::before { content: "+ "; }
+details.more[open] summary::before { content: "\2212 "; }
+details.more .md { margin-top: 8px; }
+.md { font-size: 14px; max-width: 660px; }
+.md pre { background: var(--film); border: 1px solid var(--line); border-radius: var(--r); padding: 12px 14px; overflow-x: auto; }
+.md pre code { background: none; padding: 0; }
+.md blockquote { margin: 10px 0; padding: 2px 14px; border-left: 3px solid var(--line-2); color: var(--ink-3); }
+.md ul, .md ol { padding-left: 22px; }
+.note { border: 1px solid var(--line); border-left: 3px solid var(--ink); border-radius: var(--r); background: var(--film); padding: 10px 14px; font-size: 13.5px; color: var(--ink-2); margin: 14px 0; }
+.note.dev { border-left-color: var(--mark-2); }
+.note .lbl { font: 700 10.5px var(--mono); letter-spacing: .09em; color: var(--ink); text-transform: uppercase; margin-right: 8px; }
+.note.dev .lbl { color: var(--mark); }
+.constraints { list-style: none; margin: 10px 0; padding: 0; }
+.constraints li { border-left: 2px solid var(--ink); padding: 6px 12px; margin: 6px 0; background: var(--film); border-radius: 0 var(--r) var(--r) 0; font-size: 13.5px; color: var(--ink-2); }
+.empty { border: 1.5px dashed var(--line-2); border-radius: var(--r); padding: 18px; text-align: center; color: var(--ink-3); font-size: 13px; }
+code { font: 12.5px var(--mono); background: var(--film); border-radius: var(--r); padding: 1.5px 5px; color: var(--ink); }
+.comps { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; margin: 14px 0; }
+.comp { border: 1px solid var(--line); border-radius: var(--r); padding: 10px 13px; background: var(--paper); }
+.comp .cn { font: 650 13px var(--mono); color: var(--ink); display: flex; align-items: center; gap: 9px; }
+.comp .cr { font-size: 12.5px; color: var(--ink-2); margin-top: 5px; line-height: 1.5; }
+.ibadge { flex: none; width: 24px; height: 24px; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; }
+.hubgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+a.hub { display: block; border: 1px solid var(--line-2); border-radius: var(--r); padding: 16px 18px; text-decoration: none; color: inherit; background: var(--paper); }
+a.hub:hover { border-color: var(--ink); }
+a.hub:hover .ht { color: var(--mark); }
+.hub .hk { font: 700 10px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); }
+.hub .hk.k1 { color: var(--l1); }
+.hub .hk.k2 { color: var(--l2); }
+.hub .ht { font: 700 15px var(--mono); letter-spacing: -.02em; color: var(--ink); margin: 7px 0 5px; }
+.hub .hd { font-size: 13px; color: var(--ink-2); line-height: 1.55; min-height: 40px; }
+.hub .hs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.reflist { border: 1px solid var(--line-2); border-radius: var(--r); overflow: hidden; }
+.refrow { display: flex; align-items: baseline; gap: 14px; padding: 10px 16px; border-bottom: 1px solid var(--line); font-size: 13.5px; }
+.refrow:last-child { border-bottom: 0; }
+.refrow .rf { flex: none; width: 172px; font: 650 12.5px var(--mono); }
+.refrow .rf a { text-decoration: none; }
+.refrow .rf a:hover { color: var(--mark); }
+.refrow .rd { color: var(--ink-2); }
+.refrow .rn { margin-left: auto; font: 500 11px var(--mono); color: var(--ink-3); white-space: nowrap; }
+.refrow.is-empty .rd, .refrow.is-empty .rf a { color: var(--ink-3); }
+.tblock { display: flex; flex-wrap: wrap; gap: 1px; background: var(--line-2); border: 1.5px solid var(--ink); border-radius: var(--r); overflow: hidden; margin-top: 72px; }
+.tb { flex: 1 1 150px; background: var(--paper); padding: 9px 13px; }
+.tb .tl { font: 650 9.5px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); }
+.tb .tv { font: 650 12px var(--mono); color: var(--ink); margin-top: 3px; }
+@media (max-width: 960px) { .page { grid-template-columns: 1fr; } .sidebar { position: static; max-height: none; padding-bottom: 0; } .grid2 { grid-template-columns: 1fr; } .rail .st { min-width: 84px; } }
+@media (max-width: 760px) { .hubgrid { grid-template-columns: 1fr; } .refrow .rf { width: 132px; } }
+</style></head><body><nav class="topnav"><div class="topnav-in"><span class="brand">orderhub <span class="dim">/ docs</span></span><div class="tabs"><a href="sample-index.html">Overview</a><a href="sample-current.html" class="active">Foundation</a><a href="sample-changes.html">Changes</a></div><span class="nav-meta">generated 2026-07-31</span></div></nav><div class="page"><aside class="sidebar"><p class="toc-title">On this sheet</p><ul class="toc"><li><a href="#products">§1 Products</a></li><li class="sub"><a href="#p-merchant-dashboard">Merchant Dashboard</a></li><li class="sub"><a href="#p-orderhub-api">OrderHub API</a></li><li><a href="#roadmap">§2 Roadmap</a></li><li><a href="#architecture">§3 Architecture</a></li><li class="sub"><a href="#a-components">Components</a></li><li class="sub"><a href="#a-flow">Data flow</a></li><li class="sub"><a href="#a-stack">Tech stack</a></li><li class="sub"><a href="#a-constraints">Constraints</a></li><li class="sub"><a href="#a-rev">Revision block</a></li></ul></aside><main><div class="content"><p class="kicker">Layer 1 · Foundation — state</p><h1>Foundation — current state</h1><p class="lede">Products, roadmap, and architecture exactly as documented in <code>docs/</code>. This sheet is generated — the markdown stays the source of truth.</p><div class="meta-row"><span class="tag">main @ 1ee86cb</span><span class="tag">generated 2026-07-31 09:30</span><span class="tag">2 products</span><span class="tag">5 components</span><span class="tag id">REV B</span></div><div class="rail"><div class="st"><span class="c"></span><a href="#products">Products</a><small>2 documented</small></div><div class="trk"></div><div class="st"><span class="c"></span><a href="#roadmap">Roadmap</a><small>2 now · 2 next</small></div><div class="trk"></div><div class="st"><span class="c"></span><a href="#architecture">Architecture</a><small>5 components · rev B</small></div></div><h2 id="products"><span class="idx">§1</span>Products <span class="src tag">docs/01_products/</span></h2><div class="card" id="p-merchant-dashboard"><div class="card-h"><span class="t">Merchant Dashboard</span><span class="tag">merchant-dashboard.md</span><span class="tag hard" style="margin-left:auto">TARGET · Time-to-first-action on a failed payment &lt; 5 min</span></div><div class="card-b"><table class="spec"><tr><th>users</th><td>Merchant operations staff — non-technical, browser only</td></tr><tr><th>problem</th><td>No single view of an order&#x27;s lifecycle when a payment fails</td></tr></table><div class="grid2" style="margin-top:12px"><div><p class="klabel">In scope</p><ul class="scope in"><li>Live order feed</li><li>Refund actions</li></ul></div><div><p class="klabel">Out of scope</p><ul class="scope out"><li>Analytics warehouse</li></ul></div></div><details class="more"><summary>Full document</summary><div class="md"><h4>Merchant Dashboard</h4>
+<h5>What it is</h5>
+<p>A read-mostly console over the same API, focused on time-to-first-action when something goes wrong with an order.</p></div></details></div></div><div class="card" id="p-orderhub-api"><div class="card-h"><span class="t">OrderHub API</span><span class="tag">orderhub-api.md</span><span class="tag hard" style="margin-left:auto">TARGET · 99% of orders acknowledged in &lt; 2s</span></div><div class="card-b"><table class="spec"><tr><th>users</th><td>Merchant developers integrating order intake — backend-savvy, REST/gRPC fluent</td></tr><tr><th>problem</th><td>Order intake is fragmented across three channels with no single source of order state</td></tr></table><div class="grid2" style="margin-top:12px"><div><p class="klabel">In scope</p><ul class="scope in"><li>Order intake API</li><li>Payment capture via adapter</li><li>Status webhooks</li></ul></div><div><p class="klabel">Out of scope</p><ul class="scope out"><li>Inventory management</li><li>Shipping labels</li></ul></div></div><details class="more"><summary>Full document</summary><div class="md"><h4>OrderHub API</h4>
+<h5>What it is</h5>
+<p>OrderHub API is the single entry point for order creation and lifecycle tracking. Merchants integrate once and receive a consistent state machine regardless of the sales channel the order originated from.</p></div></details></div></div><h2 id="roadmap"><span class="idx">§2</span>Roadmap <span class="src tag">docs/00_roadmap/roadmap.md</span></h2><p>Columns mirror the <code>##</code> sections of the roadmap file; items citing a <code>BACKLOG</code> id carry that item's live status dot.</p><div class="board"><div><div class="col-h">Now <span class="n">2</span></div><div class="item"><div class="im"><span class="dot d-progress"></span><a class="tag id" href="sample-changes.html#backlog">BACKLOG-004</a></div><div class="it">Webhook retry with exponential backoff</div></div><div class="item"><div class="im"><span class="dot"></span><a class="tag id" href="sample-changes.html#backlog">BACKLOG-005</a></div><div class="it">Idempotent order intake keys</div></div></div><div><div class="col-h">Next <span class="n">2</span></div><div class="item"><div class="it" style="margin-top:0">Refund flow v2</div></div><div class="item"><div class="it" style="margin-top:0">Per-merchant rate limits</div></div></div><div><div class="col-h">Later / someday <span class="n">2</span></div><div class="item"><div class="it" style="margin-top:0">Multi-currency support</div><div class="im" style="margin-top:5px"><a class="tag" href="sample-changes.html#issues">ISSUE-005</a></div></div><div class="item"><div class="it" style="margin-top:0">Merchant sandbox mode</div></div></div><div><div class="col-h">Explicitly not doing <span class="n">1</span></div><div class="item muted"><div class="it" style="margin-top:0">Building our own PSP</div><div class="im" style="margin-top:5px"><a class="tag" href="sample-changes.html#decisions">DECISION-002</a></div></div></div></div><h2 id="architecture"><span class="idx">§3</span>Architecture <span class="src tag">docs/02_architecture/architecture.md</span></h2><div class="note"><span class="lbl">Note</span>Amended <b>only</b> through the Decision workflow — every revision in the <a href="#a-rev">revision block</a> cites its Decision. The docs-kit hook warns on any direct edit.</div><h3 id="a-components">Components</h3><div class="comps"><div class="comp"><div class="cn"><span class="ibadge" style="background:#f4f6f8"><svg width="14" height="14" viewBox="0 0 16 16" style="color:#454e5a"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2.8" y="2.8" width="10.4" height="10.4" rx="1.5"/><rect x="6" y="6" width="4" height="4"/></g></svg></span>api-gateway</div><div class="cr">Authn, per-merchant rate limits, request shaping</div></div><div class="comp"><div class="cn"><span class="ibadge" style="background:#f4f6f8"><svg width="14" height="14" viewBox="0 0 16 16" style="color:#454e5a"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2.8" y="2.8" width="10.4" height="10.4" rx="1.5"/><rect x="6" y="6" width="4" height="4"/></g></svg></span>order-service</div><div class="cr">Order lifecycle state machine, single writer of order state</div></div><div class="comp"><div class="cn"><span class="ibadge" style="background:#f4f6f8"><svg width="14" height="14" viewBox="0 0 16 16" style="color:#454e5a"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2.8" y="2.8" width="10.4" height="10.4" rx="1.5"/><rect x="6" y="6" width="4" height="4"/></g></svg></span>payment-adapter</div><div class="cr">The only egress to external PSPs; normalizes capture/refund</div></div><div class="comp"><div class="cn"><span class="ibadge" style="background:#e8f0fe"><svg width="14" height="14" viewBox="0 0 16 16" style="color:#1d4ed8"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="8" cy="4.2" rx="5" ry="1.9"/><path d="M3 4.2v7.6c0 1 2.2 1.9 5 1.9s5-.9 5-1.9V4.2"/></g></svg></span>postgres</div><div class="cr">Orders + outbox tables, source of durable state</div></div><div class="comp"><div class="cn"><span class="ibadge" style="background:#f1ecfe"><svg width="14" height="14" viewBox="0 0 16 16" style="color:#7c3aed"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2.5 4.8 9h2.7L6.3 13.5 10.9 7H8.2z"/></g></svg></span>worker</div><div class="cr">Outbox consumer: webhook delivery, retries, dead-letter</div></div></div><h3 id="a-flow">Data flow</h3><div class="plot"><svg viewBox="0 0 1013 162" width="100%" role="img" aria-label="data flow graph"><defs><marker id="dag-a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M1 1.5 8 5 1 8.5" fill="none" stroke="#16181d" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></marker><marker id="dag-t" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M1 1.5 8 5 1 8.5" fill="none" stroke="#0d9488" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></marker><symbol id="i-bolt" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2.5 4.8 9h2.7L6.3 13.5 10.9 7H8.2z"/></g></symbol><symbol id="i-db" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="8" cy="4.2" rx="5" ry="1.9"/><path d="M3 4.2v7.6c0 1 2.2 1.9 5 1.9s5-.9 5-1.9V4.2"/></g></symbol><symbol id="i-globe" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5.5"/><path d="M2.5 8h11"/><path d="M8 2.5c1.9 1.6 1.9 9.4 0 11-1.9-1.6-1.9-9.4 0-11z"/></g></symbol><symbol id="i-svc" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2.8" y="2.8" width="10.4" height="10.4" rx="1.5"/><rect x="6" y="6" width="4" height="4"/></g></symbol><symbol id="i-ui" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="3" width="11" height="9" rx="1"/><path d="M2.5 5.8h11"/><path d="M4.3 4.4h.01"/></g></symbol></defs><path d="M105 63 H145" fill="none" stroke="#16181d" stroke-width="1.6" marker-end="url(#dag-a)"/><path d="M275 63 H315" fill="none" stroke="#16181d" stroke-width="1.6" marker-end="url(#dag-a)"/><path d="M459 63 C 477 63, 481 33, 499 33" fill="none" stroke="#16181d" stroke-width="1.6" marker-end="url(#dag-a)"/><path d="M657 33 H697" fill="none" stroke="#16181d" stroke-width="1.6" marker-end="url(#dag-a)"/><path d="M459 63 C 477 63, 481 93, 499 93" fill="none" stroke="#16181d" stroke-width="1.6" marker-end="url(#dag-a)"/><path d="M608 93 H697" fill="none" stroke="#0d9488" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#dag-t)"/><path d="M792 93 C 810 93, 814 63, 832 63" fill="none" stroke="#16181d" stroke-width="1.6" marker-end="url(#dag-a)"/><rect x="453.4" y="26" width="51.2" height="16" rx="2" fill="#ffffff" stroke="#e2e8ee"/><text x="479" y="38" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="9" font-weight="500" fill="#7d8794" text-anchor="middle" letter-spacing=".6">capture</text><rect x="629.7" y="70" width="45.6" height="16" rx="2" fill="#e6faf5" stroke="#7fd4c4"/><text x="652.5" y="82" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="9" font-weight="700" fill="#0d9488" text-anchor="middle" letter-spacing=".6">outbox</text><rect x="16" y="46" width="89" height="34" rx="2" fill="#ffffff" stroke="#c8d2dc" stroke-width="1.5" stroke-dasharray="5 4"/><rect x="22" y="52" width="22" height="22" rx="4" fill="#f4f6f8"/><use href="#i-ui" x="26" y="56" width="14" height="14" color="#7d8794"/><text x="52" y="67.5" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11.5" font-weight="650" fill="#454e5a">client</text><rect x="151" y="46" width="124" height="34" rx="2" fill="#ffffff" stroke="#16181d" stroke-width="1.5"/><rect x="157" y="52" width="22" height="22" rx="4" fill="#f4f6f8"/><use href="#i-svc" x="161" y="56" width="14" height="14" color="#454e5a"/><text x="187" y="67.5" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11.5" font-weight="650" fill="#16181d">api-gateway</text><rect x="321" y="46" width="138" height="34" rx="2" fill="#ffffff" stroke="#16181d" stroke-width="1.5"/><rect x="327" y="52" width="22" height="22" rx="4" fill="#f4f6f8"/><use href="#i-svc" x="331" y="56" width="14" height="14" color="#454e5a"/><text x="357" y="67.5" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11.5" font-weight="650" fill="#16181d">order-service</text><rect x="505" y="16" width="152" height="34" rx="2" fill="#ffffff" stroke="#16181d" stroke-width="1.5"/><rect x="511" y="22" width="22" height="22" rx="4" fill="#f4f6f8"/><use href="#i-svc" x="515" y="26" width="14" height="14" color="#454e5a"/><text x="541" y="37.5" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11.5" font-weight="650" fill="#16181d">payment-adapter</text><rect x="505" y="76" width="103" height="34" rx="2" fill="#ffffff" stroke="#1d4ed8" stroke-width="1.5"/><rect x="511" y="82" width="22" height="22" rx="4" fill="#e8f0fe"/><use href="#i-db" x="515" y="86" width="14" height="14" color="#1d4ed8"/><text x="541" y="97.5" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11.5" font-weight="650" fill="#16181d">postgres</text><rect x="703" y="16" width="68" height="34" rx="2" fill="#ffffff" stroke="#c8d2dc" stroke-width="1.5" stroke-dasharray="5 4"/><rect x="709" y="22" width="22" height="22" rx="4" fill="#f4f6f8"/><use href="#i-globe" x="713" y="26" width="14" height="14" color="#7d8794"/><text x="739" y="37.5" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11.5" font-weight="650" fill="#454e5a">PSP</text><rect x="703" y="76" width="89" height="34" rx="2" fill="#ffffff" stroke="#7c3aed" stroke-width="1.5"/><rect x="709" y="82" width="22" height="22" rx="4" fill="#f1ecfe"/><use href="#i-bolt" x="713" y="86" width="14" height="14" color="#7c3aed"/><text x="739" y="97.5" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11.5" font-weight="650" fill="#16181d">worker</text><rect x="838" y="46" width="159" height="34" rx="2" fill="#ffffff" stroke="#c8d2dc" stroke-width="1.5" stroke-dasharray="5 4"/><rect x="844" y="52" width="22" height="22" rx="4" fill="#f4f6f8"/><use href="#i-globe" x="848" y="56" width="14" height="14" color="#7d8794"/><text x="874" y="67.5" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11.5" font-weight="650" fill="#454e5a">merchant webhook</text></svg><p class="figcap">FIG 1 · from <code>data_flow</code> — <span style="color:#454e5a;font-weight:700">▪ service</span> · <span style="color:#1d4ed8;font-weight:700">▪ datastore</span> · <span style="color:#7c3aed;font-weight:700">▪ worker/queue</span> · dashed node = external · <span style="color:#0d9488;font-weight:700">teal dashed edge = async</span></p></div><h3 id="a-stack">Tech stack</h3><div class="meta-row" style="border-bottom:0;padding-bottom:0;margin-top:8px"><span class="tag">Go 1.22</span><span class="tag">PostgreSQL 16</span><span class="tag">Redis 7</span><span class="tag">gRPC</span><span class="tag">Terraform</span></div><h3 id="a-constraints">Constraints</h3><ul class="constraints"><li>payment-adapter is the only component allowed to call external PSPs</li><li>All state changes go through the outbox pattern — no dual writes</li><li>p99 order intake latency &lt; 300 ms</li><li>Single region until multi-currency lands</li></ul><h3 id="a-rev">Revision block <span class="dim2">· FROM AMENDED_BY</span></h3><table class="data"><tr><th style="width:56px">rev</th><th style="width:110px">date</th><th style="width:150px">decision</th><th>description</th></tr><tr><td class="mono" style="font-weight:700">B</td><td class="mono">2026-07-02</td><td><a class="tag id" href="sample-changes.html#decisions">DECISION-002</a></td><td>External PSP calls only via payment-adapter</td></tr><tr><td class="mono" style="font-weight:700">A</td><td class="mono">2026-06-14</td><td><a class="tag id" href="sample-changes.html#decisions">DECISION-001</a></td><td>Introduce outbox table + delivery worker</td></tr></table><details class="more" style="margin-top:20px"><summary>Full architecture document</summary><div class="md"><h4>Architecture</h4>
+<h5>Components</h5>
+<p>See the frontmatter list — one entry per component.</p>
+<h5>Data flow</h5>
+<p>The frontmatter edges are the authoritative flow description.</p></div></details><div class="tblock"><div class="tb"><div class="tl">Project</div><div class="tv">orderhub</div></div><div class="tb"><div class="tl">Sheet</div><div class="tv">FOUNDATION — CURRENT</div></div><div class="tb"><div class="tl">Rev</div><div class="tv">main @ 1ee86cb</div></div><div class="tb"><div class="tl">Generated</div><div class="tv">2026-07-31 09:30</div></div><div class="tb"><div class="tl">By</div><div class="tv">docs-kit render v0.2.0</div></div></div></div></main></div></body></html>
