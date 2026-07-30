@@ -1,0 +1,103 @@
+---
+name: docs-init
+description: Main entry point of docs-kit. Scaffold the three-layer docs structure (14 folders, templates, docs/README.md) into the current repo and optionally wire the rules into CLAUDE.md. Use when the user runs /docs-kit:docs-init, asks to set up / initialize project docs, or wants the three-layer docs model in a repo.
+---
+
+# docs-init — scaffold the three-layer docs structure
+
+You are setting up the docs-kit three-layer documentation model in the **current
+repository**. The full standard lives in `STANDARD.md` at the plugin root — the
+scaffold below implements it; read it if any judgment call comes up. Work in
+English. Templates are project-agnostic — never inject the current project's
+name into them.
+
+## Step 0 — Resolve the plugin root
+
+Resolve `PLUGIN_ROOT` in this order:
+1. The `${CLAUDE_PLUGIN_ROOT}` environment variable, if set (`echo "$CLAUDE_PLUGIN_ROOT"`).
+2. The directory two levels above this SKILL.md file (`skills/docs-init/SKILL.md` → plugin root).
+3. `find ~/.claude/plugins -maxdepth 6 -type d -name docs-kit` and pick the match
+   that contains `.claude-plugin/plugin.json`.
+
+Verify: `$PLUGIN_ROOT/scripts/docs_scaffold.sh` must exist.
+
+## Step 1 — Preflight: does `docs/` already exist?
+
+Check for `docs/` in the repo root (current working directory).
+
+**If `docs/` exists: STOP. Do not create, merge, or overwrite anything.**
+1. Report the current state: which of the 14 standard folders are present /
+   missing (the scaffold script prints exactly this if you run it — it refuses
+   with exit 3 and touches nothing), plus any non-standard entries.
+2. Ask the user with AskUserQuestion — question: "docs/ already exists. How
+   should docs-init proceed?" with options:
+   - "Abort — leave docs/ untouched (Recommended)"
+   - "Add missing pieces only — create only the missing standard folders and
+     their template files; never overwrite or edit any existing file"
+3. If AskUserQuestion fails or returns an empty answer, ask the same question
+   in plain text and **end the turn** — wait for the user's reply. Never proceed
+   on silence.
+4. On "Add missing pieces only": copy from `$PLUGIN_ROOT/templates/docs/` only
+   the folders/files that do not exist yet (`cp -Rn` semantics; check each path
+   first). Never overwrite an existing file.
+
+## Step 2 — Scaffold (fresh repo path)
+
+Run:
+
+```bash
+bash "$PLUGIN_ROOT/scripts/docs_scaffold.sh" .
+```
+
+The script copies the 14-folder template tree to `./docs/` (every folder ships a
+seed file — templates are never empty), stamps today's date into
+`docs/92_audit/LOG.md`, and prints the created file list ending with
+`SCAFFOLD OK`. If it exits 3 (docs/ appeared meanwhile), go back to Step 1.
+
+## Step 3 — Self-check
+
+Run:
+
+```bash
+bash "$PLUGIN_ROOT/scripts/docs_validate.sh" docs
+```
+
+A fresh scaffold must pass clean (the shipped `-000` example chain is
+self-consistent by design). If it does not, report the raw FAIL lines to the
+user as a plugin bug — do not hand-patch the generated files silently.
+
+## Step 4 — Wire the rules into CLAUDE.md (ASK FIRST — ALWAYS)
+
+The snippet lives at `$PLUGIN_ROOT/templates/claude-md-snippet.md` (trigger
+table, "only Decision amends Architecture", the lane test, pointer to
+`docs/README.md`). It is fenced by `<!-- docs-kit:start -->` /
+`<!-- docs-kit:end -->` markers.
+
+**Never write to CLAUDE.md without explicit consent — no exceptions.**
+
+1. Ask with AskUserQuestion — question: "Append the docs-kit rules block to this
+   repo's CLAUDE.md so agents follow the docs triggers?" with options:
+   - "Yes — append to CLAUDE.md (Recommended)" (creates CLAUDE.md if absent)
+   - "No — skip; I'll wire it myself"
+2. If AskUserQuestion fails or returns an empty answer, ask the same question in
+   plain text and **end the turn** — write only after the user answers yes.
+3. On yes:
+   - CLAUDE.md absent → create it containing the snippet.
+   - CLAUDE.md present without docs-kit markers → append the snippet at the end,
+     separated by one blank line. Change nothing else in the file.
+   - Markers already present → replace only the content between the markers with
+     the current snippet; report that it was refreshed.
+
+## Step 5 — Report
+
+Summarize: folders/files created, validation result, CLAUDE.md action taken
+(or skipped and why), and next steps —
+
+- Read `docs/README.md` (30 seconds).
+- The `-000` files are a worked example chain; delete all four together or keep
+  them as a format reference. Real IDs start at `001`.
+- `/docs-kit:docs-sync` reconciles docs after a working session;
+  `/docs-kit:docs-check` validates structure anytime.
+- The plugin's hooks now warn (never block) on direct `docs/02_architecture/`
+  edits and on sensitive-zone changes without an Issue/Decision. Sensitive
+  patterns are configurable via `.docs-kit.json` (see STANDARD.md §9).
