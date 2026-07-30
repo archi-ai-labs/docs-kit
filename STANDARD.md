@@ -269,5 +269,10 @@ Rules:
   alphabetical within a column); >12 nodes → one figure per connected flow
   group; unparseable or cyclic flows fall back to text — never a guessed
   diagram.
+- **Motion (pure CSS, zero JS).** Exactly three meaning-bearing animations:
+  a white packet gliding along solid edges (data direction), marching dashes on
+  dashed strokes (async / fast-lane / amendment), and an LED pulse on live dots
+  (orange = in-progress, green = docs-check clean). No entrance or hover
+  animations; `prefers-reduced-motion` disables all of it.
 - The validator ignores `docs/*.html` (it only reads `.md`); check 4's
   append-only rule is unaffected.

@@ -336,8 +336,8 @@ def svg_system_map():
          svg_text(30, 196, "L2", 10, "700", L2, ls="1.5"),
          '<line x1="140" y1="58" x2="760" y2="58" stroke="%s" stroke-width="2.5"/>' % L1,
          '<line x1="140" y1="192" x2="760" y2="192" stroke="%s" stroke-width="2.5"/>' % L2,
-         '<path d="M140 205 C 210 246, 690 246, 760 205" fill="none" stroke="%s" stroke-width="2" stroke-dasharray="6 5"/>' % FAST,
-         '<path d="M560 176 C 600 126, 664 96, 742 74" fill="none" stroke="%s" stroke-width="1.7" stroke-dasharray="5 4" marker-end="url(#map-ah)"/>' % MARK,
+         '<path d="M140 205 C 210 246, 690 246, 760 205" fill="none" stroke="%s" stroke-width="2" stroke-dasharray="6 5" class="dashrun"/>' % FAST,
+         '<path d="M560 176 C 600 126, 664 96, 742 74" fill="none" stroke="%s" stroke-width="1.7" stroke-dasharray="5 4" class="dashrun" marker-end="url(#map-ah)"/>' % MARK,
          svg_text(650, 116, "AMENDS", 9.5, "700", MARK, ls="1.2"),
          svg_text(450, 262, "FAST LANE · NO ARCHITECTURE CHANGE & REVERT < 1 DAY", 9.5, "400", FAST,
                   anchor="middle", ls="1.2")]
@@ -356,7 +356,7 @@ def svg_pipeline(counts):
     s = ['<svg viewBox="0 0 880 196" width="100%" role="img" aria-label="change pipeline with '
          'fast-lane bypass">', "<defs>", symbol_defs(["issue", "doc", "seal", "list"]), "</defs>",
          '<line x1="120" y1="78" x2="760" y2="78" stroke="%s" stroke-width="2.5"/>' % L2,
-         '<path d="M120 91 C 195 152, 685 152, 760 91" fill="none" stroke="%s" stroke-width="2" stroke-dasharray="6 5"/>' % FAST]
+         '<path d="M120 91 C 195 152, 685 152, 760 91" fill="none" stroke="%s" stroke-width="2" stroke-dasharray="6 5" class="dashrun"/>' % FAST]
     for j in range(4):
         s.append(station(xs[j], 78, L2, icons[j], names[j]))
         s.append(svg_text(xs[j], 110, str(counts[j]), 10, "400", INK3, anchor="middle"))
@@ -505,7 +505,7 @@ def svg_dag(edges, comps, fig_no="1"):
         x2 = bx - 6
         y2 = by + NODE_H / 2
         color, mid = (FAST, "dag-t") if asyn else (INK, "dag-a")
-        dash = ' stroke-dasharray="5 4"' if asyn else ""
+        dash = ' stroke-dasharray="5 4" class="dashrun"' if asyn else ""
         if abs(y1 - y2) < 1:
             d = "M%g %g H%g" % (x1, y1, x2)
         else:
@@ -514,6 +514,8 @@ def svg_dag(edges, comps, fig_no="1"):
             d = "M%g %g C %g %g, %g %g, %g %g" % (x1, y1, cx1, y1, cx2, y2, x2, y2)
         s.append('<path d="%s" fill="none" stroke="%s" stroke-width="1.6"%s marker-end="url(#%s)"/>'
                  % (d, color, dash, mid))
+        if not asyn:
+            s.append('<path d="%s" class="pkt"/>' % d)
         text = lbl.strip() if lbl else ""
         if text:
             mx = (x1 + x2) / 2
@@ -585,7 +587,15 @@ CSS = r"""
 html { scroll-behavior: smooth; }
 body { margin: 0; background: var(--paper); color: var(--ink-2); font: 15px/1.65 var(--sans); -webkit-font-smoothing: antialiased; }
 :focus-visible { outline: 2px solid var(--mark-2); outline-offset: 2px; }
-@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } * { transition: none !important; } }
+@keyframes pktflow { to { stroke-dashoffset: -50; } }
+@keyframes dashrun { to { stroke-dashoffset: -198; } }
+@keyframes pulse-o { 0% { box-shadow: 0 0 0 0 rgba(234,88,12,.4); } 70% { box-shadow: 0 0 0 6px rgba(234,88,12,0); } 100% { box-shadow: 0 0 0 0 rgba(234,88,12,0); } }
+@keyframes pulse-g { 0% { box-shadow: 0 0 0 0 rgba(22,163,74,.45); } 70% { box-shadow: 0 0 0 6px rgba(22,163,74,0); } 100% { box-shadow: 0 0 0 0 rgba(22,163,74,0); } }
+.pkt { fill: none; stroke: #ffffff; stroke-width: 2.2; stroke-linecap: round; stroke-dasharray: 5 45; animation: pktflow 2.4s linear infinite; }
+svg .dashrun { animation: dashrun 16s linear infinite; }
+.dot.d-progress { animation: pulse-o 2.2s ease-out infinite; }
+.dot.d-live { background: var(--approve); border-color: var(--approve); animation: pulse-g 2.2s ease-out infinite; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } * { transition: none !important; animation: none !important; } .pkt { display: none; } }
 a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--mark); text-decoration-thickness: 1.5px; text-underline-offset: 3px; }
 a:hover { color: var(--mark); }
 .topnav { position: sticky; top: 0; z-index: 10; background: rgba(255,255,255,.94); backdrop-filter: blur(6px); border-bottom: 1px solid var(--line); }
@@ -1313,7 +1323,7 @@ def build_index(ctx, docs, data, audit, latest_rev, check_result):
     meta = [tag(ctx["ref"]), tag("generated " + ctx["stamp"])]
     if check_result is not None:
         if check_result == 0:
-            meta.append('<span class="status">%sdocs-check clean</span>' % dot_html("done"))
+            meta.append('<span class="status">%sdocs-check clean</span>' % dot_html("live"))
         else:
             meta.append('<span class="status live">%sdocs-check · %d error%s</span>'
                         % (dot_html("progress"), check_result, "" if check_result == 1 else "s"))

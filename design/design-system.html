@@ -30,9 +30,18 @@ html { scroll-behavior: smooth; }
 body { margin: 0; background: var(--paper); color: var(--ink-2);
   font: 15px/1.65 var(--sans); -webkit-font-smoothing: antialiased; }
 :focus-visible { outline: 2px solid var(--mark-2); outline-offset: 2px; }
+@keyframes pktflow { to { stroke-dashoffset: -50; } }
+@keyframes dashrun { to { stroke-dashoffset: -198; } }
+@keyframes pulse-o { 0% { box-shadow: 0 0 0 0 rgba(234,88,12,.4); } 70% { box-shadow: 0 0 0 6px rgba(234,88,12,0); } 100% { box-shadow: 0 0 0 0 rgba(234,88,12,0); } }
+@keyframes pulse-g { 0% { box-shadow: 0 0 0 0 rgba(22,163,74,.45); } 70% { box-shadow: 0 0 0 6px rgba(22,163,74,0); } 100% { box-shadow: 0 0 0 0 rgba(22,163,74,0); } }
+.pkt { fill: none; stroke: #ffffff; stroke-width: 2.2; stroke-linecap: round; stroke-dasharray: 5 45; animation: pktflow 2.4s linear infinite; }
+svg .dashrun { animation: dashrun 16s linear infinite; }
+.dot.d-progress { animation: pulse-o 2.2s ease-out infinite; }
+.dot.d-live { background: var(--approve); border-color: var(--approve); animation: pulse-g 2.2s ease-out infinite; }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
-  * { transition: none !important; }
+  * { transition: none !important; animation: none !important; }
+  .pkt { display: none; }
 }
 
 /* prose links: ink with a redline underline */
@@ -388,9 +397,15 @@ ol.principles b { color: var(--ink); }
       <span style="font:11.5px var(--sans);color:var(--ink-3)"><span style="color:var(--fastc);font-weight:600">teal dashed</span> = bypass track · <span style="color:var(--l2);font-weight:600">violet solid</span> = the long way</span>
     </div>
     <p class="demo-label">Verdicts — stamps</p>
-    <div class="rowwrap">
+    <div class="rowwrap" style="margin-bottom:14px">
       <span class="stamp st-approved">approved</span>
       <span class="stamp st-rejected">rejected</span>
+    </div>
+    <p class="demo-label">Live signals — LED pulse (pure CSS)</p>
+    <div class="rowwrap">
+      <span class="status live"><span class="dot d-progress"></span>in flight</span>
+      <span class="status"><span class="dot d-live"></span>docs-check clean</span>
+      <span style="font:11.5px var(--sans);color:var(--ink-3)">a soft ring every 2.2s — the heartbeat of anything currently alive</span>
     </div>
   </div>
   <p class="rule-p"><b>Grammar:</b> hollow = not started · half-filled redline = live now ·
@@ -573,7 +588,12 @@ ol.principles b { color: var(--ink); }
 
   <h2 id="access"><span class="idx">§9</span>Motion &amp; access</h2>
   <table class="spec">
-    <tr><th>motion</th><td>none by design — a drawing does not animate. Hover states change color/border only; <code>prefers-reduced-motion</code> also disables smooth scrolling</td></tr>
+    <tr><th>motion</th><td>only meaning-bearing motion, all pure CSS (still zero JS), three moves total:
+      <b>packet</b> — a white light gliding along solid edges shows data direction (2.4s cycle);
+      <b>marching dashes</b> — dashed strokes (async, fast-lane, amendment) drift toward their
+      target (slow, 16s); <b>LED pulse</b> — a soft ring on live dots: orange = in-progress,
+      green = docs-check clean (2.2s). Nothing animates on entrance or hover, and
+      <code>prefers-reduced-motion</code> kills every animation (packets hide entirely)</td></tr>
     <tr><th>focus</th><td>2px redline <code>:focus-visible</code> outline on every link, tab, and summary</td></tr>
     <tr><th>contrast</th><td>body ≥ 7:1, labels ≥ 4:1, redline text #c2410c on paper 4.9:1; statuses never rely on hue alone — the dot shape carries the meaning</td></tr>
     <tr><th>responsive</th><td>sidebar folds above content &lt; 960px; boards and the title block reflow; SVG maps scale full-width</td></tr>
