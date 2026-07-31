@@ -285,3 +285,41 @@ Rules:
   animations; `prefers-reduced-motion` disables all of it.
 - The validator ignores `docs/*.html` (it only reads `.md`); check 4's
   append-only rule is unaffected.
+
+## 11. Language — English frame, Vietnamese explanation
+
+Two roles, deliberately split. **Structure is English; explanation is Vietnamese.**
+
+English, always — these are names, not prose, and translating them would break
+either the validator or the reader's ability to grep:
+
+| what | examples |
+|---|---|
+| folder + file names | `20_issues/`, `architecture.md` |
+| frontmatter field names | `status`, `lane`, `source_ref`, `amended_by` |
+| enum values | `open`, `in-progress`, `done`, `approved`, `rejected`, `fast`, `full` |
+| id prefixes | `ISSUE-`, `PROPOSAL-`, `DECISION-`, `BACKLOG-` |
+| domain terms | Issue, Proposal, Decision, Backlog, Architecture, fast lane, full lane |
+| UI labels in the rendered views | section headings, table headers, status text, stamps, `NO PRODUCTS` |
+| roadmap column headings | `## Now`, `## Next`, `## Later`, `## Not doing` |
+
+Vietnamese — everything whose job is to *explain*: descriptions, problem
+statements, rationale, scope lines, audit entries, and every lede, note, figure
+caption and empty-state hint in the generated views.
+
+Rules:
+
+- **English terms stay bare inside Vietnamese sentences** — no translation, no
+  gloss in parentheses, no bold. "Chỉ được sửa qua Decision workflow", not
+  "Chỉ được sửa qua quy trình Quyết định (Decision workflow)". Bold already
+  carries two meanings in these views (the redline pen `.hl`, and author `**`),
+  so it is not available as a third signal for "this word is English".
+- **Every `<h2>` in the generated views carries one Vietnamese gloss line**
+  (`.h2sub`) under the English heading — one line, no full stop.
+- **Roadmap headings are labels, so they stay English**, but `roadmap_kind()`
+  also accepts the obvious Vietnamese equivalents. The failure it guards against
+  is silent: an unrecognised heading loses its column colour without any error.
+- **Anchor slugs fold diacritics** rather than dropping them (`slugify()`), and
+  dedupe within a page — otherwise `phân-quyền` and `phần-quyền` collide on one
+  HTML id.
+- `<html lang="vi">`, since the prose dominates the page.

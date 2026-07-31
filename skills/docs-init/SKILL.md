@@ -7,9 +7,18 @@ description: Main entry point of docs-kit. Scaffold the three-layer docs structu
 
 You are setting up the docs-kit three-layer documentation model in the **current
 repository**. The full standard lives in `STANDARD.md` at the plugin root — the
-scaffold below implements it; read it if any judgment call comes up. Work in
-English. Templates are project-agnostic — never inject the current project's
-name into them.
+scaffold below implements it; read it if any judgment call comes up.
+
+**Language.** Write explanations in Vietnamese; keep the scaffolding in English.
+Structure is English — folder names, frontmatter field names, id prefixes
+(`ISSUE-`, `PROPOSAL-`, `DECISION-`, `BACKLOG-`), enum values (`open`,
+`in-progress`, `done`, `approved`, `rejected`, `fast`, `full`), section headings,
+and the domain terms themselves (Issue, Proposal, Decision, Backlog, Architecture,
+fast lane, full lane). Everything that *explains* — descriptions, problem
+statements, rationale, audit lines — is Vietnamese, with those English terms left
+bare inside the sentence rather than translated. See STANDARD §11.
+
+Templates are project-agnostic — never inject the current project's name into them.
 
 ## Step 0 — Resolve the plugin root
 
