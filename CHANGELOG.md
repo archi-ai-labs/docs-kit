@@ -7,6 +7,62 @@ for the plugin version — the renderer stamps it into every generated page).
 
 ## [Unreleased]
 
+### Added — `brief` became the forward path into Layer 2
+
+STANDARD §6 has always said *"Starting work that is not in the Backlog → create
+an Issue before writing code"*. Nothing implemented it. `docs-sync` only ever
+built the chain backwards — its Issues carry the line "Created retroactively …
+the work was done before this Issue existed" — and the Stop hook only nags once
+the session is over. Layer 2 had a back door and no front door.
+
+`brief` was already standing at the right moment: people run it immediately
+before handing work off, which is exactly when §6 wants the Issue. It already
+ran a decision-freeze gate that built a table of everything still open, and it
+already read `docs/` — but only to *cite* decisions, never to *record* one.
+
+So the front door is `brief` with the writing side switched on, gated on one
+directory test (`docs/20_issues/`):
+
+| Phase | New behaviour |
+|---|---|
+| 0 | Detect. No `docs/20_issues/` → the skill behaves exactly as before and writes nothing but the brief. |
+| 1 | The gate's dialog carries one extra question: record this work as an Issue? Yes → the Issue opens at `status: exploring`, holding the open-decision table. |
+| 1.5 | Gate closed → `exploring` becomes `open`, then the lane test. Fast lane creates the Backlog item and promotes the Issue; full lane stops and asks. |
+| 2 | Section 2 of the brief cites `BACKLOG-NNN` / `ISSUE-NNN` / `DECISION-NNN` instead of paraphrasing them. |
+
+Full lane **asks**, it never refuses — stop and draft the Proposal, or hand the
+work over with a no-Decision-covers-this stamp in HARD CONSTRAINTS. Blocking is
+how a plugin gets uninstalled, which costs every bit of enforcement it had; §8
+already settled this for the hooks and the same reasoning governs the skill.
+
+`brief` keeps its model invocability — it stays the one skill Claude may reach
+for on its own — because the rule being enforced is "no unconfirmed writes into
+`docs/`", not "no automatic invocation". The confirmation sits on the write.
+
+### Added — `references/issue-capture.md`
+
+Creating an Issue is now written once and read twice: by `brief` going forward
+and by `docs-sync` going back. It is procedure only — `STANDARD.md` remains the
+contract, and the file points at it rather than copying its tables, because two
+copies of a contract drift and then neither is authoritative.
+
+It also carries the rule that keeps the Stop hook honest: instructional text is
+loaded into the transcript, and that hook treats a concrete id as proof the
+session engaged with the docs workflow. A literal id with digits sitting in a
+skill file silences it in every session, permanently. Prose says `ISSUE-NNN`;
+digits live only under `docs/`.
+
+### Fixed
+
+- `README.md` described `/docs-kit:brief` as "Manual invocation only" and as
+  writing no files. The second half is what this release changes; the first half
+  had been stale since 0.9.0. `brief` really was manual-only back when it was
+  `commands/brief.md`, which carried `disable-model-invocation: true`. Folding
+  `commands/` into `skills/` dropped the flag and made `brief` the one
+  model-reachable skill — the Invariants section was updated to say so, the
+  usage table was not. Two descriptions of the same skill disagreed for a whole
+  minor version.
+
 ## [0.11.0] — 2026-07-31
 
 ### Added — ```` ```state ````, the entity lifecycle

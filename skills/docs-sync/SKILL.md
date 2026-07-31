@@ -44,13 +44,21 @@ deviation and why — honestly.
 
 ## Step 3 — Work that had no Backlog item
 
-For each piece of completed work with no matching Backlog item, create
-`docs/20_issues/ISSUE-NNN-<slug>.md` with the required frontmatter
-(`id, description, why, lane, status`), body noting **"Created retroactively by
-docs-sync — the work was done before this Issue existed."**
-- Lane by the two-question test (Architecture doc modified? revert > 1 day?).
-- Fast lane → also create the Backlog item (`source_ref` = the Issue,
-  `status: done`) and its audit line, so traceability is complete.
+For each piece of completed work with no matching Backlog item, create an Issue.
+
+The mechanics — id allocation, file naming, frontmatter, the lane test, and the
+routing that follows it — are in `references/issue-capture.md` at the plugin
+root (resolve the root as in docs-init Step 0). `brief` reads the same file from
+the forward direction; keeping one copy is what stops the two paths from
+drifting.
+
+What is specific to this skill:
+
+- The body must note **"Created retroactively by docs-sync — the work was done
+  before this Issue existed."** The forward path has no such line, and the
+  distinction matters when someone later audits the chain.
+- The work is already finished, so a fast-lane Backlog item is written at
+  `status: done` **with** its audit line — not `open` without one.
 - Full lane → **stop at the Issue** (`status: open`) and flag it prominently in
   the report: full-lane work happened without a Proposal/Decision. Do not
   fabricate the missing Proposal/Decision — that is the user's call.

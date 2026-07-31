@@ -157,7 +157,7 @@ plugin on by default.
 | `/docs-kit:docs-sync` | End-of-session reconcile: backlog statuses, audit entries, retroactive Issues, pending Architecture amendments, architecture-vs-code drift. | Yes |
 | `/docs-kit:docs-check` | Run the deterministic validator and explain each failure. Never fixes. | No |
 | `/docs-kit:docs-render` | Generate/refresh the HTML views of `docs/`. Deterministic; never edits markdown. | Yes (HTML only) |
-| `/docs-kit:brief` | Turn settled decisions into a delegation prompt for a coding agent — gates on a decision-freeze check first. Manual invocation only. | No |
+| `/docs-kit:brief` | Turn settled decisions into a delegation prompt for a coding agent — gates on a decision-freeze check first. In a repo that has `docs/`, also records the work as an Issue and routes it through Layer 2 before writing the prompt. The one skill Claude may invoke on its own. | Yes (`docs/`, only after you confirm) |
 
 **Typical flow:** `docs-init` once → work → `docs-sync` at the end of a session →
 `docs-check` whenever you want the structure verified.
@@ -339,6 +339,8 @@ docs-kit/
 ├── STANDARD.md                  # source of truth for the model
 ├── skills/                      # all five commands: docs-init (entry point),
 │                                #   docs-sync, docs-check, docs-render, brief
+├── references/                  # mechanics shared by more than one skill
+│   └── issue-capture.md         #   creating an Issue — read by brief + docs-sync
 ├── hooks/hooks.json             # 2 deterministic warn-only hooks
 ├── scripts/                     # docs_validate.sh, docs_scaffold.sh, docs_render.{sh,py}, hook workers
 ├── design/                      # "change-control print" design system + generated samples
