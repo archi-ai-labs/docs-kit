@@ -54,5 +54,6 @@ docs-kit/
 ├── hooks/hooks.json         # 2 deterministic warn-only hooks
 ├── scripts/                 # docs_validate.sh, docs_scaffold.sh, docs_render.{sh,py}, hook workers
 ├── design/                  # render design system ("change-control print") + generated samples
+│                            #   sample-*.html are renderer output — regenerate with make-samples.sh
 └── templates/               # the 14-folder docs tree + CLAUDE.md snippet
 ```
