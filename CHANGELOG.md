@@ -7,6 +7,52 @@ for the plugin version — the renderer stamps it into every generated page).
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-07-31
+
+### ⚠️ Breaking — the marketplace id changed
+
+`docs-kit` moved to the `archi-ai-labs` organisation, and the catalog it ships in
+moved into its own repo,
+[`archi-ai-labs/agent-marketplace`](https://github.com/archi-ai-labs/agent-marketplace)
+— it used to live at the root of `archimonde12/claude-trim-kit`, which meant the
+marketplace was named after a person and hosted inside an unrelated plugin. The
+marketplace is now called **`archi-ai-labs`**, so the install id is
+**`docs-kit@archi-ai-labs`**. Existing installs do not migrate themselves —
+remove the old one and install the new:
+
+```
+/plugin uninstall docs-kit@archimonde12
+/plugin marketplace remove archimonde12
+/plugin marketplace add archi-ai-labs/agent-marketplace
+/plugin install docs-kit@archi-ai-labs
+```
+
+Or in one line from a terminal:
+
+```bash
+curl -fsSL https://archi-ai-labs.github.io/agent-marketplace/install.sh | bash -s -- --plugins docs-kit
+```
+
+`--plugins docs-kit` is required: the installer's default enables only
+`trim-kit`, because `docs-kit` registers hooks and those are not switched on for
+someone who did not ask.
+
+### Changed
+
+- **The README now follows
+  [README-STANDARD](https://github.com/archi-ai-labs/agent-marketplace/blob/main/standards/README-STANDARD.md),**
+  the frame every plugin in this marketplace shares. Four things were missing and
+  are now present: a terminal install (Option 1) beside the in-Claude one, which
+  the README previously had no way to offer; the installation appendix in full —
+  how to read the script before running it, local dev, and the exact
+  `extraKnownMarketplaces` / `enabledPlugins` JSON the installer writes; the
+  manual uninstall route naming both of those keys and the `.bak` the installer
+  leaves; and `/plugin marketplace remove` with its consequence stated. Nothing
+  was removed — the model, generated views and enforcement sections stay as they
+  were.
+- **Project layout** now points at the real catalog repo instead of describing a
+  marketplace hosted inside `claude-trim-kit`.
+
 ## [0.7.0] — 2026-07-31
 
 ### Added

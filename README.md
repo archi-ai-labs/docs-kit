@@ -1,6 +1,6 @@
 # docs-kit
 
-[![validate](https://github.com/archimonde12/docs-kit/actions/workflows/validate.yml/badge.svg)](https://github.com/archimonde12/docs-kit/actions/workflows/validate.yml)
+[![validate](https://github.com/archi-ai-labs/docs-kit/actions/workflows/validate.yml/badge.svg)](https://github.com/archi-ai-labs/docs-kit/actions/workflows/validate.yml)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A63D2.svg)](https://docs.claude.com/en/docs/claude-code)
 
@@ -26,35 +26,72 @@ macOS shell.
 
 ## 🚀 Install
 
-Run these from a Claude Code session:
+Two ways to install — a one-line terminal command, or from inside Claude Code.
+**Option 1 is recommended.**
+
+### Option 1 — One command in your terminal ⭐
+
+Installs globally in your **user** settings (`~/.claude/settings.json`), so it's
+active in every project. Paste this in:
+
+```bash
+curl -fsSL https://archi-ai-labs.github.io/agent-marketplace/install.sh | bash -s -- --plugins docs-kit
+```
+
+`--plugins docs-kit` is not optional here: with no arguments the installer
+registers the catalog and enables only `trim-kit`, because `docs-kit` installs
+hooks and nothing should switch hooks on for you unasked.
+
+Want it in **one project only** instead? Add `--project` — it writes
+`./.claude/settings.json` in the current folder rather than your home config:
+
+```bash
+curl -fsSL https://archi-ai-labs.github.io/agent-marketplace/install.sh | bash -s -- --plugins docs-kit --project
+```
+
+Either way it's safe to re-run: it backs up your existing `settings.json` first and
+aborts without touching it if the JSON is invalid.
+
+### Option 2 — Inside Claude Code (Windows / no bash)
+
+No terminal or `bash` needed — run these from a Claude Code session, works everywhere:
 
 ```
-/plugin marketplace add archimonde12/claude-trim-kit
-/plugin install docs-kit@archimonde12
+/plugin marketplace add archi-ai-labs/agent-marketplace
+/plugin install docs-kit@archi-ai-labs
 ```
 
-> The marketplace is called `archimonde12` but is hosted in the
-> `claude-trim-kit` repo — one catalog, several plugins. Adding it once makes
-> every plugin in it installable, this one included.
+The `/plugin install` step **does not default to global** — it opens a scope picker.
+Choose:
 
-`/plugin install` **does not default to global** — it opens a scope picker:
-
-- **User** — every project → **pick this for global**
+- **User** — every project (same as Option 1) → **pick this for global**
 - **Project** — this repo, shared with collaborators (`.claude/settings.json`)
 - **Local** — this repo, just you (`.claude/settings.local.json`)
 
 > Want global with no picker? Run the shell command
-> `claude plugin install docs-kit@archimonde12` — it installs to **User** scope
-> unless you pass `--scope`.
+> `claude plugin install docs-kit@archi-ai-labs` — it installs to **User** scope
+> (global) unless you pass `--scope`.
 
-### ▶︎ After installing
+### ▶︎ After installing (either option)
 
 1. **Restart** Claude Code (or run `/reload-plugins`) — it fetches the plugin from GitHub.
-2. If asked to **trust** the `archimonde12` marketplace, approve it once. ✅
+2. If asked to **trust** the `archi-ai-labs` marketplace, approve it once. ✅
 3. Run **`/docs-kit:docs-init`** in the repo you want documented.
 
 <details>
-<summary><b>Local dev</b> — try it without installing</summary>
+<summary><b>Extras</b> — read the script first · local dev · what the installer writes</summary>
+
+### Prefer to read the script before running it?
+
+Piping `curl` into `bash` runs code sight unseen. To inspect it first:
+
+```bash
+curl -fsSL https://archi-ai-labs.github.io/agent-marketplace/install.sh -o install.sh
+less install.sh   # review
+bash install.sh --plugins docs-kit   # then run
+```
+
+### Local dev — try it without installing
 
 Fastest loop while editing the plugin — a session-only load, nothing written to
 your settings:
@@ -62,6 +99,27 @@ your settings:
 ```bash
 claude --plugin-dir /path/to/docs-kit
 ```
+
+### What the installer actually writes
+
+The install script (Option 1) deep-merges these two keys into the target
+`settings.json` — you can add them by hand instead of running the script:
+
+```json
+{
+  "extraKnownMarketplaces": {
+    "archi-ai-labs": {
+      "source": { "source": "github", "repo": "archi-ai-labs/agent-marketplace" }
+    }
+  },
+  "enabledPlugins": {
+    "docs-kit@archi-ai-labs": true
+  }
+}
+```
+
+`extraKnownMarketplaces` pre-registers the marketplace; `enabledPlugins` turns the
+plugin on by default.
 
 </details>
 
@@ -160,11 +218,20 @@ triggers have been tuned in practice.
 From inside Claude Code:
 
 ```
-/plugin uninstall docs-kit@archimonde12    # remove the plugin
+/plugin uninstall docs-kit@archi-ai-labs     # remove the plugin
+/plugin marketplace remove archi-ai-labs     # also drop the catalog (optional)
 ```
 
-- **Just turn it off** without removing: `/plugin disable docs-kit@archimonde12`
+- **Just turn it off** without removing: `/plugin disable docs-kit@archi-ai-labs`
 - Run `/reload-plugins` (or restart Claude Code) to apply.
+
+> Removing the marketplace uninstalls every plugin you installed from it — so if
+> `docs-kit` was your only one, `marketplace remove` alone is enough.
+
+**Installed with the script (Option 1)?** You can instead undo it by deleting the
+two keys the installer added — `extraKnownMarketplaces["archi-ai-labs"]` and
+`enabledPlugins["docs-kit@archi-ai-labs"]` — from your `settings.json`. The
+installer left a timestamped `.bak` copy next to it to restore from.
 
 Uninstalling removes the plugin, not your docs — `docs/` is ordinary markdown in
 your repo and keeps working without it.
@@ -232,9 +299,10 @@ Subscribers pick up the new version on their next `/plugin marketplace update`
 <details>
 <summary><b>Project layout</b> — a standalone plugin, not a marketplace</summary>
 
-This repo is a **standalone plugin**, distributed through the `archimonde12`
-marketplace whose catalog lives in the separate `claude-trim-kit` repo — so there
-is no `marketplace.json` here, only a `plugin.json`.
+This repo is a **standalone plugin**, distributed through the `archi-ai-labs`
+marketplace whose catalog lives in the separate
+[`archi-ai-labs/agent-marketplace`](https://github.com/archi-ai-labs/agent-marketplace)
+repo — so there is no `marketplace.json` here, only a `plugin.json`.
 
 ```
 docs-kit/
