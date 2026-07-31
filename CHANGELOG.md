@@ -26,9 +26,14 @@ directory test (`docs/20_issues/`):
 | Phase | New behaviour |
 |---|---|
 | 0 | Detect. No `docs/20_issues/` → the skill behaves exactly as before and writes nothing but the brief. |
-| 1 | The gate's dialog carries one extra question: record this work as an Issue? Yes → the Issue opens at `status: exploring`, holding the open-decision table. |
-| 1.5 | Gate closed → `exploring` becomes `open`, then the lane test. Fast lane creates the Backlog item and promotes the Issue; full lane stops and asks. |
+| 1 | The gate's dialog carries one extra question: record this work as an Issue? Yes → the Issue opens at `status: exploring` holding the open-decision table — or straight at `open` when the gate found nothing worth asking about. |
+| 1.5 | Gate closed → the Issue reaches `open`, then the lane test. Fast lane creates the Backlog item and promotes the Issue; full lane stops and asks. |
 | 2 | Section 2 of the brief cites `BACKLOG-NNN` / `ISSUE-NNN` / `DECISION-NNN` instead of paraphrasing them. |
+
+`exploring` is load-bearing rather than decorative: an Issue whose gate the user
+walks away from stays there, which is exactly what STANDARD §4 reserves that
+status for — "raw research, not yet a real Issue". Nothing cleans it up, and
+nothing should.
 
 Full lane **asks**, it never refuses — stop and draft the Proposal, or hand the
 work over with a no-Decision-covers-this stamp in HARD CONSTRAINTS. Blocking is
