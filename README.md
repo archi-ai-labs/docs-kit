@@ -211,10 +211,13 @@ CI fails if they drift.
 
 Two rules worth knowing before you write a flow. **A figure is never shrunk to
 fit** — one wider than the column scrolls instead, because text scaled down to
-make a diagram fit is a diagram nobody reads. And when a flow outgrows the graph
-style's budget (12 nodes · 18 edges · 7 per column) or contains a cycle, the
-renderer switches *style* rather than scale, drawing a source × target **matrix**
-plus the complete edge table. See STANDARD §10.
+make a diagram fit is a diagram nobody reads. And **`data_flow` is always a
+graph**: a cycle is not a drawing problem but a callback or a cache read-back, so
+those edges are lifted out for layering and drawn back in on return lanes below
+the rows. Past the density budget (20 nodes · 32 edges · 10 per column) the graph
+is still drawn in full — it just scrolls, and a note suggests splitting the flow
+across Architecture docs. The complete edge table sits under every figure. See
+STANDARD §10.
 
 ---
 

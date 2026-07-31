@@ -60,12 +60,13 @@ CHAR_W = 6.95  # approx mono advance at 11.5px, used to size SVG nodes
 # anything at or under it may stretch to fill, but is never scaled down.
 CONTENT_W = 838
 
-# The density budget for the GRAPH style. Past any one of these a graph stops
-# being readable at natural size, so the renderer switches presentation instead
-# of drawing something nobody can follow. See STANDARD §10.
-FLOW_MAX_NODES = 12
-FLOW_MAX_EDGES = 18
-FLOW_MAX_ROWS = 7  # nodes stacked in one column
+# The density budget for the graph. It no longer picks a presentation — there is
+# only one, the graph — it decides when to WARN. Past any of these the flow is
+# still drawn, at natural size, scrolling inside its own frame; the note just
+# suggests splitting it across Architecture docs. See STANDARD §10.
+FLOW_MAX_NODES = 20
+FLOW_MAX_EDGES = 32
+FLOW_MAX_ROWS = 10  # nodes stacked in one column
 
 
 def esc(s):
@@ -529,6 +530,50 @@ NODE_STYLE = {  # kind -> (border, dashed, badge_bg, icon_color, icon, label_fil
 }
 
 
+def feedback_arcs(edges):
+    """Indices of the edges to lift out so the rest is acyclic — a cycle in
+    data_flow means request/response, a callback, a cache read-back or a retry,
+    all of them normal, so the graph keeps its shape and these edges are drawn
+    as back-edges instead of the whole figure changing style.
+
+    DFS from each root in name order; an edge into a node still on the stack is
+    a back edge. Not the minimum feedback arc set (that is NP-hard) but a stable
+    one: every iteration order here is sorted, so the same input always lifts
+    the same edges — which is what keeps the rendered bytes reproducible."""
+    adj, nodes = {}, set()
+    for a, b, _asyn, _lbl in edges:
+        nodes.add(a)
+        nodes.add(b)
+    for i, (a, b, _asyn, _lbl) in enumerate(edges):
+        adj.setdefault(a, []).append((b, i))
+    for a in adj:
+        adj[a].sort(key=lambda t: (t[0].lower(), t[1]))
+
+    WHITE, GREY, BLACK = 0, 1, 2
+    color = dict.fromkeys(nodes, WHITE)
+    back = set()
+    for root in sorted(nodes, key=str.lower):
+        if color[root] != WHITE:
+            continue
+        color[root] = GREY
+        stack = [[root, 0]]
+        while stack:
+            frame = stack[-1]
+            kids = adj.get(frame[0], [])
+            if frame[1] >= len(kids):
+                color[frame[0]] = BLACK
+                stack.pop()
+                continue
+            tgt, idx = kids[frame[1]]
+            frame[1] += 1
+            if color[tgt] == GREY:      # closes a cycle, including a self-loop
+                back.add(idx)
+            elif color[tgt] == WHITE:
+                color[tgt] = GREY
+                stack.append([tgt, 0])
+    return back
+
+
 def layer_nodes(edges):
     """Longest-path layering; deterministic. Returns None on a cycle."""
     nodes, preds = [], {}
@@ -599,9 +644,19 @@ def chip_box(lines):
 
 
 def svg_dag(edges, comps, fig_no="1"):
-    layer = layer_nodes(edges)
+    # Cycles do not change the style — they lose their back-edges for the
+    # purpose of layering, then get them drawn back in below the rows.
+    back_idx = feedback_arcs(edges)
+    fwd = [e for i, e in enumerate(edges) if i not in back_idx]
+    back = [e for i, e in enumerate(edges) if i in back_idx]
+    layer = layer_nodes(fwd)
     if layer is None:
         return None
+    # A node reachable only over a back-edge still needs a column of its own.
+    for a, b, _asyn, _lbl in back:
+        for nd in (a, b):
+            if nd not in layer:
+                layer[nd] = 0
     cols = {}
     for nd in sorted(layer, key=lambda x: (layer[x], x.lower())):
         cols.setdefault(layer[nd], []).append(nd)
@@ -616,7 +671,9 @@ def svg_dag(edges, comps, fig_no="1"):
     # Every label lives in the gap right after its source column, and each gap is
     # widened to hold its widest label. Labels therefore never reach into a column,
     # which is what used to put chips on top of node boxes.
-    labelled = [(a, b, asyn, lbl.strip()) for a, b, asyn, lbl in edges if lbl and lbl.strip()]
+    # Only forward labels live in a gap; a back-edge label rides its own return
+    # lane below the rows, so it must not widen a column gap it never enters.
+    labelled = [(a, b, asyn, lbl.strip()) for a, b, asyn, lbl in fwd if lbl and lbl.strip()]
     gap_w = {}
     for c in range(ncols):
         gap_w[c] = GAP_MIN
@@ -630,7 +687,12 @@ def svg_dag(edges, comps, fig_no="1"):
         x0 += col_w.get(c, 0) + gap_w[c]
     width = x0 - gap_w[ncols - 1] + 16
     max_rows = max(len(v) for v in cols.values())
-    height = TOP + max_rows * ROW_H + 26
+    # A wrapped back-edge label is two rows tall, so the lanes have to spread far
+    # enough that one lane's chip cannot land on the next lane's line.
+    back_rows = [wrap_label(e[3].strip()) if e[3] and e[3].strip() else [] for e in back]
+    LANE_H = 28 if any(len(r) > 1 for r in back_rows) else 15
+    rows_bottom = TOP + max_rows * ROW_H
+    height = rows_bottom + (10 + len(back) * LANE_H + 16 if back else 26)
 
     pos = {}
     for c, members in cols.items():
@@ -658,7 +720,7 @@ def svg_dag(edges, comps, fig_no="1"):
         placed.append((cx - cw / 2, y - 12, cw, ch))
         return y
 
-    for a, b, asyn, lbl in edges:
+    for a, b, asyn, lbl in fwd:
         ax, ay = pos[a]
         bx, by = pos[b]
         x1 = ax + node_w(a)
@@ -692,6 +754,50 @@ def svg_dag(edges, comps, fig_no="1"):
             for row, by in zip(rows, base):
                 labels.append(svg_text(mx, by, row, 9, "700" if asyn else "500",
                                        FAST if asyn else INK3, anchor="middle", ls=".6"))
+
+    # Back-edges ride return lanes under the rows. Nothing else is drawn down
+    # there, so a backwards arrow reads as backwards from its route alone — no
+    # extra hue is spent on it, and it stays distinct from the teal dashed async
+    # edges it may itself be one of.
+    def span_of(e):
+        # The horizontal run actually drawn, centre to centre — column origins
+        # would rank two lanes by a distance neither of them travels.
+        return abs((pos[e[0]][0] + node_w(e[0]) / 2.0)
+                   - (pos[e[1]][0] + node_w(e[1]) / 2.0))
+
+    # Narrowest span takes the shallowest lane. The other way round, a short
+    # return nested inside a long one has to cross the long one's horizontal run
+    # on its way down; this way each drop stops short of every deeper lane.
+    for k, (a, b, asyn, lbl) in enumerate(
+            sorted(back, key=lambda e: (span_of(e), e[0].lower(), e[1].lower()))):
+        ly = rows_bottom + 10 + k * LANE_H
+        ax, ay = pos[a]
+        bx, by = pos[b]
+        sx, sy = ax + node_w(a) / 2.0, ay + NODE_H
+        tx, ty = bx + node_w(b) / 2.0, by + NODE_H
+        color, mid = (FAST, "dag-t") if asyn else (INK, "dag-a")
+        dash = ' stroke-dasharray="5 4" class="dashrun"' if asyn else ""
+        if a == b:  # feeds itself: a retry, or its own queue
+            d = "M%g %g C %g %g, %g %g, %g %g" % (sx - 9, sy, sx - 34, ly, sx + 34, ly, sx + 9, sy)
+        else:
+            d = "M%g %g C %g %g, %g %g, %g %g" % (sx, sy, sx, ly, tx, ly, tx, ty)
+        s.append('<path d="%s" fill="none" stroke="%s" stroke-width="1.6"%s marker-end="url(#%s)"/>'
+                 % (d, color, dash, mid))
+        if not asyn:
+            s.append('<path d="%s" class="pkt"/>' % d)
+        text = lbl.strip() if lbl else ""
+        if text:
+            rows = wrap_label(text)
+            cw, ch = chip_box(rows)
+            mx = (sx + 44) if a == b else (sx + tx) / 2.0
+            mx = max(cw / 2 + 4, min(width - cw / 2 - 4, mx))  # keep the chip on canvas
+            chip_fill, chip_stroke = ("#e6faf5", "#7fd4c4") if asyn else ("#ffffff", "#e2e8ee")
+            labels.append('<rect x="%g" y="%g" width="%g" height="%d" rx="2" fill="%s" stroke="%s"/>'
+                          % (mx - cw / 2, ly - ch / 2.0, cw, ch, chip_fill, chip_stroke))
+            base = [ly + 3.5] if len(rows) == 1 else [ly - 1.5, ly + 9.5]
+            for row, ry in zip(rows, base):
+                labels.append(svg_text(mx, ry, row, 9, "700" if asyn else "500",
+                                       FAST if asyn else INK3, anchor="middle", ls=".6"))
     s.extend(labels)
 
     for nd in sorted(layer, key=lambda x: (layer[x], x.lower())):
@@ -710,14 +816,25 @@ def svg_dag(edges, comps, fig_no="1"):
                '<span style="color:%s;font-weight:700">▪ worker/queue</span> · '
                'dashed node = external · <span style="color:%s;font-weight:700">teal dashed edge = async</span>'
                % (fig_no, INK2, L1, L2, FAST))
+    if back:
+        caption += ' · %d cạnh quay ngược chạy dưới các hàng' % len(back)
     return '<div class="plot">%s<p class="figcap">%s</p></div>' % ("".join(s), caption)
 
 
 def within_budget(edges):
-    """Does this edge set still fit the graph style at natural size?"""
-    layer = layer_nodes(edges)
+    """Is this flow still comfortable at natural size? It no longer decides which
+    style to draw — there is only the graph — it decides whether to warn. A cycle
+    is not part of the answer any more either: back-edges get drawn, not degraded.
+    Measures the layout that actually ships, so the split matches svg_dag's."""
+    if not edges:
+        return True
+    back_idx = feedback_arcs(edges)
+    layer = layer_nodes([e for i, e in enumerate(edges) if i not in back_idx])
     if layer is None:
         return False
+    for a, b, _asyn, _lbl in edges:
+        for nd in (a, b):
+            layer.setdefault(nd, 0)
     cols = {}
     for nd in layer:
         cols.setdefault(layer[nd], []).append(nd)
@@ -725,83 +842,10 @@ def within_budget(edges):
             and max(len(v) for v in cols.values()) <= FLOW_MAX_ROWS)
 
 
-def svg_matrix(edges, comps, fig_no="1"):
-    """The dense style: a source × target grid. Rows and columns grow linearly
-    where a graph's crossings grow quadratically, so this stays readable exactly
-    where the graph gives up — and it makes hubs visible as full rows/columns."""
-    nodes = []
-    for a, b, _asyn, _lbl in edges:
-        for nd in (a, b):
-            if nd not in nodes:
-                nodes.append(nd)
-    nodes.sort(key=lambda x: x.lower())
-    idx = {nd: i for i, nd in enumerate(nodes)}
-    n = len(nodes)
-
-    cell = {}
-    for a, b, asyn, lbl in edges:
-        prev = cell.get((idx[a], idx[b]))
-        cell[(idx[a], idx[b])] = (asyn if prev is None else (prev[0] and asyn),
-                                  lbl.strip() if lbl and lbl.strip() else (prev[1] if prev else ""))
-
-    CELL = 26
-    gutter = int(max(CHAR_W * len(nd) for nd in nodes) + 34)  # row labels + icon
-    head = int(max(len(nd) for nd in nodes) * 4.9) + 16       # rotated column labels
-    width = gutter + n * CELL + 16
-    height = head + n * CELL + 30
-
-    s = [svg_size(width, height, "data flow matrix"), "<defs>",
-         symbol_defs(sorted({NODE_STYLE[kind_of(nd, comps)][4] for nd in nodes})), "</defs>"]
-
-    # column headers, rotated so long names stay legible without widening the grid
-    for j, nd in enumerate(nodes):
-        cx = gutter + j * CELL + CELL / 2.0
-        s.append('<g transform="translate(%g,%g) rotate(-52)">%s</g>'
-                 % (cx + 4, head - 6,
-                    svg_text(0, 0, nd, 10.5, "600", NODE_STYLE[kind_of(nd, comps)][3], anchor="start")))
-
-    s.append('<rect x="%d" y="%d" width="%d" height="%d" fill="#ffffff" stroke="%s"/>'
-             % (gutter, head, n * CELL, n * CELL, "#e2e8ee"))
-    for k in range(n + 1):
-        s.append('<path d="M%d %d H%d" stroke="%s" stroke-width="1"/>'
-                 % (gutter, head + k * CELL, gutter + n * CELL, "#eef2f6"))
-        s.append('<path d="M%d %d V%d" stroke="%s" stroke-width="1"/>'
-                 % (gutter + k * CELL, head, head + n * CELL, "#eef2f6"))
-
-    for i, nd in enumerate(nodes):
-        cy = head + i * CELL
-        border, dashed, badge_bg, icon_color, icon, _lf = NODE_STYLE[kind_of(nd, comps)]
-        s.append('<rect x="2" y="%g" width="18" height="18" rx="4" fill="%s"/>' % (cy + 4, badge_bg))
-        s.append(use_icon(icon, 4, cy + 6, icon_color, 14))
-        s.append(svg_text(gutter - 8, cy + CELL / 2 + 3.5, nd, 10.5, "600", INK, anchor="end"))
-        # the diagonal is structurally impossible (no self-edges in a layered flow)
-        s.append('<rect x="%d" y="%d" width="%d" height="%d" fill="%s"/>'
-                 % (gutter + i * CELL + 1, cy + 1, CELL - 1, CELL - 1, "#f7f9fb"))
-
-    for (i, j), (asyn, lbl) in sorted(cell.items()):
-        cx = gutter + j * CELL + CELL / 2.0
-        cy = head + i * CELL + CELL / 2.0
-        if asyn:
-            s.append('<circle cx="%g" cy="%g" r="5.5" fill="%s" stroke="%s" stroke-width="1.8"/>'
-                     % (cx, cy, "#e6faf5", FAST))
-        else:
-            s.append('<rect x="%g" y="%g" width="9" height="9" rx="1.5" fill="%s"/>'
-                     % (cx - 4.5, cy - 4.5, INK))
-        if lbl:
-            s.append('<circle cx="%g" cy="%g" r="2" fill="%s"/>' % (cx + 8, cy - 6, MARK))
-    s.append("</svg>")
-
-    caption = ('FIG %s · matrix · from <code>data_flow</code> — row sends to column · '
-               '<span style="color:%s;font-weight:700">■ sync</span> · '
-               '<span style="color:%s;font-weight:700">○ async</span> · '
-               '<span style="color:%s;font-weight:700">•</span> edge carries a label, '
-               "spelled out in the table below" % (fig_no, INK, FAST, MARK))
-    return '<div class="plot">%s<p class="figcap">%s</p></div>' % ("".join(s), caption)
-
-
 def edge_table(edges, here):
-    """The complete, exact record of every edge — the matrix shows the shape,
-    this shows the words. Also the accessible reading of the figure."""
+    """The complete, exact record of every edge — the figure shows the shape,
+    this shows the words. Also the accessible reading of the figure, which is why
+    it is printed with every graph rather than kept as a fallback."""
     rows = []
     for a, b, asyn, lbl in edges:
         rows.append('<tr><td class="mono">%s</td><td>%s</td><td class="mono">%s</td><td>%s</td></tr>'
@@ -1031,28 +1075,6 @@ def seq_figure(src, comps, figs, here):
                   len(lanes), "" if len(lanes) == 1 else "s"))
     return ('<div class="plot flowfig">%s%s%s<p class="figcap">%s</p></div>'
             % ("".join(head), body, foot, caption))
-
-
-def flow_groups(edges):
-    """Connected components (undirected), each a separate figure when large."""
-    parent = {}
-
-    def find(x):
-        parent.setdefault(x, x)
-        while parent[x] != x:
-            parent[x] = parent[parent[x]]
-            x = parent[x]
-        return x
-
-    def union(a, b):
-        parent[find(a)] = find(b)
-
-    for a, b, _x, _y in edges:
-        union(a, b)
-    groups = {}
-    for e in edges:
-        groups.setdefault(find(e[0]), []).append(e)
-    return [groups[k] for k in sorted(groups, key=lambda k: min(x[0].lower() for x in groups[k]))]
 
 
 # ---------------------------------------------------------------- shared page shell
@@ -1698,33 +1720,22 @@ def build_current(ctx, docs, data):
 
     parts.append('<h3 id="a-flow">Data flow</h3>')
     if edges and flow_ok:
-        # The presentation standard (STANDARD §10): draw the graph while it still
-        # reads at natural size, otherwise switch style rather than shrink.
-        cyclic = layer_nodes(edges) is None
-        if not cyclic and within_budget(edges):
-            parts.append(svg_dag(edges, comps, figs.next()))
-        else:
+        # STANDARD §10: there is one style, the graph. Over budget it is still a
+        # graph — drawn at natural size, scrolling inside its own frame — because
+        # a flow the reader can follow one edge at a time beats a compact picture
+        # that spells nothing out. The budget only decides whether to warn.
+        dag = svg_dag(edges, comps, figs.next())
+        if dag and not within_budget(edges):
             nodes = {n for e in edges for n in e[:2]}
-            parts.append('<div class="note"><span class="lbl">%s</span>%s Luồng được vẽ bằng kiểu '
-                         "<b>matrix</b> thay cho <b>graph</b>: hàng gửi tới cột. Bảng cạnh bên dưới "
-                         "là bản ghi đầy đủ, chính xác từng chữ.</div>"
-                         % ("Cycle" if cyclic else "Dense",
-                            ("<code>data_flow</code> có chu trình nên không xếp tầng được."
-                             if cyclic else
-                             "%d component và %d cạnh — quá ngưỡng đọc được của kiểu graph "
-                             "(%d node · %d cạnh · %d hàng một cột)."
-                             % (len(nodes), len(edges), FLOW_MAX_NODES, FLOW_MAX_EDGES,
-                                FLOW_MAX_ROWS))))
-            parts.append(svg_matrix(edges, comps, figs.next()))
-            # Sub-flows that do fit are still worth drawing — the matrix gives the
-            # whole shape, these give the parts a reader can actually follow.
-            for group in flow_groups(edges):
-                if len(group) < len(edges) and within_budget(group):
-                    dag = svg_dag(group, comps, figs.next())
-                    if dag:
-                        parts.append(dag)
-            parts.append('<h4 id="a-edges">Mọi cạnh</h4>')
-            parts.append(edge_table(edges, here))
+            parts.append('<div class="note"><span class="lbl">Dense</span>%d component và %d cạnh '
+                         "— quá ngưỡng đọc thoải mái (%d node · %d cạnh · %d hàng một cột). Hình "
+                         "vẫn vẽ đủ ở kích thước thật và cuộn ngang; nếu khó theo dõi thì tách bớt "
+                         "sang một doc Architecture khác thay vì rút gọn hình.</div>"
+                         % (len(nodes), len(edges), FLOW_MAX_NODES, FLOW_MAX_EDGES, FLOW_MAX_ROWS))
+        if dag:
+            parts.append(dag)
+        parts.append('<h4 id="a-edges">Mọi cạnh</h4>')
+        parts.append(edge_table(edges, here))
     elif as_list(arch_fm.get("data_flow")):
         parts.append('<div class="note"><span class="lbl">Note</span>Không đọc được '
                      "<code>data_flow</code> — hiển thị nguyên văn. Cú pháp cạnh: "

@@ -43,9 +43,11 @@ data_flow:
   - engine ~> audit : append trade event
 ```
 
-Renderer tự chọn kiểu vẽ theo độ dày (STANDARD §10): trong ngân sách thì vẽ
-**graph**, quá dày hoặc có chu trình thì chuyển sang **matrix** kèm bảng cạnh
-đầy đủ. Không bao giờ thu nhỏ hình cho vừa cột.
+Renderer luôn vẽ **graph** (STANDARD §10). Chu trình không phải lỗi — `a -> b`
+kèm `b -> a` là callback, là đọc cache ngược, là retry — nên cạnh quay ngược
+được vẽ thành **back-edge chạy dưới các hàng**. Quá dày thì hình vẫn vẽ đủ, chỉ
+cuộn ngang, kèm gợi ý tách bớt sang doc khác. Không bao giờ thu nhỏ hình cho
+vừa cột.
 
 ## Business flows
 

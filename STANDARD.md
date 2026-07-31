@@ -299,26 +299,47 @@ Rules:
 - **Figure standard — a figure is never shrunk to fit.** Text that has been
   scaled down to make a diagram fit is a diagram nobody reads. Every figure is
   drawn at its natural size; one wider than the column scrolls inside its own
-  frame. When a flow outgrows the style it is drawn in, the renderer changes
-  *style* rather than scale. The graph style's density budget:
+  frame.
+
+  `data_flow` has exactly one style: a **graph** — longest-path layering,
+  alphabetical within a column, every edge label placed in the gap after its
+  source column, a gap widened to hold it so a label can never land on a node.
+  It stays a graph at every density. The complete edge table is printed beneath
+  it, always: the figure carries the shape, the table carries the words, and the
+  table is also the figure's accessible reading. Unparseable input falls back to
+  its own source text — never a guessed diagram.
+
+  **A cycle is not a degradation.** `a -> b` and `b -> a` together mean
+  request/response, a callback, a cache read-back, or a retry — ordinary shapes
+  in a running system, not a drawing problem. Before layering, the renderer
+  lifts out a *feedback arc set* (DFS from each root in name order; an edge into
+  a node still on the stack is a back-edge) and layers what remains. The lifted
+  edges are then drawn back in on **return lanes below the rows**, widest span
+  in the deepest lane so shorter returns nest inside rather than cross. A
+  back-edge is told apart by its route alone — nothing else is drawn under the
+  rows — which spends no new hue and keeps it distinct from the teal dashed
+  async edges it may itself be one of. A self-edge (`a -> a`) is a loop in its
+  own lane. The figure caption states how many back-edges it holds.
+
+  The feedback arc set is not minimal — that is NP-hard — but it is **stable**:
+  every iteration order in its computation is sorted, so the same input always
+  lifts the same edges, which is what keeps the rendered bytes reproducible.
+
+  The density budget therefore no longer selects a presentation. It decides when
+  to **warn**:
 
   | limit | value |
   |---|---|
-  | nodes | 12 |
-  | edges | 18 |
-  | nodes stacked in one column | 7 |
+  | nodes | 20 |
+  | edges | 32 |
+  | nodes stacked in one column | 10 |
   | participants in a sequence | 8 |
   | steps in a sequence | 16 |
 
-  Within budget, `data_flow` is a **graph**: longest-path layering, alphabetical
-  within a column, every edge label placed in the gap after its source column —
-  a gap widened to hold it, so a label can never land on a node. Over budget, or
-  cyclic, it becomes a **matrix**: rows send to columns, which grows linearly
-  where a graph's crossings grow quadratically, and which makes hubs visible as
-  full rows. A matrix is always accompanied by the complete edge table, and by a
-  graph of each connected sub-flow that does fit. A sequence over budget degrades
-  to its numbered step table. Unparseable input falls back to its own source
-  text — never a guessed diagram.
+  Past any of these the flow is still drawn as a graph, at natural size,
+  scrolling inside its own frame; a note suggests splitting it across
+  Architecture docs rather than compressing the picture. A sequence over budget
+  degrades to its numbered step table.
 - **Business flows** (```` ```flow ```` fenced block in the *body* of any
   `01_products/` or `02_architecture/` doc) render as a sequence figure —
   lifelines left to right, time down the page, participants ordered by first

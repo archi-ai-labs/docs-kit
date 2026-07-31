@@ -135,9 +135,12 @@ data_flow:
   - "client -> api-gateway -> order-service"
   - "order-service -> payment-adapter : capture"
   - "payment-adapter -> PSP"
+  - "PSP ~> payment-adapter : webhook kết quả"
+  - "payment-adapter -> order-service : mã lỗi đã chuẩn hoá"
   - "order-service -> postgres"
   - "postgres ~> worker : outbox"
   - "worker -> merchant webhook"
+  - "worker -> worker : retry backoff luỹ thừa"
 tech_stack: [Go 1.22, PostgreSQL 16, Redis 7, gRPC, Terraform]
 constraints:
   - "Chỉ payment-adapter được phép gọi PSP bên ngoài"

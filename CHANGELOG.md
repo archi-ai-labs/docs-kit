@@ -7,6 +7,54 @@ for the plugin version — the renderer stamps it into every generated page).
 
 ## [Unreleased]
 
+## [0.9.1] — 2026-07-31
+
+### ⚠️ Removed — the matrix style is gone
+
+`data_flow` had two presentations: a graph, and a source × target **matrix** for
+flows that were dense *or cyclic*. The matrix is deleted. There is one style now,
+and it is the graph.
+
+The trigger, not the density, was the real problem. **A cycle sent any flow to the
+matrix regardless of size** — a six-component API server with `cache -> api` and
+`worker ~> api` was drawn as a 247×231 grid of nine dots, with every edge label
+stripped off the figure and replaced by a marker meaning "look it up in the table
+below". But request/response, callbacks, cache read-backs and retries are ordinary
+shapes in a running system; treating them as an overflow condition punished the
+common case.
+
+The consolation the standard promised never arrived either. §10 said a matrix is
+*"always accompanied by … a graph of each connected sub-flow that does fit"*, but
+the code asked `len(group) < len(edges)` over **connected components** — and a real
+system is connected, so there was exactly one group, the condition was never true,
+and no sub-graph was ever drawn. What shipped was a bare matrix.
+
+### Added
+
+- **Back-edges.** Before layering, the renderer lifts out a *feedback arc set*
+  (DFS from each root in name order; an edge into a node still on the stack is a
+  back-edge), layers what remains, and draws the lifted edges back in on **return
+  lanes below the rows** — narrowest run in the shallowest lane, so a short return
+  nested inside a long one never has to cross it. A back-edge is told apart by its
+  route alone: nothing else is drawn under the rows. That spends no new hue and
+  keeps it distinct from the teal dashed async edges it may itself be one of.
+  `a -> a` is a loop in its own lane. The caption states the count.
+- The feedback arc set is not minimal (that is NP-hard) but it is **stable** —
+  every iteration order in its computation is sorted, so the same input always
+  lifts the same edges, and the rendered bytes stay reproducible.
+- **The complete edge table is now printed under every flow figure**, not only
+  under the ones that needed rescuing. The figure carries the shape, the table
+  carries the words, and the table is the figure's accessible reading.
+
+### Changed
+
+- **The density budget stopped choosing a presentation and started choosing a
+  warning.** With one style left there is nothing to switch to, so past the budget
+  the graph is still drawn in full, at natural size, scrolling inside its own
+  frame — with a note suggesting the flow be split across Architecture docs.
+  Raised accordingly: **20 nodes · 32 edges · 10 per column** (was 12 · 18 · 7).
+- `flow_groups()` was only ever called by the matrix branch and went with it.
+
 ## [0.9.0] — 2026-07-31
 
 ### ⚠️ Breaking — this plugin now installs switched off
