@@ -1,5 +1,7 @@
 ---
+name: docs-render
 description: Generate or refresh the HTML views of docs/ (index, current, changes) — deterministic, never edits markdown
+disable-model-invocation: true
 ---
 
 Generate the docs-kit HTML views for this repository.

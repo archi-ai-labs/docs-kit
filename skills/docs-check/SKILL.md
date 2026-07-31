@@ -1,6 +1,7 @@
 ---
 name: docs-check
-description: Read-only validation of the docs/ structure. Runs the deterministic docs-kit validator script and explains each failure in plain language with a suggested fix — never edits anything. Use only when the user runs /docs-kit:docs-check or explicitly asks to validate/check docs consistency.
+description: Read-only validation of the docs/ structure. Runs the deterministic validator and explains each failure in plain language with a suggested fix — never edits anything.
+disable-model-invocation: true
 ---
 
 # docs-check — read-only structure validation

@@ -1,6 +1,7 @@
 ---
 name: docs-sync
-description: Reconcile docs/ with what the current session actually did — update Backlog statuses, append audit entries, create retroactive Issues, apply pending Architecture amendments. Use only when the user runs /docs-kit:docs-sync or explicitly asks to sync/update the project docs after work.
+description: Reconcile docs/ with what this session actually did — update Backlog statuses, append audit entries, create retroactive Issues, apply pending Architecture amendments.
+disable-model-invocation: true
 ---
 
 # docs-sync — reconcile docs/ with this session's work

@@ -1,6 +1,7 @@
 ---
 name: docs-init
-description: Main entry point of docs-kit. Scaffold the three-layer docs structure (14 folders, templates, docs/README.md) into the current repo and optionally wire the rules into CLAUDE.md. Use when the user runs /docs-kit:docs-init, asks to set up / initialize project docs, or wants the three-layer docs model in a repo.
+description: The main entry point. Scaffold the three-layer docs structure into this repo — 14 folders, templates, docs/README.md — and optionally wire the rules into CLAUDE.md.
+disable-model-invocation: true
 ---
 
 # docs-init — scaffold the three-layer docs structure

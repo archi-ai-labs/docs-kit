@@ -1,6 +1,6 @@
 ---
-description: Write a delegation prompt (work brief) from settled decisions, or force a decision-freeze first
-disable-model-invocation: true
+name: brief
+description: Turn settled decisions into a delegation prompt for a coding agent, gating on a decision-freeze check first. Use whenever the user is about to hand work to another agent or a teammate — a prompt, a spec, a work brief, a handover — and especially when they ask for one while key decisions are still open.
 ---
 
 # Brief — from settled decisions to a delegation prompt

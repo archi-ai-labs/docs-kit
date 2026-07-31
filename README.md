@@ -15,10 +15,15 @@ to be disciplined — **Architecture is amended only through a Decision**, every
 change traces back to an Issue, and the audit log is append-only. What a machine
 can check, a script checks; what it cannot, a warn-only hook reminds you about.
 
-**Requirements:** Claude Code. `/docs-kit:docs-render` additionally wants
-**Python 3.9+** — if it is missing, the renderer skips with a message and nothing
-else breaks. Scripts hold a **bash 3.2 / BSD awk** floor, so they run on a stock
-macOS shell.
+**Requirements:** Claude Code — **v2.1.154 or later** to get the opt-in install
+described below; earlier versions install this plugin switched on.
+`/docs-kit:docs-render` additionally wants **Python 3.9+** — if it is missing, the
+renderer skips with a message and nothing else breaks. Scripts hold a **bash 3.2
+/ BSD awk** floor, so they run on a stock macOS shell.
+
+**Always-on context cost: about 77 tokens** — one skill description, the only
+thing here Claude can reach on its own. The other four load nothing until you
+type them.
 
 **Menu:** [Install](#-install) · [Usage](#-usage) · [The model](#-the-model) · [Generated views](#-generated-views) · [Enforcement](#-enforcement) · [Uninstall](#-uninstall) · [For maintainers](#-for-maintainers) · [Roadmap](#-roadmap)
 
@@ -40,7 +45,8 @@ curl -fsSL https://archi-ai-labs.github.io/agent-marketplace/install.sh | bash -
 
 `--plugins docs-kit` is not optional here: with no arguments the installer
 registers the catalog and enables only `trim-kit`, because `docs-kit` installs
-hooks and nothing should switch hooks on for you unasked.
+hooks and nothing should switch hooks on for you unasked. Naming it *is* that
+decision, so this route leaves the plugin **on** — you can skip step 3 below.
 
 Want it in **one project only** instead? Add `--project` — it writes
 `./.claude/settings.json` in the current folder rather than your home config:
@@ -76,7 +82,25 @@ Choose:
 
 1. **Restart** Claude Code (or run `/reload-plugins`) — it fetches the plugin from GitHub.
 2. If asked to **trust** the `archi-ai-labs` marketplace, approve it once. ✅
-3. Run **`/docs-kit:docs-init`** in the repo you want documented.
+3. **Turn it on if you came via Option 2** — that route installs the plugin
+   *disabled*:
+   ```
+   /plugin enable docs-kit@archi-ai-labs
+   ```
+4. Run **`/docs-kit:docs-init`** in the repo you want documented.
+
+> **Why step 3 exists, and why Option 1 skips it.** `docs-kit` registers two
+> hooks, `PostToolUse` and `Stop`. Hooks run without you asking on that
+> particular occasion, so the plugin ships `defaultEnabled: false` and nothing
+> switches them on for someone who has not decided to have them. Option 1 makes
+> you name `--plugins docs-kit`, which is that decision — the installer writes an
+> explicit `true` into `enabledPlugins`, and an explicit setting outranks the
+> default. Option 2's `/plugin install` does not ask, so it lands disabled.
+>
+> **Already using `docs-kit` before v0.9.0? Nothing changes for you.** A choice
+> already recorded in your settings outranks this default at every scope. And on
+> Claude Code older than **v2.1.154** the field is ignored entirely and the
+> plugin installs enabled either way.
 
 <details>
 <summary><b>Extras</b> — read the script first · local dev · what the installer writes</summary>
@@ -309,8 +333,8 @@ docs-kit/
 ├── .claude-plugin/plugin.json   # the plugin manifest (single source of version)
 ├── .github/workflows/validate.yml
 ├── STANDARD.md                  # source of truth for the model
-├── skills/                      # docs-init (entry point), docs-sync, docs-check
-├── commands/                    # thin wrappers → /docs-kit:docs-*, plus self-contained brief
+├── skills/                      # all five commands: docs-init (entry point),
+│                                #   docs-sync, docs-check, docs-render, brief
 ├── hooks/hooks.json             # 2 deterministic warn-only hooks
 ├── scripts/                     # docs_validate.sh, docs_scaffold.sh, docs_render.{sh,py}, hook workers
 ├── design/                      # "change-control print" design system + generated samples
@@ -323,9 +347,18 @@ docs-kit/
 └── README.md
 ```
 
+`commands/` is gone as of v0.9.0. Three of its five files were six-line wrappers
+that only said *"invoke the same-named skill"* — and a skill outranks a command
+of the same name, so those three never ran. The other two, `brief` and
+`docs-render`, held real content and became skills. Nothing about typing
+`/docs-kit:<name>` changed.
+
 **Invariants** — do not "fix" these away:
 
 - The three-layer order is fixed, and only a Decision amends Architecture.
+- Exactly one skill is reachable by Claude on its own (`brief`); the rest carry
+  `disable-model-invocation: true`. The number in **Requirements** is the budget
+  that buys.
 - Hooks stay deterministic and warn-only; the rationale comments in
   `scripts/hook_*` are load-bearing.
 - Writes to user config (`CLAUDE.md`) happen only after an explicit yes.

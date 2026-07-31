@@ -105,4 +105,8 @@ jobs:
         run: npm install -g @anthropic-ai/claude-code
 
       - name: Validate plugin (also checks skill frontmatter)
-        run: claude plugin validate .
+        # --strict turns warnings into errors. An unrecognized or slightly
+        # misspelled manifest field still loads at runtime and validates with a
+        # warning, which is exactly why it has to fail here: the field you typo
+        # is the field you believe you set.
+        run: claude plugin validate . --strict
