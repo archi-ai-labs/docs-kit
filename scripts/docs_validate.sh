@@ -161,7 +161,7 @@ check_id_prefix() { # check_id_prefix <file> <PREFIX>
   fi
 }
 
-for dir in 01_products 02_architecture 20_issues 21_proposals 22_decisions 23_backlog; do
+for dir in 01_products 02_architecture 03_business-logic 20_issues 21_proposals 22_decisions 23_backlog; do
   [ -d "$DOCS/$dir" ] || continue
   for f in "$DOCS/$dir"/*.md; do
     [ -f "$f" ] || continue
@@ -172,6 +172,9 @@ for dir in 01_products 02_architecture 20_issues 21_proposals 22_decisions 23_ba
         ;;
       02_architecture)
         require_fields "$f" components data_flow tech_stack constraints amended_by
+        ;;
+      03_business-logic)
+        require_fields "$f" domain amended_by
         ;;
       20_issues)
         if require_fields "$f" id description why lane status; then
@@ -224,8 +227,9 @@ fi
 
 # ---------------- check 5: amended_by entries cite existing Decisions --------
 
-if [ -d "$DOCS/02_architecture" ]; then
-  for f in "$DOCS/02_architecture"/*.md; do
+for amdir in 02_architecture 03_business-logic; do
+  [ -d "$DOCS/$amdir" ] || continue
+  for f in "$DOCS/$amdir"/*.md; do
     [ -f "$f" ] || continue
     case "$(basename "$f")" in README.md) continue ;; esac
     frontmatter "$f" | awk '
@@ -254,14 +258,14 @@ $refs
 EOF
     done < "$TMP/amended"
   done
-fi
+done
 
 # ----------------------------- layout notes (informational, never failing) ---
 
-for dir in 00_roadmap 01_products 02_architecture 20_issues 21_proposals \
-           22_decisions 23_backlog 30_conventions 40_services 50_runbooks \
-           60_fe-integration 70_deploy 92_audit 93_qa; do
-  [ -d "$DOCS/$dir" ] || echo "NOTE [layout] $DOCS/$dir: standard folder missing (docs-init creates all 14)"
+for dir in 00_roadmap 01_products 02_architecture 03_business-logic \
+           20_issues 21_proposals 22_decisions 23_backlog 30_conventions \
+           40_services 50_runbooks 60_fe-integration 70_deploy 92_audit 93_qa; do
+  [ -d "$DOCS/$dir" ] || echo "NOTE [layout] $DOCS/$dir: standard folder missing (docs-init creates all 15)"
 done
 
 # -------------------------------------------------------------------- report -

@@ -279,6 +279,50 @@ FILES["92_audit/LOG.md"] = """# Audit log
 2026-07-28 | BACKLOG-003 xong — chuyển đổi sang PSP adapter | BACKLOG-003 | - | -
 """
 
+FILES["03_business-logic/refund-approval.md"] = """---
+domain: "Duyệt hoàn tiền — điều kiện nào được hoàn, khi nào phải từ chối"
+amended_by: []
+---
+
+# Refund approval
+
+> Layer 1 — Foundation. Chỉ Decision workflow mới sửa được.
+
+```flowchart
+title: Duyệt hoàn tiền
+trigger: merchant gọi POST /refunds
+code: internal/order/refund.go
+decide: within_window — trong 30 ngày kể từ capture?
+decide: amount_ok — số tiền ≤ phần đã capture?
+decide: psp_ok — PSP trả về thành công?
+start -> within_window
+within_window -> reject : quá hạn
+within_window -> amount_ok : còn hạn
+amount_ok -> reject : vượt quá
+amount_ok -> call_psp : hợp lệ
+call_psp -> psp_ok
+psp_ok -> call_psp : lỗi tạm, backoff
+psp_ok -> mark_refunded : thành công
+mark_refunded ~> outbox : refund.completed
+mark_refunded -> end
+reject -> end
+outcome: đơn ở trạng thái refunded, hoặc bị từ chối kèm lý do
+```
+
+## Rules
+
+| Trong 30 ngày | Số tiền | Kết quả |
+|---|---|---|
+| không | — | `reject` — quá hạn |
+| có | > phần đã capture | `reject` — vượt quá |
+| có | ≤ phần đã capture | gọi PSP, retry có backoff |
+
+## Invariants
+
+- Tổng đã hoàn không bao giờ vượt tổng đã capture của đơn đó.
+- `orders.status` chỉ đổi sang `refunded` sau khi PSP xác nhận — không đoán trước.
+"""
+
 FILES["30_conventions/coding-style.md"] = "# Coding style\n\nGo fmt, test dạng bảng.\n"
 FILES["30_conventions/review-rules.md"] = "# Review rules\n\nĐổi schema cần hai lượt duyệt.\n"
 FILES["40_services/order-service.md"] = "# order-service\n\nSở hữu trạng thái đơn.\n"

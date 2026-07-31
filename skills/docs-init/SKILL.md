@@ -1,6 +1,6 @@
 ---
 name: docs-init
-description: The main entry point. Scaffold the three-layer docs structure into this repo — 14 folders, templates, docs/README.md — and optionally wire the rules into CLAUDE.md.
+description: The main entry point. Scaffold the three-layer docs structure into this repo — 15 folders, templates, docs/README.md — and optionally wire the rules into CLAUDE.md.
 disable-model-invocation: true
 ---
 
@@ -36,7 +36,7 @@ Verify: `$PLUGIN_ROOT/scripts/docs_scaffold.sh` must exist.
 Check for `docs/` in the repo root (current working directory).
 
 **If `docs/` exists: STOP. Do not create, merge, or overwrite anything.**
-1. Report the current state: which of the 14 standard folders are present /
+1. Report the current state: which of the 15 standard folders are present /
    missing (the scaffold script prints exactly this if you run it — it refuses
    with exit 3 and touches nothing), plus any non-standard entries.
 2. Ask the user with AskUserQuestion — question: "docs/ already exists. How
@@ -59,7 +59,7 @@ Run:
 bash "$PLUGIN_ROOT/scripts/docs_scaffold.sh" .
 ```
 
-The script copies the 14-folder template tree to `./docs/` (every folder ships a
+The script copies the 15-folder template tree to `./docs/` (every folder ships a
 seed file — templates are never empty), stamps today's date into
 `docs/92_audit/LOG.md`, and prints the created file list ending with
 `SCAFFOLD OK`. If it exits 3 (docs/ appeared meanwhile), go back to Step 1.
@@ -169,6 +169,6 @@ Summarize: folders/files created, validation result, CLAUDE.md action taken
   them as a format reference. Real IDs start at `001`.
 - `/docs-kit:docs-sync` reconciles docs after a working session;
   `/docs-kit:docs-check` validates structure anytime.
-- The plugin's hooks now warn (never block) on direct `docs/02_architecture/`
+- The plugin's hooks now warn (never block) on direct `docs/02_architecture/` or `docs/03_business-logic/`
   edits and on sensitive-zone changes without an Issue/Decision. Sensitive
   patterns are configurable via `.docs-kit.json` (see STANDARD.md §9).

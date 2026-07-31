@@ -7,6 +7,50 @@ for the plugin version — the renderer stamps it into every generated page).
 
 ## [Unreleased]
 
+## [0.10.0] — 2026-07-31
+
+### Added — `03_business-logic/`, the fourth layer-1 folder
+
+`data_flow` says what calls what. ```` ```flow ```` says what happens in what
+order. Neither says **what happens when a condition holds** — a sequence has no
+branches. That rule had nowhere to live, so it lived in people's heads.
+
+- **`docs/03_business-logic/`** — layer 1, gated by the Decision workflow like
+  Architecture, with its own two-field frontmatter (`domain`, `amended_by`). The
+  scaffold is now **15 folders**. A repo scaffolded before this only sees an
+  informational `NOTE [layout]`; nothing starts failing.
+- **```` ```flowchart ````** — branch points declared with `decide: node — question?`,
+  drawn as diamonds; steps in the edge grammar already used by `data_flow` and
+  ```` ```flow ````; `start` / `end` as stadium terminals. There is deliberately no
+  branch syntax: **a branch is an ordinary labelled edge**, so the layered engine
+  places it by the same rule as every other label, and a retry loop is an ordinary
+  back-edge on a return lane — both inherited from 0.9.1 rather than reimplemented.
+  A branch label takes the diamond's own hue, spending no new one, because it is
+  the most load-bearing text on the figure.
+- **§5 Business logic on `current.html`**, its own rail station, and the numbered
+  step table plus decide-question table under every chart.
+- Decision tables stay **plain markdown tables**. A table is already a table; a
+  grammar for it would have been a grammar for nothing.
+
+### Changed
+
+- `extract_flows()` → `extract_figures()`, a fence registry. Adding a figure type
+  is now adding a name to `FIGURE_FENCES` plus its parser.
+- The edge grammar moved into one `parse_edge_line()`, read by `data_flow`,
+  ```` ```flow ```` and ```` ```flowchart ```` alike, so the three cannot drift into
+  three dialects.
+- `svg_dag()` gained a `shapes` argument and renders flowchart nodes through the
+  same layering and back-edge routing as the data-flow graph — one engine, because
+  two would mean maintaining that routing twice.
+
+### Fixed
+
+- **The architecture hook no longer fires on the plugin's own templates.**
+  `templates/docs/02_architecture/` ends in the exact path the hook watches for,
+  so anyone editing a shipped template got warned about a Decision that could not
+  possibly exist — precisely the false-positive class that teaches people to
+  disable a warn-only hook.
+
 ## [0.9.1] — 2026-07-31
 
 ### ⚠️ Removed — the matrix style is gone

@@ -12,7 +12,7 @@ model (STANDARD.md at the plugin root; digest in `docs/README.md`):
 
 - `docs/92_audit/` is **append-only**: add lines at the end of the log file,
   never edit, reorder, or delete existing lines.
-- `docs/02_architecture/` may be touched **only** via the approved-Decision path
+- `docs/02_architecture/` and `docs/03_business-logic/` may be touched **only** via the approved-Decision path
   in Step 4 — nothing else in this skill edits layer 1.
 - Never fabricate history: no retroactive Decisions, no invented approvals.
   When traceability is missing, create an **Issue** and tell the user.

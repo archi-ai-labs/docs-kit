@@ -79,11 +79,20 @@ jobs:
         run: |
           warn=$(echo '{"tool_input":{"file_path":"docs/02_architecture/architecture.md"}}' \
                  | python3 scripts/hook_architecture_warn.py | wc -c)
+          logic=$(echo '{"tool_input":{"file_path":"docs/03_business-logic/rules.md"}}' \
+                 | python3 scripts/hook_architecture_warn.py | wc -c)
           quiet=$(echo '{"tool_input":{"file_path":"src/main.go"}}' \
                   | python3 scripts/hook_architecture_warn.py | wc -c)
-          echo "architecture: $warn bytes   unrelated: $quiet bytes"
+          # The plugin ships templates/docs/02_architecture/ — a path that ends in
+          # the very thing the hook watches for. Warning there would train this
+          # repo's own maintainers to switch the hook off, so it must stay silent.
+          tmpl=$(echo '{"tool_input":{"file_path":"templates/docs/02_architecture/architecture.md"}}' \
+                  | python3 scripts/hook_architecture_warn.py | wc -c)
+          echo "architecture: $warn   business-logic: $logic   unrelated: $quiet   template: $tmpl"
           [ "$warn" -gt 0 ] || { echo "::error::hook stayed silent on an architecture edit."; exit 1; }
+          [ "$logic" -gt 0 ] || { echo "::error::hook stayed silent on a business-logic edit."; exit 1; }
           [ "$quiet" -eq 0 ] || { echo "::error::hook fired on an unrelated file."; exit 1; }
+          [ "$tmpl" -eq 0 ] || { echo "::error::hook fired on the plugin's own template tree."; exit 1; }
           echo '{"transcript_path":"/nonexistent"}' | python3 scripts/hook_stop_scan.py
 
       # The samples ARE the design contract, and they are real renderer output.

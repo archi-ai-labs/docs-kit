@@ -7,7 +7,7 @@ trước — mất 30 giây.
 
 | Layer | Thư mục | Bản chất | Luật sửa |
 |---|---|---|---|
-| 1 · Foundation | `00_roadmap` `01_products` `02_architecture` | Trạng thái | Architecture **chỉ** đổi qua một Decision đã duyệt (`amended_by`) |
+| 1 · Foundation | `00_roadmap` `01_products` `02_architecture` `03_business-logic` | Trạng thái | **Chỉ** đổi qua một Decision đã duyệt (`amended_by`) |
 | 2 · Change | `20_issues` `21_proposals` `22_decisions` `23_backlog` | Tiến trình, truy nguyên được | Theo đúng luồng bên dưới |
 | 3 · Reference | `30_conventions` `40_services` `50_runbooks` `60_fe-integration` `70_deploy` `93_qa` | Tài liệu vận hành | Sửa thẳng, không cần Decision |
 | Oversight | `92_audit` | Nhật ký chỉ ghi thêm | Chỉ nối dòng, không bao giờ viết lại |
@@ -18,14 +18,14 @@ trước — mất 30 giây.
 Issue (exploring → open)
   ├─ FAST lane ──────────────────────────────► Backlog (source_ref = Issue)
   └─ FULL lane ──► Proposal ──► Decision ────► Backlog (source_ref = Decision)
-Decision được duyệt ⇒ sửa 02_architecture NGAY trong phiên đó (thêm dòng amended_by)
+Decision được duyệt ⇒ sửa 02_architecture / 03_business-logic NGAY trong phiên đó (+ amended_by)
 Backlog item xong   ⇒ status: done + nối một dòng vào 92_audit/
 Review (định kỳ)    ⇒ read-only trên layer 1–2; phát hiện nối vào 92_audit/
 ```
 
 ## 3 · Lane test — hai câu hỏi, "có" một câu ⇒ FULL lane
 
-1. Thay đổi này có sửa tài liệu Architecture không?
+1. Thay đổi này có sửa Architecture hay Business logic không?
 2. Nếu hoá ra sai, rollback có mất hơn 1 ngày không?
 
 ## 4 · Folders
@@ -35,6 +35,7 @@ Review (định kỳ)    ⇒ read-only trên layer 1–2; phát hiện nối và
 | 00 | `00_roadmap` | Sản phẩm đang đi về đâu: now / next / later |
 | 01 | `01_products` | Mỗi sản phẩm là gì, cho ai, thế nào là thành công |
 | 02 | `02_architecture` | Component, luồng dữ liệu, stack, ràng buộc — chỉ sửa qua Decision |
+| 03 | `03_business-logic` | Quy tắc nghiệp vụ có rẽ nhánh (```flowchart```) — chỉ sửa qua Decision |
 | 20 | `20_issues` | Mọi thứ đáng làm đều vào đây trước (nghiên cứu thô bắt đầu ở `exploring`) |
 | 21 | `21_proposals` | Phương án cho full lane, kèm lựa chọn thay thế + đánh đổi |
 | 22 | `22_decisions` | Duyệt / loại, do ai, vì sao |

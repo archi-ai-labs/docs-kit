@@ -11,7 +11,7 @@ The model below is fixed. Do not add stages, remove stages, or reorder them.
 
 ```
 LAYER 1 — FOUNDATION (state; only a Decision may amend it)
-  Products → Roadmap → Architecture
+  Products → Roadmap → Architecture → Business logic
 
 LAYER 2 — CHANGE (process; fully traceable)
   Issue (status: exploring | open | promoted | archived)
@@ -37,13 +37,14 @@ Layer rules:
   No traceability fields, no Decision needed.
 - **Review (`92_audit/`)** observes layers 1–2 and appends findings. It never edits them.
 
-## 2. Folder layout (14 folders under `docs/`)
+## 2. Folder layout (15 folders under `docs/`)
 
 | # | Folder | Type | Layer |
 |---|--------|------|-------|
 | 00 | `00_roadmap` | Roadmap | 1 |
 | 01 | `01_products` | Products | 1 |
 | 02 | `02_architecture` | Architecture | 1 |
+| 03 | `03_business-logic` | Business logic | 1 |
 | 20 | `20_issues` | Issue | 2 |
 | 21 | `21_proposals` | Proposal | 2 |
 | 22 | `22_decisions` | Decision | 2 |
@@ -134,6 +135,31 @@ component **is** — written after reading that code, not guessed from its name.
 Longer explanation goes in a `### <name>` section in the body, which the
 rendered card picks up as expandable detail.
 
+### `03_business-logic/*.md` — Business logic
+```yaml
+---
+domain: ""          # what this rule set is about
+amended_by: []      # ONLY the Decision workflow appends entries here.
+---
+```
+Two fields, and no more: adding an optional field later is cheap, removing a
+required one breaks every repo already scaffolded.
+
+The split against Architecture is by the question answered, not by subject:
+
+| Question | Folder |
+|---|---|
+| What exists, and what calls what | `02_architecture/` |
+| Doing X — what happens, in what order | `02_architecture/` (```` ```flow ````) |
+| **Hitting condition Y — which way does it branch, by what rule** | **`03_business-logic/`** |
+
+The body carries ```` ```flowchart ```` blocks (see §10) and, for rules that read
+better as a table than as a picture, plain markdown tables — a decision table
+needs no grammar of its own.
+
+`amended_by` entries follow the Architecture rule above: each must contain a
+`DECISION-NNN` token that resolves to an existing Decision `id:`.
+
 ### `20_issues/*.md` — Issue (id prefix `ISSUE-`)
 ```yaml
 ---
@@ -214,6 +240,7 @@ Ask both. **Any "yes" → FULL lane. Both "no" → FAST lane.**
 | Session event | Required docs action |
 |---|---|
 | Code change touches a schema, API contract, or component boundary | A Decision must already exist. If none exists: create an Issue, stop, and ask the user. |
+| Code change alters a branching business rule | Same — the rule lives in `03_business-logic/`, which is layer 1. |
 | A Backlog item is completed | Set its `status: done` and append one line to `92_audit/`. |
 | A Decision is approved | Amend `02_architecture/` in the SAME session (body + `amended_by` entry). |
 | Starting work that is not in the Backlog | Create an Issue before writing code. |
@@ -231,7 +258,7 @@ Checks:
 | `[backlog]` | Every Backlog item has a non-empty `source_ref:`. |
 | `[frontmatter]` | Required fields per type (§4) are present; `lane`/`status`/`outcome` enums are valid; `id:` prefixes match their folder; Proposals contain an "Alternatives considered" heading. |
 | `[audit-append]` | `92_audit/` files are append-only vs git HEAD (no deleted or rewritten lines). Skipped when git or HEAD is unavailable. |
-| `[amended-by]` | Every `amended_by` entry in Architecture contains a `DECISION-NNN` token that resolves to an existing Decision. |
+| `[amended-by]` | Every `amended_by` entry in Architecture and Business logic contains a `DECISION-NNN` token that resolves to an existing Decision. |
 
 Output: one line per violation — `FAIL [tag] <file>: <message>` — then a count.
 Exit codes: `0` clean, `1` violations found, `2` setup error (e.g. docs/ missing).
@@ -244,8 +271,11 @@ skills never "eyeball-validate" in its place.
 Two hooks, both plain scripts, **no LLM calls**:
 
 1. **PostToolUse** on `Edit|Write`: if the edited path is under
-   `docs/02_architecture/` → warn (user + agent): "Architecture is amended only
-   via the Decision workflow — confirm a Decision ref exists."
+   `docs/02_architecture/` or `docs/03_business-logic/` → warn (user + agent):
+   "this is layer 1, amended only via the Decision workflow — confirm a Decision
+   ref exists." Paths under `templates/docs/` are exempt: the plugin ships its own
+   template tree at exactly that shape, and firing on it would train docs-kit's
+   own maintainers to switch the hook off.
 2. **Stop**: scan the session transcript. If files matching sensitive patterns
    were edited but the session never created or referenced any Issue/Decision →
    remind the user to run `/docs-kit:docs-sync`.
@@ -340,8 +370,38 @@ Rules:
   scrolling inside its own frame; a note suggests splitting it across
   Architecture docs rather than compressing the picture. A sequence over budget
   degrades to its numbered step table.
+- **Business logic** (```` ```flowchart ```` fenced block in the *body* of a
+  `03_business-logic/` doc — or of a product or architecture doc) renders as a
+  flowchart. It answers the one question a sequence cannot: *what happens when
+  condition Y holds*. Grammar, deliberately the same family as `data_flow` and
+  ```` ```flow ```` rather than a third dialect:
+
+  | line | meaning |
+  |---|---|
+  | `title:` `trigger:` `outcome:` `code:` | optional headers, exactly as in ```` ```flow ```` |
+  | `decide: <node> — <question>` | declares `<node>` a branch point; drawn as a diamond |
+  | `a -> b` · `a ~> b` | a step · an async step |
+  | `a -> b : label` | edge label — **on an edge out of a decide node the label IS the branch name** |
+  | `start` · `end` | reserved names, drawn as stadium terminals |
+
+  There is no branch syntax and no nesting. A branch is an ordinary labelled
+  edge, which means the layered engine places it in the gap after its source
+  column by the same rule as every other label, and a loop (`validate -> input :
+  sai định dạng`) is an ordinary back-edge on a return lane. Both come free from
+  the data-flow engine; a flowchart is the same layering problem with different
+  boxes, and giving it its own engine would mean maintaining that routing twice.
+  A branch label takes the diamond's own hue — no new hue is spent, it is the
+  same L1 — because it is the most load-bearing text on the figure.
+
+  Its budget, warn-only on the same principle as the graph's: **20 nodes ·
+  28 edges · 8 decide nodes**. The numbered step table, and the decide-question
+  table when there is one, print under every chart rather than as a rescue.
+
+  Rules that read better as a table than as a picture stay markdown tables — a
+  decision table needs no grammar of its own.
 - **Business flows** (```` ```flow ```` fenced block in the *body* of any
-  `01_products/` or `02_architecture/` doc) render as a sequence figure —
+  `01_products/`, `02_architecture/` or `03_business-logic/` doc) render as a
+  sequence figure —
   lifelines left to right, time down the page, participants ordered by first
   appearance. Steps use the same edge grammar as `data_flow`; `a -> a` is a
   self-call. Optional `title:`, `trigger:`, `outcome:`, `code:` header lines

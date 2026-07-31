@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "docs-kit",
   "displayName": "Docs Kit",
-  "version": "0.9.1",
+  "version": "0.10.0",
   "description": "Three-layer docs workflow as an installable unit: scaffold the structure (docs-init), reconcile docs with what a session actually did (docs-sync), validate structure deterministically (docs-check), render a deterministic HTML site of the docs (docs-render), and turn settled decisions into a delegation prompt (brief). Warn-only hooks keep the agent honest about Architecture amendments and undocumented sensitive changes.",
   "author": {
     "name": "archi-ai-labs",

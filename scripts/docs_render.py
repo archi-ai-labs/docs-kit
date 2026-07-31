@@ -643,7 +643,13 @@ def chip_box(lines):
     return max(chip_w_for(x) for x in lines), 16 if len(lines) == 1 else 27
 
 
-def svg_dag(edges, comps, fig_no="1"):
+def svg_dag(edges, comps, fig_no="1", shapes=None, aria="data flow graph",
+            caption=None, wrap=True):
+    """The one layered-graph engine. `shapes` switches it from data-flow nodes
+    (icon badge, kind tint) to flowchart nodes (step / decide / terminal); a
+    flowchart is the same layering problem with different boxes, and giving it
+    its own engine would mean maintaining the back-edge routing twice.
+    `wrap=False` returns the bare <svg> so a caller can compose its own frame."""
     # Cycles do not change the style — they lose their back-edges for the
     # purpose of layering, then get them drawn back in below the rows.
     back_idx = feedback_arcs(edges)
@@ -663,7 +669,10 @@ def svg_dag(edges, comps, fig_no="1"):
     ncols = max(cols) + 1
 
     def node_w(nd):
-        return int(48 + CHAR_W * len(nd))
+        if shapes is None:
+            return int(48 + CHAR_W * len(nd))   # room for the 22px icon badge
+        # A diamond wastes its corners, so the same text needs a wider box.
+        return int((64 if shapes.get(nd) == "decide" else 30) + CHAR_W * len(nd))
 
     col_w = {c: max(node_w(nd) for nd in cols[c]) for c in cols}
     GAP_MIN, ROW_H, NODE_H, TOP = 46, 60, 34, 16
@@ -700,12 +709,25 @@ def svg_dag(edges, comps, fig_no="1"):
         for r, nd in enumerate(members):
             pos[nd] = (col_x[c], TOP + pad + r * ROW_H)
 
-    s = [svg_size(width, height, "data flow graph"),
+    s = [svg_size(width, height, aria),
          "<defs>", marker_def("dag-a", INK), marker_def("dag-t", FAST),
-         symbol_defs(sorted({NODE_STYLE[kind_of(nd, comps)][4] for nd in layer}))]
+         "" if shapes is not None
+         else symbol_defs(sorted({NODE_STYLE[kind_of(nd, comps)][4] for nd in layer}))]
     s.append("</defs>")
 
     labels, placed = [], []
+
+    def branch_style(src_node, asyn):
+        """(chip fill, chip stroke, ink, weight). A label on an edge out of a
+        decide node IS the branch name — the most load-bearing text in a
+        flowchart — so it takes the diamond's own hue instead of the muted grey
+        every other edge label gets. No new hue is spent: it is the same L1."""
+        if asyn:
+            return "#e6faf5", "#7fd4c4", FAST, "700"
+        if shapes is not None and shapes.get(src_node) == "decide":
+            return "#ffffff", L1, L1, "700"
+        return "#ffffff", "#e2e8ee", INK3, "500"
+
 
     def free_y(cx, cw, ch, y):
         """Nudge a chip off any chip already placed. Deterministic: the offsets are
@@ -747,13 +769,12 @@ def svg_dag(edges, comps, fig_no="1"):
             cw, ch = chip_box(rows)
             t = 0.5 if x2 == x1 else max(0.0, min(1.0, (mx - x1) / float(x2 - x1)))
             my = free_y(mx, cw, ch, y1 + (y2 - y1) * t - 10)
-            chip_fill, chip_stroke = ("#e6faf5", "#7fd4c4") if asyn else ("#ffffff", "#e2e8ee")
+            chip_fill, chip_stroke, ink, wt = branch_style(a, asyn)
             labels.append('<rect x="%g" y="%g" width="%g" height="%d" rx="2" fill="%s" stroke="%s"/>'
                           % (mx - cw / 2, my - 12, cw, ch, chip_fill, chip_stroke))
             base = [my] if len(rows) == 1 else [my - 1, my + 10]
             for row, by in zip(rows, base):
-                labels.append(svg_text(mx, by, row, 9, "700" if asyn else "500",
-                                       FAST if asyn else INK3, anchor="middle", ls=".6"))
+                labels.append(svg_text(mx, by, row, 9, wt, ink, anchor="middle", ls=".6"))
 
     # Back-edges ride return lanes under the rows. Nothing else is drawn down
     # there, so a backwards arrow reads as backwards from its route alone — no
@@ -791,31 +812,52 @@ def svg_dag(edges, comps, fig_no="1"):
             cw, ch = chip_box(rows)
             mx = (sx + 44) if a == b else (sx + tx) / 2.0
             mx = max(cw / 2 + 4, min(width - cw / 2 - 4, mx))  # keep the chip on canvas
-            chip_fill, chip_stroke = ("#e6faf5", "#7fd4c4") if asyn else ("#ffffff", "#e2e8ee")
+            chip_fill, chip_stroke, ink, wt = branch_style(a, asyn)
             labels.append('<rect x="%g" y="%g" width="%g" height="%d" rx="2" fill="%s" stroke="%s"/>'
                           % (mx - cw / 2, ly - ch / 2.0, cw, ch, chip_fill, chip_stroke))
             base = [ly + 3.5] if len(rows) == 1 else [ly - 1.5, ly + 9.5]
             for row, ry in zip(rows, base):
-                labels.append(svg_text(mx, ry, row, 9, "700" if asyn else "500",
-                                       FAST if asyn else INK3, anchor="middle", ls=".6"))
+                labels.append(svg_text(mx, ry, row, 9, wt, ink, anchor="middle", ls=".6"))
     s.extend(labels)
 
     for nd in sorted(layer, key=lambda x: (layer[x], x.lower())):
         x, y = pos[nd]
+        w = node_w(nd)
+        if shapes is not None:
+            shape = shapes.get(nd, "step")
+            if shape == "decide":
+                s.append('<path d="M%g %g L%g %g L%g %g L%g %g Z" fill="#ffffff" stroke="%s" '
+                         'stroke-width="1.5"/>'
+                         % (x, y + NODE_H / 2.0, x + w / 2.0, y, x + w, y + NODE_H / 2.0,
+                            x + w / 2.0, y + NODE_H, L1))
+            elif shape == "terminal":
+                s.append('<rect x="%g" y="%g" width="%d" height="%d" rx="%g" fill="%s" '
+                         'stroke="%s" stroke-width="1.5"/>'
+                         % (x, y, w, NODE_H, NODE_H / 2.0, "#f4f6f8", INK2))
+            else:
+                s.append('<rect x="%g" y="%g" width="%d" height="%d" rx="2" fill="#ffffff" '
+                         'stroke="%s" stroke-width="1.5"/>' % (x, y, w, NODE_H, INK))
+            s.append(svg_text(x + w / 2.0, y + 21.5, nd, 11.5, "650",
+                              L1 if shape == "decide" else INK, anchor="middle"))
+            continue
         border, dashed, badge_bg, icon_color, icon, label_fill = NODE_STYLE[kind_of(nd, comps)]
         dash = ' stroke-dasharray="5 4"' if dashed else ""
         s.append('<rect x="%g" y="%g" width="%d" height="%d" rx="2" fill="#ffffff" stroke="%s" stroke-width="1.5"%s/>'
-                 % (x, y, node_w(nd), NODE_H, border, dash))
+                 % (x, y, w, NODE_H, border, dash))
         s.append('<rect x="%g" y="%g" width="22" height="22" rx="4" fill="%s"/>' % (x + 6, y + 6, badge_bg))
         s.append(use_icon(icon, x + 10, y + 10, icon_color, 14))
         s.append(svg_text(x + 36, y + 21.5, nd, 11.5, "650", label_fill))
     s.append("</svg>")
-    caption = ('FIG %s · graph · from <code>data_flow</code> — '
-               '<span style="color:%s;font-weight:700">▪ service</span> · '
-               '<span style="color:%s;font-weight:700">▪ datastore</span> · '
-               '<span style="color:%s;font-weight:700">▪ worker/queue</span> · '
-               'dashed node = external · <span style="color:%s;font-weight:700">teal dashed edge = async</span>'
-               % (fig_no, INK2, L1, L2, FAST))
+    if not wrap:
+        return "".join(s)
+    if caption is None:
+        caption = ('FIG %s · graph · from <code>data_flow</code> — '
+                   '<span style="color:%s;font-weight:700">▪ service</span> · '
+                   '<span style="color:%s;font-weight:700">▪ datastore</span> · '
+                   '<span style="color:%s;font-weight:700">▪ worker/queue</span> · '
+                   'dashed node = external · '
+                   '<span style="color:%s;font-weight:700">teal dashed edge = async</span>'
+                   % (fig_no, INK2, L1, L2, FAST))
     if back:
         caption += ' · %d cạnh quay ngược chạy dưới các hàng' % len(back)
     return '<div class="plot">%s<p class="figcap">%s</p></div>' % ("".join(s), caption)
@@ -866,6 +908,27 @@ SEQ_MAX_LANES = 8
 SEQ_MAX_STEPS = 16
 
 
+def parse_edge_line(line):
+    """One line of the shared edge grammar → [(src, dst, async, label)], empty if
+    the line carries no edge. `data_flow`, ```flow``` and ```flowchart``` all read
+    their steps through here, so the three can never drift into three dialects."""
+    if "->" not in line and "~>" not in line:
+        return []
+    label = ""
+    if line.count("->") + line.count("~>") == 1 and ":" in line.split(">", 1)[-1]:
+        line, label = line.rsplit(":", 1)
+        label = label.strip()
+    parts = EDGE_RE.split(line)
+    if len(parts) < 3:
+        return []
+    nodes = [p.strip() for p in parts[0::2]]
+    ops = parts[1::2]
+    if any(not nd for nd in nodes):
+        return []
+    return [(nodes[k], nodes[k + 1], op == "~>", label if len(ops) == 1 else "")
+            for k, op in enumerate(ops)]
+
+
 def parse_sequence(src):
     """A ```flow fence: optional 'title/trigger/outcome/code' headers, then steps in
     the same edge grammar as data_flow. Returns (meta, steps) or None if no step
@@ -880,21 +943,7 @@ def parse_sequence(src):
         if m:  # checked before the arrow test: a trigger may itself contain '->'
             meta[m.group(1).lower()] = m.group(2).strip()
             continue
-        if "->" not in line and "~>" not in line:
-            continue
-        label = ""
-        if line.count("->") + line.count("~>") == 1 and ":" in line.split(">", 1)[-1]:
-            line, label = line.rsplit(":", 1)
-            label = label.strip()
-        parts = EDGE_RE.split(line)
-        if len(parts) < 3:
-            continue
-        nodes = [p.strip() for p in parts[0::2]]
-        ops = parts[1::2]
-        if any(not nd for nd in nodes):
-            continue
-        for k, op in enumerate(ops):
-            steps.append((nodes[k], nodes[k + 1], op == "~>", label if len(ops) == 1 else ""))
+        steps.extend(parse_edge_line(line))
     if not steps:
         return None
     return meta, steps
@@ -1021,19 +1070,25 @@ def scan_fence(lines, i):
     return info, body, min(j + 1, len(lines))
 
 
-def extract_flows(md):
-    """Lift top-level ```flow blocks out of a body. They get their own section on
-    the sheet, so leaving them in place would print every flow twice."""
+# Every fence that renders as a figure. Adding a figure type is adding a name
+# here plus its parser — the scan below never changes shape again.
+FIGURE_FENCES = ("flow", "flowchart")
+
+
+def extract_figures(md, names=FIGURE_FENCES):
+    """Lift top-level figure fences out of a body, keeping every other fence in
+    place. They get their own section on the sheet, so leaving them here would
+    print each figure twice. Returns ({name: [source, ...]}, remaining_md)."""
     lines = md.split("\n")
-    kept, blocks, i = [], [], 0
+    kept, blocks, i = [], dict((n, []) for n in names), 0
     while i < len(lines):
         if not FENCE_OPEN_RE.match(lines[i]):
             kept.append(lines[i])
             i += 1
             continue
         info, body, nxt = scan_fence(lines, i)
-        if info == "flow":
-            blocks.append("\n".join(body))
+        if info in blocks:
+            blocks[info].append("\n".join(body))
         else:
             kept.extend(lines[i:nxt])
         i = nxt
@@ -1075,6 +1130,109 @@ def seq_figure(src, comps, figs, here):
                   len(lanes), "" if len(lanes) == 1 else "s"))
     return ('<div class="plot flowfig">%s%s%s<p class="figcap">%s</p></div>'
             % ("".join(head), body, foot, caption))
+
+
+# ---------------------------------------------------------------- business logic
+
+DECIDE_RE = re.compile(r"^decide\s*:\s*(.+)$", re.I)
+TERMINAL_NAMES = ("start", "end")
+CHART_MAX_NODES = 20
+CHART_MAX_EDGES = 28
+CHART_MAX_DECIDES = 8
+
+
+def parse_flowchart(src):
+    """A ```flowchart fence: the ```flow headers, plus `decide:` lines naming the
+    branch points, plus steps in the shared edge grammar. Returns
+    (meta, questions, shapes, edges) or None when no edge parsed.
+
+    A branch is an ordinary labelled edge out of a decide node — there is no
+    separate branch syntax, because an indented one would be a third dialect in
+    the same docs tree, and because edge labels already get placed in the gap
+    after their source column without landing on anything."""
+    meta, questions, edges = {}, {}, []
+    for raw in src.split("\n"):
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        m = SEQ_HEAD_RE.match(line)
+        if m:  # before the arrow test: a trigger may itself contain '->'
+            meta[m.group(1).lower()] = m.group(2).strip()
+            continue
+        m = DECIDE_RE.match(line)
+        if m:
+            body, question = m.group(1).strip(), ""
+            for sep in (" — ", " – ", " -- "):
+                if sep in body:
+                    body, question = body.split(sep, 1)
+                    break
+            if body.strip():
+                questions[body.strip()] = question.strip()
+            continue
+        edges.extend(parse_edge_line(line))
+    if not edges:
+        return None
+    shapes = {}
+    for a, b, _asyn, _lbl in edges:
+        for nd in (a, b):
+            shapes[nd] = ("decide" if nd in questions
+                          else "terminal" if nd.lower() in TERMINAL_NAMES else "step")
+    return meta, questions, shapes, edges
+
+
+def decide_table(questions, here):
+    rows = "".join('<tr><td class="mono">%s</td><td>%s</td></tr>'
+                   % (esc(nd), inline_md(q, here) if q else '<span class="dim">—</span>')
+                   for nd, q in sorted(questions.items(), key=lambda kv: kv[0].lower()))
+    return ('<table class="data"><tr><th style="width:200px">điểm rẽ</th>'
+            "<th>hỏi gì</th></tr>%s</table>" % rows)
+
+
+def flowchart_figure(src, comps, figs, here):
+    parsed = parse_flowchart(src)
+    if parsed is None:
+        return None
+    meta, questions, shapes, edges = parsed
+    nodes = {nd for e in edges for nd in e[:2]}
+    fig_no = figs.next() if figs is not None else "—"
+    title = meta.get("title", "")
+
+    head = []
+    if meta.get("trigger"):
+        head.append('<div class="seqline"><span class="lbl">Trigger</span>%s</div>'
+                    % inline_md(meta["trigger"], here))
+    if meta.get("code"):
+        head.append('<div class="seqline"><span class="lbl">Code</span><code>%s</code></div>'
+                    % esc(meta["code"]))
+    foot = ('<div class="seqline out"><span class="lbl">Outcome</span>%s</div>'
+            % inline_md(meta["outcome"], here)) if meta.get("outcome") else ""
+
+    svg = svg_dag(edges, comps, fig_no, shapes=shapes,
+                  aria="business logic flowchart", wrap=False)
+    if svg is None:
+        return None
+    caption = ('FIG %s · flowchart · %s'
+               '<span style="color:%s;font-weight:700">◇ điểm rẽ</span> · ▭ bước · '
+               '⬭ đầu/cuối · nhãn trên cạnh ra từ ◇ là tên nhánh'
+               % (fig_no, (esc(title) + " — ") if title else "", L1))
+    loops = len(feedback_arcs(edges))
+    if loops:
+        caption += ' · %d vòng lặp chạy dưới các hàng' % loops
+
+    note = ""
+    if (len(nodes) > CHART_MAX_NODES or len(edges) > CHART_MAX_EDGES
+            or len(questions) > CHART_MAX_DECIDES):
+        note = ('<div class="note"><span class="lbl">Dense</span>%d node · %d cạnh · %d điểm rẽ '
+                "— quá ngưỡng đọc thoải mái (%d · %d · %d). Hình vẫn vẽ đủ và cuộn ngang; "
+                "nếu khó theo dõi thì tách quy tắc này thành nhiều flowchart nhỏ.</div>"
+                % (len(nodes), len(edges), len(questions),
+                   CHART_MAX_NODES, CHART_MAX_EDGES, CHART_MAX_DECIDES))
+    tables = decide_table(questions, here) if questions else ""
+    # The numbered steps ship with every chart, not as a rescue: they are the
+    # exact wording, the copyable record, and the figure's accessible reading.
+    tables += seq_steps_table(edges, here)
+    return (note + '<div class="plot flowfig">%s%s%s<p class="figcap">%s</p></div>'
+            % ("".join(head), svg, foot, caption) + tables)
 
 
 # ---------------------------------------------------------------- shared page shell
@@ -1488,6 +1646,7 @@ def load_docs(docs):
 
     return {
         "products": load("01_products"),
+        "logic": load("03_business-logic"),
         "issues": load("20_issues"),
         "proposals": load("21_proposals"),
         "decisions": load("22_decisions"),
@@ -1551,10 +1710,15 @@ def build_current(ctx, docs, data):
         arch_fm, arch_body = parse_frontmatter(arch_file.read_text(encoding="utf-8", errors="replace"))
     comps = parse_components(arch_fm.get("components", []))
     edges, flow_ok = parse_flows(arch_fm.get("data_flow", []))
-    arch_flows, arch_body = extract_flows(arch_body)
+    arch_figs, arch_body = extract_figures(arch_body)
+    arch_flows, arch_charts = arch_figs["flow"], arch_figs["flowchart"]
     # (source label, anchor, blocks) — business flows collected from every Layer-1
     # doc and shown together, so they read as a set instead of one per card.
-    flow_src = []
+    flow_src, chart_src = [], []
+    # Parsed once: the rail needs the count before the section needs the blocks.
+    logic_figs = [(fm_str(d, "domain") or doc_title(d), extract_figures(d["body"])[0])
+                  for d in data["logic"]]
+    logic_charts = sum(len(f["flowchart"]) for _label, f in logic_figs)
     amends = []
     for entry in as_list(arch_fm.get("amended_by", [])):
         m = AMEND_RE.match(str(entry).strip())
@@ -1580,9 +1744,12 @@ def build_current(ctx, docs, data):
             '<div class="st"><span class="c"></span><a href="#roadmap">Roadmap</a><small>%s</small></div>'
             '<div class="trk"></div>'
             '<div class="st"><span class="c"></span><a href="#architecture">Architecture</a><small>%s</small></div>'
+            '<div class="trk"></div>'
+            '<div class="st"><span class="c"></span><a href="#logic">Business logic</a><small>%s</small></div>'
             "</div>"
             % ("%d documented" % len(products),
-               "%d now · %d next" % (now_count, next_count), arch_sub))
+               "%d now · %d next" % (now_count, next_count), arch_sub,
+               "%d rule%s" % (logic_charts, "" if logic_charts == 1 else "s")))
 
     parts = ['<p class="kicker">Layer 1 · Foundation — state</p>',
              "<h1>Foundation — current state</h1>",
@@ -1611,9 +1778,11 @@ def build_current(ctx, docs, data):
         metric = fm_str(d, "success_metric")
         metric_tag = ('<span class="tag hard" style="margin-left:auto">TARGET · %s</span>'
                       % esc(trim(metric, 48))) if metric else ""
-        prod_flows, prod_body = extract_flows(d["body"])
-        if prod_flows:
-            flow_src.append((name, "#p-" + slug, prod_flows))
+        prod_figs, prod_body = extract_figures(d["body"])
+        if prod_figs["flow"]:
+            flow_src.append((name, "#p-" + slug, prod_figs["flow"]))
+        if prod_figs["flowchart"]:
+            chart_src.append((name, "#p-" + slug, prod_figs["flowchart"]))
         body_html = md_to_html(prod_body, here, comps, figs)
         details = ('<details class="more"><summary>Full document</summary><div class="md">%s</div></details>'
                    % body_html) if body_html.strip() else ""
@@ -1785,8 +1954,18 @@ def build_current(ctx, docs, data):
     # --- business flows
     if arch_flows:
         flow_src.append(("Architecture", "#architecture", arch_flows))
+    if arch_charts:
+        chart_src.append(("Architecture", "#architecture", arch_charts))
+    # 03_business-logic is where branching rules live, so its charts come last —
+    # after any chart a product or the architecture doc happened to carry.
+    for label, d_figs in logic_figs:
+        if d_figs["flow"]:
+            flow_src.append((label, "#logic", d_figs["flow"]))
+        if d_figs["flowchart"]:
+            chart_src.append((label, "#logic", d_figs["flowchart"]))
     parts.append('<h2 id="flows" class="s-l1"><span class="idx">§4</span>Business flows '
-                 '<span class="src tag">```flow trong docs/01_products/ · 02_architecture/</span></h2>')
+                 '<span class="src tag">```flow trong docs/01_products/ · 02_architecture/ · '
+                 "03_business-logic/</span></h2>")
     parts.append(section_sub("Nghiệp vụ chạy ra sao, theo thứ tự thời gian — mỗi kịch bản một hình. "
                              "Đây là chỗ trả lời “đặt một lệnh thì chuyện gì xảy ra”, thứ mà sơ đồ "
                              "component tĩnh phía trên không nói được."))
@@ -1809,6 +1988,31 @@ def build_current(ctx, docs, data):
             "kèm <code>title:</code>, <code>trigger:</code>, <code>outcome:</code>, "
             "<code>code:</code> nếu có"))
 
+    parts.append('<h2 id="logic" class="s-l1"><span class="idx">§5</span>Business logic '
+                 '<span class="src tag">```flowchart trong docs/03_business-logic/</span></h2>')
+    parts.append(section_sub("Quy tắc rẽ nhánh — điều gì xảy ra khi gặp điều kiện nào. "
+                             "Sequence ở §4 kể thứ tự; chỗ này kể lựa chọn"))
+    if chart_src:
+        for label, anchor, blocks in chart_src:
+            parts.append('<h3>%s <a class="tag" href="%s">nguồn</a></h3>' % (esc(label), anchor))
+            for block in blocks:
+                fig = flowchart_figure(block, comps, figs, here)
+                if fig:
+                    parts.append(fig)
+                else:
+                    parts.append('<div class="note"><span class="lbl">Note</span>Một khối '
+                                 "<code>```flowchart</code> không đọc được cạnh nào — mỗi bước là "
+                                 "<code>a -&gt; b</code>, nhánh là nhãn cạnh "
+                                 "<code>a -&gt; b : yes</code>, điểm rẽ khai báo bằng "
+                                 "<code>decide: a — câu hỏi?</code>.</div>")
+                    parts.append("<pre><code>%s</code></pre>" % esc(block.strip()))
+    else:
+        parts.append(empty_state(
+            "NO BUSINESS LOGIC — thêm một khối <code>```flowchart</code> vào "
+            "<code>docs/03_business-logic/</code>. Khai báo điểm rẽ bằng "
+            "<code>decide: check — câu hỏi?</code>, rồi nối các bước: "
+            "<code>check -&gt; approve : yes</code>"))
+
     sidebar = ['<li><a href="#products">§1 Products</a></li>']
     for d in products:
         slug = slugs[d["path"]]
@@ -1821,6 +2025,7 @@ def build_current(ctx, docs, data):
                           ("a-rev", "Revision block")]:
         sidebar.append('<li class="sub"><a href="#%s">%s</a></li>' % (anchor, label))
     sidebar.append('<li><a href="#flows">§4 Business flows</a></li>')
+    sidebar.append('<li><a href="#logic">§5 Business logic</a></li>')
 
     return page_html(ctx, "%s · Foundation — current state" % ctx["project"],
                      "Foundation", "".join(sidebar), "".join(parts), "FOUNDATION — CURRENT"), latest_rev

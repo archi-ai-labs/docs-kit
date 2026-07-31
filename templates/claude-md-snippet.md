@@ -3,7 +3,8 @@
 
 Repo này dùng mô hình docs ba lớp trong `docs/` — đọc `docs/README.md` trước (30 giây).
 
-**Luật cứng:** chỉ Decision workflow mới được đổi `docs/02_architecture/` — mỗi lần
+**Luật cứng:** chỉ Decision workflow mới được đổi `docs/02_architecture/` và
+`docs/03_business-logic/` — mỗi lần
 sửa phải nối một dòng `amended_by` dẫn Decision đã duyệt, ngay trong phiên nó được duyệt.
 
 **Ngôn ngữ:** khung tiếng Anh, giải thích tiếng Việt. Tên trường frontmatter, giá trị
@@ -22,7 +23,7 @@ Backlog); "không" cả hai → fast lane (Issue → Backlog):
 |---|---|
 | Code đụng tới schema, API contract, hoặc ranh giới component | Phải có sẵn một Decision. Chưa có: tạo Issue, dừng lại, hỏi người dùng. |
 | Một Backlog item hoàn thành | Đặt `status: done` + nối một dòng vào `docs/92_audit/`. |
-| Một Decision được duyệt | Sửa `docs/02_architecture/` NGAY trong phiên đó. |
+| Một Decision được duyệt | Sửa `docs/02_architecture/` (và `docs/03_business-logic/` nếu Decision đụng quy tắc nghiệp vụ) NGAY trong phiên đó. |
 | Bắt đầu việc không có trong Backlog | Tạo Issue trước khi viết code. |
 
 Phiên nào có đổi code thì kết thúc bằng `/docs-kit:docs-sync`; kiểm tra cấu trúc bằng `/docs-kit:docs-check`.
