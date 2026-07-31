@@ -1,24 +1,23 @@
 ---
 id: ISSUE-000
-description: "EXAMPLE — adopt a structured logging format across services"
-why: "Grep-based debugging across plain-text logs is slow and error-prone; structured fields make incidents traceable"
+description: "EXAMPLE — thống nhất một định dạng log có cấu trúc cho toàn bộ service"
+why: "Debug xuyên service bằng grep trên log thuần text vừa chậm vừa dễ sót; log có trường rõ ràng thì truy được vết sự cố"
 lane: full
 status: promoted
 ---
 
 # ISSUE-000 — Example: adopt a structured logging format
 
-> **Worked example** shipped by docs-init. It demonstrates the full-lane chain:
-> ISSUE-000 → PROPOSAL-000 → DECISION-000 → BACKLOG-000 (+ one line in `92_audit/`).
-> Delete all four `-000` files together (they reference each other), or keep them
-> as a format reference. Real Issues start at `ISSUE-001`.
+> **Ví dụ chạy được** do docs-init tạo sẵn. Nó minh hoạ trọn chuỗi full lane:
+> ISSUE-000 → PROPOSAL-000 → DECISION-000 → BACKLOG-000 (+ một dòng trong `92_audit/`).
+> Xoá cả bốn file `-000` cùng lúc (chúng dẫn chiếu lẫn nhau), hoặc giữ lại làm mẫu
+> định dạng. Issue thật bắt đầu từ `ISSUE-001`.
 
 ## Notes
 
-Lane test: it does **not** modify the Architecture doc (question 1 = no), but
-rolling the format back across all services would take more than a day
-(question 2 = yes) → **full lane**.
+Lane test: nó **không** sửa tài liệu Architecture (câu 1 = không), nhưng rollback
+định dạng này trên toàn bộ service thì mất hơn một ngày (câu 2 = có) → **full lane**.
 
-An Issue starts as `status: exploring` while it is raw research, becomes `open`
-when it is a real candidate, `promoted` once a Proposal exists (full lane) or a
-Backlog item exists (fast lane), and `archived` when dropped or superseded.
+Một Issue khởi đầu ở `status: exploring` khi còn là nghiên cứu thô, chuyển sang
+`open` khi đã là ứng viên thật, `promoted` khi đã có Proposal (full lane) hoặc đã
+có Backlog item (fast lane), và `archived` khi bị bỏ hoặc bị thay thế.

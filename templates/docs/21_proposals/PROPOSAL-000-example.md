@@ -1,34 +1,34 @@
 ---
 id: PROPOSAL-000
 issue_ref: ISSUE-000
-problem: "Logs are unstructured plain text; cross-service debugging requires fragile grep chains"
-proposed: "Adopt JSON-lines logging with a shared field set (ts, level, service, trace_id, msg)"
+problem: "Log đang là text thuần không cấu trúc; debug xuyên service phải nối grep rất mong manh"
+proposed: "Dùng JSON-lines với bộ trường dùng chung (ts, level, service, trace_id, msg)"
 impact: "none"
 ---
 
 # PROPOSAL-000 — Example: structured logging format
 
-> Part of the `-000` worked example chain. See `20_issues/ISSUE-000-example.md`.
+> Thuộc chuỗi ví dụ `-000`. Xem `20_issues/ISSUE-000-example.md`.
 
 ## Problem
 
-Restate the problem from the Issue with any new evidence gathered while exploring.
+Nêu lại vấn đề từ Issue, kèm bằng chứng mới thu được trong lúc tìm hiểu.
 
 ## Alternatives considered
 
-1. **JSON-lines with a shared field set (proposed)** — machine-parseable everywhere;
-   trade-off: slightly noisier for humans reading raw logs.
-2. **logfmt (`key=value`)** — human-friendlier; trade-off: weaker nested-data support,
-   fewer off-the-shelf parsers in our stack.
-3. **Keep plain text + better conventions** — zero migration cost; trade-off: does not
-   solve machine parsing, the original problem remains.
+1. **JSON-lines với bộ trường dùng chung (phương án đề xuất)** — máy đọc được ở mọi
+   nơi; đánh đổi: người đọc log thô thấy hơi rối.
+2. **logfmt (`key=value`)** — dễ đọc cho người hơn; đánh đổi: hỗ trợ dữ liệu lồng
+   nhau yếu, ít parser sẵn có trong stack của mình.
+3. **Giữ text thuần + siết quy ước** — không tốn chi phí migrate; đánh đổi: không
+   giải quyết được chuyện máy parse, tức vấn đề gốc vẫn còn nguyên.
 
 ## Proposed option
 
-Option 1. Roll out via a shared logging helper; services migrate call sites
-incrementally behind the same interface.
+Phương án 1. Triển khai qua một logging helper dùng chung; các service migrate dần
+từng chỗ gọi, sau cùng một interface.
 
 ## Impact on Architecture / Roadmap
 
-None — no component boundary or roadmap change (`impact: none` above). If a
-proposal does affect them, describe exactly what would be amended.
+Không — không đụng ranh giới component, không đụng roadmap (`impact: none` phía
+trên). Nếu một proposal có ảnh hưởng thật, phải mô tả chính xác cái gì sẽ bị sửa.

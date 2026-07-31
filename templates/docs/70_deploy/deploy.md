@@ -1,19 +1,19 @@
 # Deploy
 
-> Layer 3 — Reference. Edit directly; no Decision required.
+> Layer 3 — Reference. Sửa thẳng, không cần Decision.
 
 ## Environments
 
-_List environments (dev / staging / prod), where they run, and how they differ._
+_Liệt kê môi trường (dev / staging / prod), chạy ở đâu, khác nhau chỗ nào._
 
 ## Pipeline
 
-_How a change gets from merge to production — CI steps, approvals, artifacts._
+_Một thay đổi đi từ lúc merge tới production ra sao — bước CI, khâu duyệt, artifact._
 
 ## Release procedure
 
-_The exact commands or the pipeline trigger. Link a runbook in `50_runbooks/` for the long form._
+_Câu lệnh chính xác, hoặc cách kích hoạt pipeline. Bản dài thì dẫn runbook trong `50_runbooks/`._
 
 ## Rollback
 
-_How to revert a bad release, and how long it takes. If the answer is "> 1 day", remember the lane test._
+_Cách gỡ một bản release hỏng, và mất bao lâu. Nếu câu trả lời là "> 1 ngày", nhớ lại lane test._

@@ -5,8 +5,13 @@ Usage: make-fixture.py <dir>   — writes <dir>/docs/... and nothing else.
 
 The fixture deliberately exercises every branch of the renderer: both lanes,
 an amended architecture (two revisions), all board columns including archived
-and not-doing, a recorded deviation, and an empty Layer-3 folder. Driven by
-../make-samples.sh, which renders it and writes design/sample-*.html.
+and not-doing, a recorded deviation, an empty Layer-3 folder, and a product
+whose file name carries Vietnamese diacritics (so the samples prove slugify()
+folds them instead of dropping them). Driven by ../make-samples.sh, which
+renders it and writes design/sample-*.html.
+
+Language follows STANDARD §11: structure and terms in English, explanation in
+Vietnamese — the fixture has to look like real output, not a translation test.
 """
 import sys
 from pathlib import Path
@@ -18,70 +23,88 @@ FILES = {}
 
 FILES["00_roadmap/roadmap.md"] = """# Roadmap
 
-> Layer 1 — Foundation. Keep this aligned with approved Decisions.
+> Layer 1 — Foundation. Giữ đồng bộ với các Decision đã duyệt.
 
 ## Now
 
-- BACKLOG-004 Webhook retry with exponential backoff
-- BACKLOG-005 Idempotent order intake keys
+- BACKLOG-004 Retry webhook với backoff luỹ thừa
+- BACKLOG-005 Khoá idempotent cho luồng nhận đơn
 
 ## Next
 
-- Refund flow v2
-- Per-merchant rate limits
+- Luồng hoàn tiền v2
+- Giới hạn tần suất theo từng merchant
 
 ## Later / someday
 
-- Multi-currency support (ISSUE-005)
-- Merchant sandbox mode
+- Hỗ trợ đa tiền tệ (ISSUE-005)
+- Chế độ sandbox cho merchant
 
 ## Explicitly not doing
 
-- Building our own PSP (DECISION-002)
+- Tự xây PSP riêng (DECISION-002)
 """
 
 FILES["01_products/orderhub-api.md"] = """---
 name: "OrderHub API"
-users: "Merchant developers integrating order intake — backend-savvy, REST/gRPC fluent"
-problem: "Order intake is fragmented across three channels with no single source of order state"
-scope_in: [Order intake API, Payment capture via adapter, Status webhooks]
-scope_out: [Inventory management, Shipping labels]
-success_metric: "99% of orders acknowledged in < 2s"
+users: "Lập trình viên phía merchant tích hợp luồng nhận đơn — rành backend, quen REST/gRPC"
+problem: "Luồng nhận đơn nằm rải trên ba kênh, không có nguồn duy nhất cho trạng thái đơn"
+scope_in: [API nhận đơn, Capture thanh toán qua adapter, Webhook trạng thái]
+scope_out: [Quản lý kho, In nhãn vận chuyển]
+success_metric: "99% đơn được xác nhận trong < 2s"
 ---
 
 # OrderHub API
 
 ## What it is
 
-OrderHub API is the single entry point for order creation and lifecycle tracking.
-Merchants integrate once and receive a consistent state machine regardless of the
-sales channel the order originated from.
+OrderHub API là cửa vào duy nhất để tạo đơn và theo dõi vòng đời đơn. Merchant
+tích hợp một lần và nhận về cùng một state machine, bất kể đơn đến từ kênh bán nào.
 """
 
 FILES["01_products/merchant-dashboard.md"] = """---
 name: "Merchant Dashboard"
-users: "Merchant operations staff — non-technical, browser only"
-problem: "No single view of an order's lifecycle when a payment fails"
-scope_in: [Live order feed, Refund actions]
-scope_out: [Analytics warehouse]
-success_metric: "Time-to-first-action on a failed payment < 5 min"
+users: "Nhân viên vận hành phía merchant — không rành kỹ thuật, chỉ dùng trình duyệt"
+problem: "Không có chỗ nào nhìn được trọn vòng đời một đơn khi thanh toán lỗi"
+scope_in: [Luồng đơn thời gian thực, Thao tác hoàn tiền]
+scope_out: [Kho dữ liệu phân tích]
+success_metric: "Thời gian tới thao tác đầu tiên khi thanh toán lỗi < 5 phút"
 ---
 
 # Merchant Dashboard
 
 ## What it is
 
-A read-mostly console over the same API, focused on time-to-first-action when
-something goes wrong with an order.
+Một console chủ yếu để đọc, đặt trên cùng API đó, tập trung vào việc rút ngắn thời
+gian tới thao tác đầu tiên khi một đơn có vấn đề.
+"""
+
+# A Vietnamese file name on purpose: 'đối-soát' folds to 'doi-soat'. Under the old
+# ASCII-only slug it became '-i-so-t', which is both unreadable and collision-prone.
+FILES["01_products/đối-soát.md"] = """---
+name: "Đối soát giao dịch"
+users: "Kế toán merchant — làm việc theo ngày, đối chiếu số liệu cuối phiên"
+problem: "Số liệu giữa OrderHub và sao kê PSP lệch nhau mà không biết lệch ở đâu"
+scope_in: [Đối chiếu theo ngày, Xuất báo cáo lệch]
+scope_out: [Hạch toán kế toán, Xuất hoá đơn]
+success_metric: "Mọi khoản lệch trong ngày được quy về một giao dịch cụ thể trong < 1 giờ"
+---
+
+# Đối soát giao dịch
+
+## What it is
+
+Đối chiếu từng giao dịch giữa trạng thái đơn của OrderHub và sao kê PSP, rồi chỉ
+đúng giao dịch gây lệch thay vì báo một con số tổng.
 """
 
 FILES["02_architecture/architecture.md"] = """---
 components:
-  - "api-gateway — Authn, per-merchant rate limits, request shaping"
-  - "order-service — Order lifecycle state machine, single writer of order state"
-  - "payment-adapter — The only egress to external PSPs; normalizes capture/refund"
-  - "postgres [db] — Orders + outbox tables, source of durable state"
-  - "worker [queue] — Outbox consumer: webhook delivery, retries, dead-letter"
+  - "api-gateway — Xác thực, giới hạn tần suất theo merchant, nắn request"
+  - "order-service — State machine vòng đời đơn, nơi duy nhất ghi trạng thái đơn"
+  - "payment-adapter — Lối ra duy nhất tới PSP ngoài; chuẩn hoá capture/refund"
+  - "postgres [db] — Bảng orders + outbox, nguồn trạng thái bền vững"
+  - "worker [queue] — Consumer của outbox: gửi webhook, retry, dead-letter"
 data_flow:
   - "client -> api-gateway -> order-service"
   - "order-service -> payment-adapter : capture"
@@ -91,24 +114,24 @@ data_flow:
   - "worker -> merchant webhook"
 tech_stack: [Go 1.22, PostgreSQL 16, Redis 7, gRPC, Terraform]
 constraints:
-  - "payment-adapter is the only component allowed to call external PSPs"
-  - "All state changes go through the outbox pattern — no dual writes"
-  - "p99 order intake latency < 300 ms"
-  - "Single region until multi-currency lands"
+  - "Chỉ payment-adapter được phép gọi PSP bên ngoài"
+  - "Mọi thay đổi trạng thái đi qua outbox pattern — không ghi hai nơi"
+  - "Độ trễ p99 khi nhận đơn < 300 ms"
+  - "Chạy một region cho tới khi đa tiền tệ xong"
 amended_by:
-  - "2026-06-14 DECISION-001 Introduce outbox table + delivery worker"
-  - "2026-07-02 DECISION-002 External PSP calls only via payment-adapter"
+  - "2026-06-14 DECISION-001 Thêm bảng outbox + worker gửi webhook"
+  - "2026-07-02 DECISION-002 Gọi PSP ngoài chỉ qua payment-adapter"
 ---
 
 # Architecture
 
 ## Components
 
-See the frontmatter list — one entry per component.
+Xem danh sách trong frontmatter — mỗi component một dòng.
 
 ## Data flow
 
-The frontmatter edges are the authoritative flow description.
+Các cạnh khai trong frontmatter mới là mô tả luồng có thẩm quyền.
 """
 
 def issue(n, desc, why, lane, status):
@@ -123,45 +146,45 @@ status: %s
 # ISSUE-%03d — %s
 """ % (n, desc, why, lane, status, n, desc)
 
-FILES["20_issues/ISSUE-001-gateway-502.md"] = issue(1, "Gateway 502 flapping (runbook, not a change)", "Ops noise, belongs in runbooks", "fast", "archived")
-FILES["20_issues/ISSUE-002-webhooks-lost.md"] = issue(2, "Webhooks lost when service crashes mid-send", "Merchants miss order updates silently", "full", "promoted")
-FILES["20_issues/ISSUE-003-psp-direct.md"] = issue(3, "Services call PSPs directly, bypassing the adapter", "Breaks the single-egress constraint", "full", "promoted")
-FILES["20_issues/ISSUE-004-retry-storm.md"] = issue(4, "Webhook retry storm duplicates deliveries", "Hotfixed in prod before an Issue existed", "fast", "promoted")
-FILES["20_issues/ISSUE-005-multi-currency.md"] = issue(5, "Multi-currency support", "Requested by two enterprise merchants", "full", "exploring")
-FILES["20_issues/ISSUE-006-refund-bypass.md"] = issue(6, "Refund flow bypasses order state machine", "Refunds can contradict order state", "full", "open")
+FILES["20_issues/ISSUE-001-gateway-502.md"] = issue(1, "Gateway 502 chập chờn (thuộc runbook, không phải thay đổi)", "Nhiễu vận hành, chỗ của nó là runbook", "fast", "archived")
+FILES["20_issues/ISSUE-002-webhooks-lost.md"] = issue(2, "Mất webhook khi service chết giữa lúc đang gửi", "Merchant âm thầm lỡ cập nhật đơn", "full", "promoted")
+FILES["20_issues/ISSUE-003-psp-direct.md"] = issue(3, "Service gọi thẳng PSP, đi vòng qua adapter", "Phá ràng buộc chỉ một lối ra", "full", "promoted")
+FILES["20_issues/ISSUE-004-retry-storm.md"] = issue(4, "Bão retry webhook làm gửi trùng", "Đã hotfix trên prod trước khi có Issue", "fast", "promoted")
+FILES["20_issues/ISSUE-005-multi-currency.md"] = issue(5, "Hỗ trợ đa tiền tệ", "Hai merchant lớn cùng yêu cầu", "full", "exploring")
+FILES["20_issues/ISSUE-006-refund-bypass.md"] = issue(6, "Luồng hoàn tiền đi vòng qua state machine của đơn", "Hoàn tiền có thể mâu thuẫn với trạng thái đơn", "full", "open")
 
 FILES["21_proposals/PROPOSAL-001-outbox.md"] = """---
 id: PROPOSAL-001
 issue_ref: ISSUE-002
-problem: "Webhooks are sent inline; a crash between DB write and send loses them"
-proposed: "Outbox table + delivery worker for at-least-once webhooks"
-impact: "Architecture change: new worker component and outbox table; roadmap unchanged"
+problem: "Webhook đang gửi inline; chết giữa lúc ghi DB và lúc gửi là mất luôn"
+proposed: "Bảng outbox + worker gửi, để webhook đạt at-least-once"
+impact: "Đổi Architecture: thêm component worker và bảng outbox; roadmap không đổi"
 ---
 
 # PROPOSAL-001 — Outbox + delivery worker
 
 ## Alternatives considered
 
-1. **Inline retries with backoff** — simplest, but a crash still loses the webhook.
-2. **Message broker (Redis streams)** — new infra to operate for one use case.
-3. **Outbox + worker (chosen)** — at-least-once with only postgres + one consumer.
+1. **Retry inline kèm backoff** — đơn giản nhất, nhưng chết máy là vẫn mất webhook.
+2. **Message broker (Redis streams)** — thêm hạ tầng phải vận hành cho đúng một ca dùng.
+3. **Outbox + worker (chọn)** — đạt at-least-once mà chỉ cần postgres + một consumer.
 """
 
 FILES["21_proposals/PROPOSAL-002-psp-adapter.md"] = """---
 id: PROPOSAL-002
 issue_ref: ISSUE-003
-problem: "Two services call PSP SDKs directly, duplicating retry and error logic"
-proposed: "Route all PSP traffic through payment-adapter; forbid direct calls"
-impact: "Architecture change: payment-adapter becomes the single PSP egress"
+problem: "Hai service gọi thẳng SDK của PSP, lặp lại logic retry và xử lý lỗi"
+proposed: "Dồn toàn bộ lưu lượng PSP qua payment-adapter; cấm gọi thẳng"
+impact: "Đổi Architecture: payment-adapter thành lối ra PSP duy nhất"
 ---
 
 # PROPOSAL-002 — Single PSP egress
 
 ## Alternatives considered
 
-1. **Shared SDK wrapper library** — still N callers, N configs to rotate.
-2. **Per-service allowlists** — policy without enforcement point.
-3. **Adapter as single egress (chosen)** — one place for retries, keys, audit.
+1. **Thư viện wrapper SDK dùng chung** — vẫn N nơi gọi, N config phải xoay khoá.
+2. **Allowlist theo từng service** — có chính sách mà không có chỗ cưỡng chế.
+3. **Adapter làm lối ra duy nhất (chọn)** — một chỗ lo retry, khoá, và audit.
 """
 
 def decision(n, pref, outcome, reason, amendment):
@@ -177,8 +200,8 @@ architecture_amendment: "%s"
 # DECISION-%03d
 """ % (n, pref, outcome, reason, amendment, n)
 
-FILES["22_decisions/DECISION-001-outbox.md"] = decision(1, 1, "approved", "At-least-once delivery with minimal new infra", "Introduce outbox table + delivery worker")
-FILES["22_decisions/DECISION-002-psp-adapter.md"] = decision(2, 2, "approved", "Single egress point for keys, retries, and audit", "External PSP calls only via payment-adapter")
+FILES["22_decisions/DECISION-001-outbox.md"] = decision(1, 1, "approved", "Đạt at-least-once mà thêm rất ít hạ tầng mới", "Thêm bảng outbox + worker gửi webhook")
+FILES["22_decisions/DECISION-002-psp-adapter.md"] = decision(2, 2, "approved", "Một lối ra duy nhất để quản khoá, retry và audit", "Gọi PSP ngoài chỉ qua payment-adapter")
 
 def backlog(n, desc, src, status):
     return """---
@@ -191,39 +214,39 @@ status: %s
 # BACKLOG-%03d — %s
 """ % (n, desc, src, status, n, desc)
 
-FILES["23_backlog/BACKLOG-001-outbox-migration.md"] = backlog(1, "Outbox table migration", "DECISION-001", "done")
-FILES["23_backlog/BACKLOG-002-delivery-worker.md"] = backlog(2, "Delivery worker + dead-letter", "DECISION-001", "done")
-FILES["23_backlog/BACKLOG-003-psp-cutover.md"] = backlog(3, "PSP adapter cutover", "DECISION-002", "done")
-FILES["23_backlog/BACKLOG-004-retry-backoff.md"] = backlog(4, "Webhook retry with exponential backoff", "ISSUE-004", "in-progress")
-FILES["23_backlog/BACKLOG-005-idempotent-intake.md"] = backlog(5, "Idempotent order intake keys", "DECISION-001", "open")
+FILES["23_backlog/BACKLOG-001-outbox-migration.md"] = backlog(1, "Migration bảng outbox", "DECISION-001", "done")
+FILES["23_backlog/BACKLOG-002-delivery-worker.md"] = backlog(2, "Worker gửi webhook + dead-letter", "DECISION-001", "done")
+FILES["23_backlog/BACKLOG-003-psp-cutover.md"] = backlog(3, "Chuyển đổi sang PSP adapter", "DECISION-002", "done")
+FILES["23_backlog/BACKLOG-004-retry-backoff.md"] = backlog(4, "Retry webhook với backoff luỹ thừa", "ISSUE-004", "in-progress")
+FILES["23_backlog/BACKLOG-005-idempotent-intake.md"] = backlog(5, "Khoá idempotent cho luồng nhận đơn", "DECISION-001", "open")
 
 FILES["92_audit/LOG.md"] = """# Audit log
 
-> Append-only. Format: `YYYY-MM-DD | what happened | ref | deviation ("-" if none) | why`
+> Chỉ ghi thêm. Định dạng: `YYYY-MM-DD | chuyện gì đã xảy ra | ref | lệch ("-" nếu không) | vì sao`
 
-2026-05-02 | docs skeleton scaffolded | - | - | -
-2026-05-10 | ISSUE-001 archived to runbooks | ISSUE-001 | - | ops noise, not a change
-2026-05-28 | ISSUE-002 opened | ISSUE-002 | - | -
-2026-06-05 | PROPOSAL-001 drafted | PROPOSAL-001 | - | -
-2026-06-14 | DECISION-001 approved, architecture REV A | DECISION-001 | - | -
-2026-06-16 | BACKLOG-001 done — outbox migration | BACKLOG-001 | - | -
-2026-06-20 | BACKLOG-002 done — delivery worker live | BACKLOG-002 | - | -
-2026-06-24 | ISSUE-003 opened | ISSUE-003 | - | -
-2026-06-30 | PROPOSAL-002 drafted | PROPOSAL-002 | - | -
-2026-07-02 | DECISION-002 approved, architecture REV B | DECISION-002 | - | -
-2026-07-15 | Hotfix pushed before Issue existed | ISSUE-004 | retroactive Issue | prod webhook storm
-2026-07-28 | BACKLOG-003 done — PSP adapter cutover | BACKLOG-003 | - | -
+2026-05-02 | khởi tạo bộ khung docs | - | - | -
+2026-05-10 | ISSUE-001 chuyển về runbook, đóng lại | ISSUE-001 | - | nhiễu vận hành, không phải thay đổi
+2026-05-28 | mở ISSUE-002 | ISSUE-002 | - | -
+2026-06-05 | soạn PROPOSAL-001 | PROPOSAL-001 | - | -
+2026-06-14 | duyệt DECISION-001, architecture lên REV A | DECISION-001 | - | -
+2026-06-16 | BACKLOG-001 xong — migration outbox | BACKLOG-001 | - | -
+2026-06-20 | BACKLOG-002 xong — worker gửi webhook đã chạy | BACKLOG-002 | - | -
+2026-06-24 | mở ISSUE-003 | ISSUE-003 | - | -
+2026-06-30 | soạn PROPOSAL-002 | PROPOSAL-002 | - | -
+2026-07-02 | duyệt DECISION-002, architecture lên REV B | DECISION-002 | - | -
+2026-07-15 | đẩy hotfix trước khi có Issue | ISSUE-004 | Issue lập bù về sau | bão webhook trên prod
+2026-07-28 | BACKLOG-003 xong — chuyển đổi sang PSP adapter | BACKLOG-003 | - | -
 """
 
-FILES["30_conventions/coding-style.md"] = "# Coding style\n\nGo fmt, table-driven tests.\n"
-FILES["30_conventions/review-rules.md"] = "# Review rules\n\nTwo approvals on schema changes.\n"
-FILES["40_services/order-service.md"] = "# order-service\n\nOwns order state.\n"
-FILES["50_runbooks/gateway-502.md"] = "# Gateway 502\n\nCheck upstream health.\n"
-FILES["50_runbooks/psp-outage.md"] = "# PSP outage\n\nQueue captures, notify merchants.\n"
-FILES["50_runbooks/webhook-storm.md"] = "# Webhook storm\n\nPause worker, drain dead-letter.\n"
-FILES["70_deploy/environments.md"] = "# Environments\n\nstaging, prod (single region).\n"
-FILES["93_qa/test-matrix.md"] = "# Test matrix\n\nIntake, capture, refund, webhook.\n"
-FILES["README.md"] = "# docs\n\nThree-layer docs. 30-second guide lives here in the real scaffold.\n"
+FILES["30_conventions/coding-style.md"] = "# Coding style\n\nGo fmt, test dạng bảng.\n"
+FILES["30_conventions/review-rules.md"] = "# Review rules\n\nĐổi schema cần hai lượt duyệt.\n"
+FILES["40_services/order-service.md"] = "# order-service\n\nSở hữu trạng thái đơn.\n"
+FILES["50_runbooks/gateway-502.md"] = "# Gateway 502\n\nKiểm tra sức khoẻ upstream.\n"
+FILES["50_runbooks/psp-outage.md"] = "# PSP outage\n\nXếp hàng capture, báo cho merchant.\n"
+FILES["50_runbooks/webhook-storm.md"] = "# Webhook storm\n\nTạm dừng worker, xả dead-letter.\n"
+FILES["70_deploy/environments.md"] = "# Environments\n\nstaging, prod (một region).\n"
+FILES["93_qa/test-matrix.md"] = "# Test matrix\n\nNhận đơn, capture, hoàn tiền, webhook.\n"
+FILES["README.md"] = "# docs\n\nTài liệu ba lớp. Bản hướng dẫn 30 giây nằm ở đây trong scaffold thật.\n"
 
 for folder in ["60_fe-integration"]:
     (docs / folder).mkdir(parents=True, exist_ok=True)

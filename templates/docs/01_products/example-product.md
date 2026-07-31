@@ -1,26 +1,26 @@
 ---
 name: "Example product"
-users: "Who uses this product — role, context, technical level"
-problem: "The concrete problem this product solves for those users"
-scope_in: [core feature A, core feature B]
-scope_out: [explicitly excluded thing A, explicitly excluded thing B]
-success_metric: "The measurable signal that says this product works"
+users: "Ai dùng sản phẩm này — vai trò, bối cảnh, mức độ rành kỹ thuật"
+problem: "Vấn đề cụ thể mà sản phẩm này giải quyết cho những người đó"
+scope_in: [tính năng lõi A, tính năng lõi B]
+scope_out: [thứ bị loại rõ ràng A, thứ bị loại rõ ràng B]
+success_metric: "Tín hiệu đo được cho biết sản phẩm này chạy đúng"
 ---
 
 # Example product
 
-> Placeholder. Rename this file, fill in the frontmatter above, and describe your
-> real product below. One file per product. Delete this file if you fill in a real
-> one — the validator only requires that every file here has the six fields above.
+> File mẫu. Đổi tên file, điền frontmatter phía trên, rồi mô tả sản phẩm thật của
+> bạn bên dưới. Mỗi sản phẩm một file. Điền được file thật rồi thì xoá file này —
+> validator chỉ đòi mọi file ở đây có đủ sáu trường trên.
 
 ## What it is
 
-One or two paragraphs: what the product does and for whom.
+Một hai đoạn: sản phẩm làm gì, cho ai.
 
 ## In scope / out of scope
 
-Expand on `scope_in` / `scope_out` if the lists need nuance.
+Nói rõ thêm về `scope_in` / `scope_out` nếu danh sách cần diễn giải.
 
 ## Success
 
-How `success_metric` is measured and what "good" looks like.
+`success_metric` được đo bằng cách nào, và thế nào là "đạt".

@@ -1,20 +1,23 @@
 # Roadmap
 
-> Layer 1 — Foundation. Keep this aligned with approved Decisions. Proposals that
-> affect the roadmap must state it in their `impact` field.
+> Layer 1 — Foundation. Giữ đồng bộ với các Decision đã duyệt. Proposal nào ảnh
+> hưởng tới roadmap thì phải nói rõ trong trường `impact` của nó.
+>
+> Tên bốn cột dưới đây là nhãn — giữ nguyên tiếng Anh. Trang HTML sinh ra đọc
+> đúng những tiêu đề này để tô màu cột.
 
 ## Now
 
-- _What is being worked on right now (should map to open/in-progress Backlog items)._
+- _Đang làm ngay lúc này (nên khớp với Backlog item đang open/in-progress)._
 
 ## Next
 
-- _What comes after the current work, in rough priority order._
+- _Làm sau đợt hiện tại, xếp theo mức ưu tiên tương đối._
 
 ## Later / someday
 
-- _Ideas that are real but not scheduled. Anything actionable should become an Issue._
+- _Ý tưởng có thật nhưng chưa xếp lịch. Cái nào đủ cụ thể để làm thì nên thành Issue._
 
 ## Explicitly not doing
 
-- _Things considered and rejected, so they don't get re-litigated. Link the Decision if one exists._
+- _Đã cân nhắc và loại, ghi lại để khỏi bàn lại. Có Decision thì dẫn link tới._

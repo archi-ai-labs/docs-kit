@@ -868,19 +868,24 @@ def slugify(text, seen=None):
 # carries. Headings are labels and stay English (see STANDARD §11), but a
 # Vietnamese heading is a likely slip, and the failure is silent — the column
 # simply loses its colour — so the obvious equivalents are accepted too.
+#   (kind, matched at the start of the heading, matched anywhere in it)
+# "now" must be a prefix — as a substring it would fire on "Known issues".
+# The not-doing family is the opposite: the shipped template writes
+# "Explicitly not doing", so the phrase is not at the start. It is checked
+# first, because it is the stronger signal wherever it appears.
 ROADMAP_KINDS = [
-    ("now", ("now", "bây giờ", "dang lam", "đang làm")),
-    ("next", ("next", "tiếp theo", "tiep theo")),
-    ("later", ("later", "để sau", "de sau", "sau này")),
-    ("not-doing", ("not doing", "không làm", "khong lam", "won't do")),
+    ("not-doing", (), ("not doing", "won't do", "không làm", "khong lam")),
+    ("now", ("now", "bây giờ", "đang làm", "dang lam"), ()),
+    ("next", ("next", "tiếp theo", "tiep theo"), ()),
+    ("later", ("later", "để sau", "de sau", "sau này"), ()),
 ]
 
 
 def roadmap_kind(heading):
     """Map a roadmap '##' heading to now / next / later / not-doing, or None."""
     h = (heading or "").strip().lower()
-    for kind, prefixes in ROADMAP_KINDS:
-        if any(h.startswith(p) for p in prefixes):
+    for kind, prefixes, anywhere in ROADMAP_KINDS:
+        if any(h.startswith(p) for p in prefixes) or any(p in h for p in anywhere):
             return kind
     return None
 

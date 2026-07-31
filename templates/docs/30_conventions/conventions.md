@@ -1,15 +1,15 @@
 # Conventions
 
-> Layer 3 — Reference. Edit directly; no Decision required.
+> Layer 3 — Reference. Sửa thẳng, không cần Decision.
 
 ## Code style
 
-- _Formatter / linter of record and where its config lives._
+- _Formatter / linter chính thức và file config của nó nằm ở đâu._
 
 ## Naming
 
-- _Branches, commits, files, services — the patterns this repo actually uses._
+- _Branch, commit, file, service — đúng những quy ước repo này đang dùng thật._
 
 ## Process
 
-- _PR size, review expectations, when to write an Issue vs. just do it (see `docs/README.md` lane test)._
+- _PR to cỡ nào, kỳ vọng khi review, khi nào cần mở Issue thay vì làm luôn (xem lane test ở `docs/README.md`)._

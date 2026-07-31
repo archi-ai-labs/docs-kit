@@ -1,25 +1,29 @@
 <!-- docs-kit:start (managed by /docs-kit:docs-init — edit between markers only via docs-kit) -->
 ## Documentation rules (docs-kit)
 
-This repo uses the three-layer docs model in `docs/` — read `docs/README.md` first (30 seconds).
+Repo này dùng mô hình docs ba lớp trong `docs/` — đọc `docs/README.md` trước (30 giây).
 
-**Hard rule:** only the Decision workflow may change `docs/02_architecture/` — every
-amendment appends an `amended_by` entry citing the approving Decision, in the same
-session it is approved.
+**Luật cứng:** chỉ Decision workflow mới được đổi `docs/02_architecture/` — mỗi lần
+sửa phải nối một dòng `amended_by` dẫn Decision đã duyệt, ngay trong phiên nó được duyệt.
 
-**Lane test** — two questions, any "yes" → full lane (Issue → Proposal → Decision →
-Backlog); both "no" → fast lane (Issue → Backlog):
-1. Does this change modify the Architecture doc?
-2. If it turns out wrong, would reverting take more than 1 day?
+**Ngôn ngữ:** khung tiếng Anh, giải thích tiếng Việt. Tên trường frontmatter, giá trị
+enum, tiền tố id, tiêu đề mục và các thuật ngữ (Issue, Proposal, Decision, Backlog,
+Architecture, fast lane, full lane) giữ nguyên tiếng Anh. Phần diễn giải — description,
+why, reason, dòng audit — viết tiếng Việt, để thuật ngữ Anh nằm trần trong câu.
 
-**Mandatory triggers:**
+**Lane test** — hai câu hỏi, "có" một câu → full lane (Issue → Proposal → Decision →
+Backlog); "không" cả hai → fast lane (Issue → Backlog):
+1. Thay đổi này có sửa tài liệu Architecture không?
+2. Nếu hoá ra sai, rollback có mất hơn 1 ngày không?
 
-| Session event | Required docs action |
+**Trigger bắt buộc:**
+
+| Sự kiện trong phiên | Việc phải làm với docs |
 |---|---|
-| Code change touches a schema, API contract, or component boundary | A Decision must already exist. If none: create an Issue, stop, ask the user. |
-| A Backlog item is completed | Set its `status: done` + append one line to `docs/92_audit/`. |
-| A Decision is approved | Amend `docs/02_architecture/` in the SAME session. |
-| Starting work that is not in the Backlog | Create an Issue before writing code. |
+| Code đụng tới schema, API contract, hoặc ranh giới component | Phải có sẵn một Decision. Chưa có: tạo Issue, dừng lại, hỏi người dùng. |
+| Một Backlog item hoàn thành | Đặt `status: done` + nối một dòng vào `docs/92_audit/`. |
+| Một Decision được duyệt | Sửa `docs/02_architecture/` NGAY trong phiên đó. |
+| Bắt đầu việc không có trong Backlog | Tạo Issue trước khi viết code. |
 
-End sessions that changed code with `/docs-kit:docs-sync`; validate structure with `/docs-kit:docs-check`.
+Phiên nào có đổi code thì kết thúc bằng `/docs-kit:docs-sync`; kiểm tra cấu trúc bằng `/docs-kit:docs-check`.
 <!-- docs-kit:end -->

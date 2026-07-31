@@ -8,28 +8,28 @@ amended_by: []
 
 # Architecture
 
-> Layer 1 — Foundation. **Do not edit this document outside the Decision workflow.**
-> Every amendment appends one entry to `amended_by` in the frontmatter:
-> `- YYYY-MM-DD DECISION-NNN <one-line summary>` — written in the same session the
-> Decision was approved. The docs-kit PostToolUse hook warns on any edit here.
+> Layer 1 — Foundation. **Không sửa tài liệu này ngoài Decision workflow.**
+> Mỗi lần sửa phải nối thêm một dòng vào `amended_by` trong frontmatter:
+> `- YYYY-MM-DD DECISION-NNN <tóm tắt một dòng>` — viết ngay trong phiên mà
+> Decision được duyệt. Hook PostToolUse của docs-kit sẽ cảnh báo mọi lần sửa ở đây.
 
 ## Components
 
-_List the main components and their responsibilities. Mirror the `components` list above._
+_Liệt kê các component chính và trách nhiệm của từng cái. Khớp với danh sách `components` phía trên._
 
 ## Data flow
 
-_How data moves between components. One diagram or a short numbered flow._
+_Dữ liệu đi qua các component ra sao. Một sơ đồ, hoặc một luồng đánh số ngắn gọn._
 
 ## Tech stack
 
-_Languages, frameworks, datastores, infra. Mirror `tech_stack` above._
+_Ngôn ngữ, framework, datastore, hạ tầng. Khớp với `tech_stack` phía trên._
 
 ## Constraints
 
-_Hard constraints the design must respect: latency, cost, compliance, team size…_
+_Ràng buộc cứng mà thiết kế phải tôn trọng: độ trễ, chi phí, tuân thủ, quy mô team…_
 
 ## Amendment history
 
-The authoritative list is `amended_by` in the frontmatter. Use this section for
-context on notable amendments if a one-line summary is not enough.
+Danh sách có thẩm quyền là `amended_by` trong frontmatter. Mục này chỉ để ghi thêm
+bối cảnh cho những lần sửa đáng kể, khi một dòng tóm tắt là không đủ.

@@ -1,17 +1,17 @@
 # FE integration
 
-> Layer 3 — Reference. Edit directly; no Decision required.
-> Contract *changes* usually touch an API boundary — that is a trigger event:
-> a Decision must exist first (see `docs/README.md`).
+> Layer 3 — Reference. Sửa thẳng, không cần Decision.
+> Nhưng *thay đổi* contract thường đụng ranh giới API — đó là một trigger event:
+> phải có Decision trước đã (xem `docs/README.md`).
 
 ## Endpoints / contracts the frontend consumes
 
-_Base URLs per environment, auth scheme, error envelope format._
+_Base URL theo từng môi trường, cơ chế auth, định dạng khung lỗi._
 
 ## Conventions
 
-_Pagination, date formats, i18n, feature flags — whatever the FE must know._
+_Phân trang, định dạng ngày giờ, i18n, feature flag — những gì FE bắt buộc phải biết._
 
 ## Changelog pointers
 
-_Where breaking contract changes are announced (link the Decision that approved them)._
+_Thay đổi phá vỡ contract được thông báo ở đâu (dẫn Decision đã duyệt nó)._
