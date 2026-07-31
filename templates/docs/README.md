@@ -34,7 +34,7 @@ Review (định kỳ)    ⇒ read-only trên layer 1–2; phát hiện nối và
 |---|---|---|
 | 00 | `00_roadmap` | Sản phẩm đang đi về đâu: now / next / later |
 | 01 | `01_products` | Mỗi sản phẩm là gì, cho ai, thế nào là thành công |
-| 02 | `02_architecture` | Component, lược đồ dữ liệu (```erd```), luồng dữ liệu, stack, ràng buộc — chỉ sửa qua Decision |
+| 02 | `02_architecture` | Component, lược đồ dữ liệu (```erd```), type (```class```), luồng dữ liệu, stack, ràng buộc — chỉ sửa qua Decision |
 | 03 | `03_business-logic` | Quy tắc rẽ nhánh (```flowchart```) + vòng đời entity (```state```) — chỉ sửa qua Decision |
 | 20 | `20_issues` | Mọi thứ đáng làm đều vào đây trước (nghiên cứu thô bắt đầu ở `exploring`) |
 | 21 | `21_proposals` | Phương án cho full lane, kèm lựa chọn thay thế + đánh đổi |

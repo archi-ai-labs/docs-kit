@@ -63,6 +63,63 @@ digits live only under `docs/`.
   usage table was not. Two descriptions of the same skill disagreed for a whole
   minor version.
 
+## [0.13.0] — 2026-08-01
+
+### Added — ```` ```class ````, the code's own contracts
+
+The ERD says what the database holds. It says nothing about which type satisfies
+which interface — and in a codebase whose architecture rests on "only
+payment-adapter may call the PSP", that sentence is a claim about an interface
+with more than one implementation, written down nowhere.
+
+- **```` ```class ````** in the body of the `02_architecture/` doc, rendering in a
+  new **Types & contracts** sub-section of §3 right after Data model. `class:` and
+  `interface:` open a type; `extends` and `implements` are relation lines inside
+  it; `+` and `-` mark visibility; a member containing `(` is a method and splits
+  at the paren, not at whitespace — splitting on the first space yields the
+  nonsense `Capture(orderID` / `string, cents int64) (Receipt, error)`.
+- **Association is derived, never written.** A field whose type names another
+  declared type draws its own edge, for the same reason `fk` draws an ERD
+  relationship: one source per fact. `*`, `[]`, `...` and `map[…]` are stripped
+  first, so `*http.Client` matches nothing — a type from another package is not in
+  this picture. Method signatures are not scanned; one naming every type in the
+  package would draw a graph nobody can read.
+- **No composition, no aggregation.** The boundary between them generates more
+  argument than insight, and hand-written it drifts from the code.
+
+### Added — `scripts/docs_detect.py`, and `docs-init` uses it
+
+Scaffolding a Go repo used to start from a blank `tech_stack:`. Now a read-only
+detector reports what the manifests actually declare — language and version,
+direct dependencies, docker-compose services and their images, which is where a
+real `PostgreSQL 16` comes from, since no language manifest says it.
+
+- It **writes nothing**. `docs-init` reads the report, asks, and writes — in the
+  dialog Step 3 already had, because a trickle of dialogs is how a user stops
+  reading them.
+- **Only `tech_stack:` may be filled from it.** A manifest stating `go 1.22` is a
+  fact; a component's description is a claim about behaviour, and STANDARD §4
+  already calls `auth — handles auth` a failure.
+- Every cap is printed. `dep:` stops at 15 per manifest and `dep-count:` states
+  the true total, because a silent truncation reads as "that was all of them".
+- `frontend: yes` is **reporting, not branching**. The tree is 15 folders for
+  every repo; making it conditional would leave every backend repo printing a
+  layout NOTE forever.
+
+### Changed
+
+- `svg_dag()` learned a `"sep"` row tag (a hairline above that row) and
+  `entity_tag` (a stereotype inside the header band). A class box is the ERD's
+  entity box with those two things — not a second kind of node — and neither
+  changes any height.
+- `implements` edges are **statically** dashed, graphite. Marching dashes already
+  mean async or fast-lane, and a UML realization arrow is neither, so `svg_dag`
+  gained an explicit `dashed` set rather than reusing the async flag.
+- `docs-init` Step 3 now also asks for the ```` ```erd ````, ```` ```class ````,
+  ```` ```flowchart ```` and ```` ```state ```` blocks. It had been telling agents
+  to fill `components` and ```` ```flow ```` only — every fence added since 0.10.0
+  was invisible to the one skill that populates a fresh repo.
+
 ## [0.12.0] — 2026-07-31
 
 ### Added — ```` ```erd ````, the data model

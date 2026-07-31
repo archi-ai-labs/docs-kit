@@ -73,10 +73,31 @@ not have guessed from the directory listing. This step fills
 repo** — never from the project's name, its README's claims, or a framework's
 conventional layout.
 
+0. First, see what this repo is built with:
+
+   ```bash
+   python3 "$PLUGIN_ROOT/scripts/docs_detect.py" .
+   ```
+
+   It is read-only and writes nothing. Report the findings in Vietnamese —
+   language and version, services from docker-compose, notable dependencies.
+   Nothing printed but `DETECT OK` means no manifest was found; say so plainly
+   and move on, do not guess a stack from folder names.
+
+   **Only `tech_stack:` may be filled from this report.** It states what a
+   manifest declares, which is a fact. `components:` may not — a component's
+   description is a claim about behaviour, and item 3 below is the bar it has
+   to meet.
+
 1. Ask with AskUserQuestion — question: "Đọc source của repo để điền
    Architecture (components, data flow, business flows)?" with options:
    - "Yes — đọc code rồi điền (Recommended)"
    - "No — để trống, tôi tự điền"
+   Add a second question in the **same call** — one dialog, not two, because a
+   trickle of dialogs is how a user stops reading them: "Điền `tech_stack:` từ
+   những gì vừa nhận diện được?" with options "Yes — dùng bản nhận diện
+   (Recommended)" and "No — để trống". Skip this second question when the
+   detector found nothing.
    If AskUserQuestion fails or returns empty, ask in plain text and **end the
    turn**. Never fill layer 1 on silence.
 
@@ -110,7 +131,28 @@ conventional layout.
    ordered steps, `outcome:`. Participant names must match `components` so the
    figure picks up their icons. See STANDARD §10.
 
-6. State your confidence in the report. Anything inferred rather than read —
+6. Write the **data model** — one ```` ```erd ```` block in the architecture
+   body, from the migrations or schema files that are actually in this repo.
+   `table:` opens an entity, one column per line; a `fk -> other.id` flag is
+   what draws a relationship, and cardinality is derived from it — never write
+   cardinality by hand. Only tables and columns you read. See STANDARD §10.
+
+7. Write the **types** — one ```` ```class ```` block in the architecture body,
+   for the contract that matters most in this repo: the interface with more than
+   one implementation, the one a constraint depends on. `interface:` / `class:`
+   open a type, `implements` and `extends` are relation lines, a field whose
+   type names another declared type draws its own edge. Do not transcribe the
+   whole package — pick the boundary a newcomer needs.
+
+8. Write the **business logic** into `docs/03_business-logic/` when the code has
+   any: one ```` ```flowchart ```` per branching rule (`decide: node — câu hỏi?`
+   makes a branch point) and one ```` ```state ```` per entity lifecycle
+   (`initial:` / `final:` name real states). Each file needs `domain:` and
+   `amended_by:` in its frontmatter. A rule that lives only in people's heads is
+   exactly what this folder is for — but only write the ones you read in the
+   code.
+
+9. State your confidence in the report. Anything inferred rather than read —
    say so, and leave it out rather than guess. An architecture doc that is
    confidently wrong is worse than an empty one.
 

@@ -211,6 +211,41 @@ payload     jsonb
 sent_at     timestamptz null
 ```
 
+## Types & contracts
+
+```class
+title: Lối ra PSP
+code: internal/psp/
+
+interface: PSPClient
++ Capture(orderID string, cents int64) (Receipt, error)
++ Refund(orderID string, cents int64) (Receipt, error)
+
+class: BaseAdapter
+- http       *http.Client
+- timeout    time.Duration
++ do(req Request) (Response, error) — chỗ duy nhất đặt timeout và retry
+
+class: StripeAdapter
+extends BaseAdapter
+implements PSPClient
+- secret      string
+- lastReceipt Receipt — biên lai của lần gọi gần nhất, dùng cho idempotency
++ Capture(orderID string, cents int64) (Receipt, error)
++ Refund(orderID string, cents int64) (Receipt, error)
+
+class: SandboxAdapter
+implements PSPClient
+- fixtures map[string]Receipt
++ Capture(orderID string, cents int64) (Receipt, error)
++ Refund(orderID string, cents int64) (Receipt, error)
+
+class: Receipt
++ PSPRef  string
++ Status  string
++ Cents   int64
+```
+
 ## Data flow
 
 Các cạnh khai trong frontmatter mới là mô tả luồng có thẩm quyền.

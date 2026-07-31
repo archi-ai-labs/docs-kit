@@ -153,7 +153,7 @@ plugin on by default.
 
 | Command | What it does | Writes files |
 |---|---|---|
-| `/docs-kit:docs-init` | Scaffold 15 folders + templates into `docs/`, read the repo's source to fill Architecture, and optionally wire the rules into `CLAUDE.md`. Refuses to touch an existing `docs/`; asks before every write outside the scaffold. | Yes |
+| `/docs-kit:docs-init` | Scaffold 15 folders + templates into `docs/`, detect the stack from the repo's manifests, read the repo's source to fill Architecture, and optionally wire the rules into `CLAUDE.md`. Refuses to touch an existing `docs/`; asks before every write outside the scaffold. | Yes |
 | `/docs-kit:docs-sync` | End-of-session reconcile: backlog statuses, audit entries, retroactive Issues, pending Architecture amendments, architecture-vs-code drift. | Yes |
 | `/docs-kit:docs-check` | Run the deterministic validator and explain each failure. Never fixes. | No |
 | `/docs-kit:docs-render` | Generate/refresh the HTML views of `docs/`. Deterministic; never edits markdown. | Yes (HTML only) |
@@ -342,7 +342,8 @@ docs-kit/
 ├── references/                  # mechanics shared by more than one skill
 │   └── issue-capture.md         #   creating an Issue — read by brief + docs-sync
 ├── hooks/hooks.json             # 2 deterministic warn-only hooks
-├── scripts/                     # docs_validate.sh, docs_scaffold.sh, docs_render.{sh,py}, hook workers
+├── scripts/                     # docs_validate.sh, docs_scaffold.sh, docs_render.{sh,py},
+│                                #   docs_detect.py (read-only stack report), hook workers
 ├── design/                      # "change-control print" design system + generated samples
 │   ├── design-system.html       #   the design contract
 │   ├── sample-*.html            #   real renderer output — regenerate, never hand-edit

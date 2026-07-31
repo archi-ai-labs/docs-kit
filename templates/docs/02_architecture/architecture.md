@@ -96,6 +96,54 @@ trỏ về một dòng cha. Nên đầu con vẽ chân quạ, đầu cha vẽ g�
 Quan hệ tự trỏ (`parent_id fk -> orders.id`) viết như mọi cột khác; renderer nhận
 ra nó quay ngược và vẽ xuống làn dưới các hàng.
 
+## Types & contracts
+
+Data model ở trên là dữ liệu đã lưu. Khối ```` ```class ```` dưới đây là code —
+cái nào implement interface nào, cái nào giữ tham chiếu tới cái nào. Cũng là
+**ví dụ chạy được**, xoá hoặc sửa đè khi viết thật.
+
+```class
+title: <ranh giới quan trọng nhất của hệ thống>
+code: <package đọc để hiểu>
+
+interface: Store
++ Get(id string) (Record, error)
++ Put(r Record) error
+
+class: PostgresStore
+implements Store
+- pool    *pgxpool.Pool
+- last    Record — bản ghi ghi gần nhất, dùng cho metric
++ Get(id string) (Record, error)
++ Put(r Record) error
+
+class: MemoryStore
+implements Store
+- items map[string]Record
++ Get(id string) (Record, error)
++ Put(r Record) error
+
+class: Record
++ ID      string
++ Payload []byte
+```
+
+| Dòng | Nghĩa |
+|---|---|
+| `class: <tên>` · `interface: <tên>` | Mở một type. Interface được vẽ kèm nhãn `«interface»` |
+| `implements <tên>` | Cạnh nét đứt, tam giác rỗng ở đầu interface |
+| `extends <tên>` | Cạnh nét liền, tam giác rỗng ở đầu type cha |
+| `+ <tên> <kiểu>` · `- <tên> <kiểu>` | Thành viên public · private |
+| Thành viên có `(` | Là method — nằm ở ngăn dưới |
+
+**Association không viết tay.** Một field có kiểu trùng tên một type đã khai báo
+trong khối này thì tự sinh ra cạnh, y như `fk` sinh ra quan hệ ở ERD. Chữ ký
+method **không** quét — một signature nhắc đủ mọi type trong package sẽ vẽ ra đồ
+thị không ai đọc được.
+
+Không có composition/aggregation: ranh giới giữa hai cái đó gây tranh cãi nhiều
+hơn là làm sáng ra, và viết tay thì sớm muộn cũng lệch với code.
+
 ## Business flows
 
 Mỗi kịch bản nghiệp vụ một khối ```` ```flow ````. Đây là chỗ trả lời "làm việc X

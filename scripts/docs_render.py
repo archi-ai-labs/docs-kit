@@ -652,7 +652,7 @@ ENTITY_COL_H = 20
 
 def svg_dag(edges, comps, fig_no="1", shapes=None, aria="data flow graph",
             caption=None, wrap=True, initial=None, entity_rows=None,
-            marks=None, defs=""):
+            entity_tag=None, marks=None, dashed=None, defs=""):
     """The one layered-graph engine. `shapes` switches it from data-flow nodes
     (icon badge, kind tint) to flowchart nodes (step / decide / terminal), state
     machine nodes (state / final) or ERD entities; each of those is the same
@@ -663,10 +663,16 @@ def svg_dag(edges, comps, fig_no="1", shapes=None, aria="data flow graph",
     `entity_rows` maps a node to its column lines and makes that node an entity —
     a box as tall as the table is long. It is deliberately NOT called `rows`: the
     label loops below bind a local `rows`, and a closure over a shadowed name
-    would silently measure a wrapped label instead of a table.
+    would silently measure a wrapped label instead of a table. A row whose tag set
+    contains "sep" gets a hairline drawn above it, which is how a class box splits
+    fields from methods without a second kind of node. `entity_tag` puts a short
+    stereotype in the header band — inside it, so no box grows taller for it.
 
     `marks` maps an edge index to (start marker id, end marker id), either of
     which may be None for a bare end; absent index keeps the default arrowhead.
+    `dashed` is a set of edge indices drawn with a STATIC dash — graphite, and
+    without the marching animation, because marching dashes already mean async and
+    a UML realization arrow is not an async call.
     `defs` is extra <defs> content from the caller. Between them this function
     stays ignorant of what a crow's foot is — it places markers by id, and the
     figure that needs them defines them.
@@ -695,9 +701,12 @@ def svg_dag(edges, comps, fig_no="1", shapes=None, aria="data flow graph",
     def node_w(nd):
         if entity_rows is not None and nd in entity_rows:
             # An entity is as wide as its widest column line, not as its name.
-            # +8 leaves room for the PK / FK tag between the name and the type.
-            widest = max([len(nd) + 2] + [len(r[0]) + len(r[1]) + 8
-                                          for r in entity_rows[nd]])
+            # +8 leaves room for the PK / FK tag between the name and the type;
+            # the header has to hold the name and its stereotype side by side.
+            head = len(nd) + 2 + len((entity_tag or {}).get(nd, "")) + 2
+            widest = max([head] + [len(r[0]) + len(r[1]) + 8
+                                   + (2 if ({"public", "private"} & set(r[2])) else 0)
+                                   for r in entity_rows[nd]])
             return int(30 + CHAR_W * widest)
         if shapes is None:
             return int(48 + CHAR_W * len(nd))   # room for the 22px icon badge
@@ -801,6 +810,8 @@ def svg_dag(edges, comps, fig_no="1", shapes=None, aria="data flow graph",
         y2 = by + node_h(b) / 2.0
         color, mid = (FAST, "dag-t") if asyn else (INK, "dag-a")
         dash = ' stroke-dasharray="5 4" class="dashrun"' if asyn else ""
+        if ei in (dashed or ()):   # static dash: marching dashes mean async
+            dash = ' stroke-dasharray="6 4"'
         if abs(y1 - y2) < 1:
             d = "M%g %g H%g" % (x1, y1, x2)
         else:
@@ -850,6 +861,8 @@ def svg_dag(edges, comps, fig_no="1", shapes=None, aria="data flow graph",
         tx, ty = bx + node_w(b) / 2.0, by + node_h(b)
         color, mid = (FAST, "dag-t") if asyn else (INK, "dag-a")
         dash = ' stroke-dasharray="5 4" class="dashrun"' if asyn else ""
+        if ei in (dashed or ()):   # static dash: marching dashes mean async
+            dash = ' stroke-dasharray="6 4"'
         if a == b:  # feeds itself: a retry, or its own queue
             d = "M%g %g C %g %g, %g %g, %g %g" % (sx - 9, sy, sx - 34, ly, sx + 34, ly, sx + 9, sy)
         else:
@@ -881,12 +894,26 @@ def svg_dag(edges, comps, fig_no="1", shapes=None, aria="data flow graph",
             s.append('<path d="M%g %g H%g" stroke="%s" stroke-width="1"/>'
                      % (x, y + ENTITY_HEAD_H, x + w, INK))
             s.append(svg_text(x + 10, y + 17.5, nd, 11.5, "700", INK))
+            stereo = (entity_tag or {}).get(nd, "")
+            if stereo:
+                # Graphite, and inside the band: a stereotype names no layer, so it
+                # buys no hue, and giving it its own line would change every height.
+                s.append(svg_text(x + w - 10, y + 17.5, stereo, 9, "600", INK3,
+                                  anchor="end"))
             for r, row in enumerate(entity_rows[nd]):
                 cname, ctype, tags = row[0], row[1], row[2]
                 cy = y + ENTITY_HEAD_H + ENTITY_COL_H * r + 14
+                if "sep" in tags:
+                    s.append('<path d="M%g %g H%g" stroke="%s" stroke-width="1"/>'
+                             % (x, cy - 14, x + w, INK))
                 key = "pk" in tags
-                s.append(svg_text(x + 10, cy, cname, 10.5, "700" if key else "500",
-                                  INK if key else INK2))
+                # Visibility rides in the left margin. Graphite, like PK / FK: it
+                # names no layer. Absent for an ERD row, so nothing there shifts.
+                vis = "+" if "public" in tags else "−" if "private" in tags else ""
+                if vis:
+                    s.append(svg_text(x + 9, cy, vis, 10.5, "700", INK3))
+                s.append(svg_text(x + (20 if vis else 10), cy, cname, 10.5,
+                                  "700" if key else "500", INK if key else INK2))
                 s.append(svg_text(x + w - 10, cy, ctype, 10.5, "500", INK3, anchor="end"))
                 # pk/fk stay graphite: they name no layer, so they buy no hue.
                 if key or "fk" in tags:
@@ -1163,7 +1190,7 @@ def scan_fence(lines, i):
 
 # Every fence that renders as a figure. Adding a figure type is adding a name
 # here plus its parser — the scan below never changes shape again.
-FIGURE_FENCES = ("flow", "flowchart", "state", "erd")
+FIGURE_FENCES = ("flow", "flowchart", "state", "erd", "class")
 
 
 def extract_figures(md, names=FIGURE_FENCES):
@@ -1639,6 +1666,201 @@ def erd_figure(src, comps, figs, here):
     body = ('<div class="plot flowfig">%s%s<p class="figcap">%s</p></div>'
             % ("".join(head), svg, caption)) if svg else ""
     return "".join(notes) + body + erd_columns_table(order, tables, here)
+
+
+# ---------------------------------------------------------------- types (class)
+
+CLASS_HEAD_RE = re.compile(r"^(title|code)\s*:\s*(.*)$", re.I)
+CLASS_OPEN_RE = re.compile(r"^(class|interface)\s*:\s*(.+)$", re.I)
+CLASS_REL_RE = re.compile(r"^(extends|implements)\s+([A-Za-z0-9_.]+)$", re.I)
+CLASS_MAX_TYPES = 12
+CLASS_MAX_MEMBERS = 15   # in any one type
+
+
+def class_marker_defs():
+    """One hollow triangle, used by both extends and implements — the line style
+    is what tells them apart, exactly as UML has it. `svg_dag` never learns what
+    this shape means; it places it by id."""
+    return ('<marker id="cls-tri" viewBox="0 0 12 12" refX="12" refY="6" '
+            'markerWidth="12" markerHeight="12" orient="auto">'
+            '<path d="M0 1 L12 6 L0 11 Z" fill="#ffffff" stroke="%s" '
+            'stroke-width="1.3"/></marker>' % INK)
+
+
+def bare_type(sig):
+    """`*Foo`, `[]Foo`, `...Foo`, `map[string]Foo` → `Foo`. Anything qualified —
+    `*http.Client` — keeps its dot and therefore matches no declared type, which
+    is the point: a type from another package is not in this picture."""
+    t = sig.strip()
+    if t.startswith("map[") and "]" in t:
+        t = t[t.index("]") + 1:]
+    return t.lstrip("*[]. ").replace("[]", "").strip()
+
+
+def parse_class(src):
+    """A ```class fence: `class:` / `interface:` open a type, `extends` and
+    `implements` are relation lines inside it, everything else is a member.
+    Returns (meta, order, types, edges, marks) or None when no type parsed.
+
+    A member whose type names another declared type draws an association, for the
+    same reason `fk` draws an ERD relationship — one source per fact. Method
+    signatures are deliberately NOT scanned: a signature naming every type in the
+    package would draw a graph nobody can read."""
+    meta, types, order, cur = {}, {}, [], None
+    for raw in src.split("\n"):
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        m = CLASS_OPEN_RE.match(line)
+        if m:
+            cur = m.group(2).strip()
+            if cur and cur not in types:
+                types[cur] = {"kind": m.group(1).lower(), "fields": [], "methods": [],
+                              "rel": []}
+                order.append(cur)
+            continue
+        m = CLASS_HEAD_RE.match(line)
+        if m:
+            meta[m.group(1).lower()] = m.group(2).strip()
+            continue
+        if cur is None:
+            continue          # a member before any type: has nowhere to live
+        m = CLASS_REL_RE.match(line)
+        if m:
+            types[cur]["rel"].append((m.group(1).lower(), m.group(2)))
+            continue
+        body, gloss = split_decl(line)
+        vis = ""
+        if body[:1] in ("+", "-"):
+            vis, body = body[0], body[1:].strip()
+        if "(" in body:
+            # A method splits at its opening paren, not at whitespace: a signature
+            # has spaces inside it, and splitting on the first one yields the
+            # nonsense `Capture(orderID` / `string, cents int64) (Receipt, error)`.
+            cut = body.index("(")
+            name, sig = body[:cut].strip(), body[cut:].strip()
+            bucket = "methods"
+        else:
+            parts = body.split(None, 1)
+            if not parts:
+                continue
+            name, sig = parts[0], (parts[1].strip() if len(parts) > 1 else "")
+            bucket = "fields"
+        if not name:
+            continue
+        types[cur][bucket].append((vis, name, sig, gloss))
+    if not order:
+        return None
+
+    edges, marks, dashed, seen = [], {}, set(), set()
+
+    def add(src_t, dst_t, kind):
+        if (src_t, dst_t, kind) in seen:
+            return
+        seen.add((src_t, dst_t, kind))
+        marks[len(edges)] = (None, "cls-tri" if kind != "assoc" else "dag-a")
+        if kind == "implements":
+            dashed.add(len(edges))
+        edges.append((src_t, dst_t, False, ""))
+
+    for t in order:
+        for kind, target in types[t]["rel"]:
+            add(t, target, kind)
+        for _vis, _name, sig, _gloss in types[t]["fields"]:
+            target = bare_type(sig)
+            # An association is emitted once per pair: three fields of one type
+            # would otherwise draw three parallel edges saying the same thing.
+            if target and target != t and target in types:
+                add(t, target, "assoc")
+    return meta, order, types, edges, marks, dashed
+
+
+def class_members_table(order, types, here):
+    rows = []
+    for t in order:
+        for bucket, label in (("fields", "field"), ("methods", "method")):
+            for vis, name, sig, gloss in types[t][bucket]:
+                shown = {"+": "public", "-": "private"}.get(vis, "")
+                rows.append('<tr><td class="mono">%s</td><td class="mono">%s</td>'
+                            '<td>%s</td><td>%s</td><td class="mono">%s</td><td>%s</td></tr>'
+                            % (esc(t), esc(name), label,
+                               shown or '<span class="dim">—</span>',
+                               esc(sig) if sig else '<span class="dim">—</span>',
+                               inline_md(gloss, here) if gloss
+                               else '<span class="dim">—</span>'))
+    return ('<table class="data"><tr><th style="width:150px">type</th>'
+            '<th style="width:170px">thành viên</th><th style="width:80px">loại</th>'
+            '<th style="width:90px">hiển thị</th><th style="width:220px">kiểu / chữ ký</th>'
+            "<th>ghi chú</th></tr>%s</table>" % "".join(rows))
+
+
+def class_figure(src, comps, figs, here):
+    parsed = parse_class(src)
+    if parsed is None:
+        return None
+    meta, order, types, edges, marks, dashed = parsed
+    fig_no = figs.next() if (edges and figs is not None) else "—"
+    title = meta.get("title", "")
+
+    head = []
+    if meta.get("code"):
+        head.append('<div class="seqline"><span class="lbl">Code</span><code>%s</code></div>'
+                    % esc(meta["code"]))
+
+    # A relation may name a type this block never declared. Draw it anyway — the
+    # relation is real — as an empty box, and say so in a note.
+    unknown = sorted({d for _s, d, _a, _l in edges if d not in types},
+                     key=lambda s: s.lower())
+    rows_map, tag_map = {}, {}
+    for t in order + unknown:
+        spec = types.get(t)
+        rows = []
+        if spec:
+            rows = [(n, sig, ("private",) if v == "-" else ("public",) if v == "+" else ())
+                    for v, n, sig, _g in spec["fields"]]
+            for k, (v, n, sig, _g) in enumerate(spec["methods"]):
+                tags = ("private",) if v == "-" else ("public",) if v == "+" else ()
+                # The first method carries the separator, so the two compartments
+                # cost one tag rather than a second kind of node.
+                rows.append((n, sig, (tags + ("sep",)) if (k == 0 and spec["fields"])
+                             else tags))
+        rows_map[t] = rows
+        if spec and spec["kind"] == "interface":
+            tag_map[t] = "«interface»"
+
+    svg = svg_dag(edges, comps, fig_no, aria="class diagram", wrap=False,
+                  entity_rows=rows_map, entity_tag=tag_map, marks=marks,
+                  dashed=dashed, defs=class_marker_defs()) if edges else None
+    if edges and svg is None:
+        return None
+
+    caption = ('FIG %s · class · %s%d type · %d quan hệ — '
+               '<span style="color:%s;font-weight:700">«interface»</span> · '
+               'tam giác rỗng = implements/extends · nét đứt = implements · '
+               'mũi tên thường = tham chiếu qua field'
+               % (fig_no, (esc(title) + " — ") if title else "",
+                  len(order), len(edges), L1))
+    loops = len(feedback_arcs(edges)) if edges else 0
+    if loops:
+        caption += ' · %d quan hệ quay ngược chạy dưới các hàng' % loops
+
+    notes = []
+    widest = max([len(v["fields"]) + len(v["methods"]) for v in types.values()] or [0])
+    if len(order) > CLASS_MAX_TYPES or widest > CLASS_MAX_MEMBERS:
+        notes.append('<div class="note"><span class="lbl">Dense</span>%d type · type nhiều '
+                     "thành viên nhất %d — quá ngưỡng đọc thoải mái (%d · %d). Hình vẫn vẽ "
+                     "đủ và cuộn ngang; nếu khó theo dõi thì tách theo package.</div>"
+                     % (len(order), widest, CLASS_MAX_TYPES, CLASS_MAX_MEMBERS))
+    if unknown:
+        notes.append('<div class="note"><span class="lbl">Unknown</span>%d type được nhắc '
+                     "trong extends/implements nhưng không khai báo trong khối này: %s. Vẽ "
+                     "thành hộp rỗng — thêm <code>class:</code> hoặc <code>interface:</code> "
+                     "cho nó, hoặc kiểm tra lại chính tả.</div>"
+                     % (len(unknown), code_list(unknown)))
+
+    body = ('<div class="plot flowfig">%s%s<p class="figcap">%s</p></div>'
+            % ("".join(head), svg, caption)) if svg else ""
+    return "".join(notes) + body + class_members_table(order, types, here)
 
 
 # ---------------------------------------------------------------- shared page shell
@@ -2320,6 +2542,27 @@ def build_current(ctx, docs, data):
             "<code>docs/02_architecture/</code>. Mở bằng <code>table: orders</code>, rồi "
             "mỗi cột một dòng: <code>merchant_id uuid fk -&gt; merchants.id</code>"))
 
+    parts.append('<h3 id="a-types">Types &amp; contracts</h3>')
+    parts.append(section_sub("Cấu trúc type — cái nào implement interface nào, cái nào giữ "
+                             "tham chiếu tới cái nào. Data model ở trên là dữ liệu đã lưu; "
+                             "chỗ này là code"))
+    if arch_figs["class"]:
+        for block in arch_figs["class"]:
+            fig = class_figure(block, comps, figs, here)
+            if fig:
+                parts.append(fig)
+            else:
+                parts.append('<div class="note"><span class="lbl">Note</span>Một khối '
+                             "<code>```class</code> không đọc được type nào — mỗi type mở bằng "
+                             "<code>class: &lt;tên&gt;</code> hoặc <code>interface: &lt;tên&gt;</code>, "
+                             "rồi mỗi thành viên một dòng.</div>")
+                parts.append("<pre><code>%s</code></pre>" % esc(block.strip()))
+    else:
+        parts.append(empty_state(
+            "NO TYPES — thêm một khối <code>```class</code> vào "
+            "<code>docs/02_architecture/</code>. Mở bằng <code>interface: PSPClient</code> "
+            "hoặc <code>class: PaymentAdapter</code>, rồi mỗi thành viên một dòng"))
+
     parts.append('<h3 id="a-flow">Data flow</h3>')
     if edges and flow_ok:
         # STANDARD §10: there is one style, the graph. Over budget it is still a
@@ -2483,7 +2726,7 @@ def build_current(ctx, docs, data):
     sidebar.append('<li><a href="#roadmap">§2 Roadmap</a></li>')
     sidebar.append('<li><a href="#architecture">§3 Architecture</a></li>')
     for anchor, label in [("a-components", "Components"), ("a-data", "Data model"),
-                          ("a-flow", "Data flow"),
+                          ("a-types", "Types &amp; contracts"), ("a-flow", "Data flow"),
                           ("a-stack", "Tech stack"), ("a-constraints", "Constraints"),
                           ("a-rev", "Revision block")]:
         sidebar.append('<li class="sub"><a href="#%s">%s</a></li>' % (anchor, label))

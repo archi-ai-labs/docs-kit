@@ -46,7 +46,7 @@ jobs:
       - name: Shell + Python syntax
         run: |
           for f in scripts/*.sh; do bash -n "$f"; done
-          python3 -m py_compile scripts/docs_render.py scripts/hook_*.py
+          python3 -m py_compile scripts/docs_render.py scripts/docs_detect.py scripts/hook_*.py
 
       # The scaffold must validate clean out of the box: the shipped -000 example
       # chain is self-consistent by design, and a fresh tree is the first thing
@@ -57,6 +57,25 @@ jobs:
           git -C "$work" init -q
           bash scripts/docs_scaffold.sh "$work"
           bash scripts/docs_validate.sh "$work/docs"
+
+      # docs-init reads this report to fill tech_stack, so it has to state facts
+      # the manifest really declares — and stay quiet, not guess, when there is
+      # no manifest at all.
+      - name: Detector reports a real stack, and nothing on an empty tree
+        run: |
+          work="$(mktemp -d)"
+          printf 'module example.com/x\n\ngo 1.22\n\nrequire (\n\tgithub.com/jackc/pgx/v5 v5.5.0\n\tgithub.com/x/y v1.0.0 // indirect\n)\n' > "$work/go.mod"
+          printf 'services:\n  postgres:\n    image: postgres:16\n' > "$work/docker-compose.yml"
+          out="$(python3 scripts/docs_detect.py "$work")"
+          echo "$out"
+          echo "$out" | grep -qx 'lang: go 1.22' || { echo "::error::detector missed the declared go version."; exit 1; }
+          echo "$out" | grep -qx 'service: postgres image postgres:16' || { echo "::error::detector missed the compose image."; exit 1; }
+          echo "$out" | grep -qx 'dep: github.com/x/y' && { echo "::error::detector reported an indirect dependency as direct."; exit 1; }
+          echo "$out" | tail -1 | grep -qx 'DETECT OK' || { echo "::error::detector did not finish with DETECT OK."; exit 1; }
+          empty="$(mktemp -d)"
+          [ "$(python3 scripts/docs_detect.py "$empty")" = "DETECT OK" ] \
+            || { echo "::error::detector invented facts about an empty tree."; exit 1; }
+          echo "OK — detector states what is declared and nothing else"
 
       # A mutation the validator is supposed to catch must actually fail it —
       # otherwise the check above only proves the script exits 0.

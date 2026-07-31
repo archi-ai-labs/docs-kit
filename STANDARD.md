@@ -135,10 +135,11 @@ component **is** — written after reading that code, not guessed from its name.
 Longer explanation goes in a `### <name>` section in the body, which the
 rendered card picks up as expandable detail.
 
-The body carries ```` ```flow ```` blocks for scenarios and an ```` ```erd ````
-block for the data model (both in §10). Components answer *what exists* for
-services; the ERD answers the same question for data, which is why it lives here
-and not in a folder of its own.
+The body carries ```` ```flow ```` blocks for scenarios, an ```` ```erd ```` block
+for the data model, and a ```` ```class ```` block for the types (all in §10).
+Components answer *what exists* for services; the ERD answers the same question
+for stored data and the class diagram for the code's own contracts, which is why
+all three live here and not in folders of their own.
 
 ### `03_business-logic/*.md` — Business logic
 ```yaml
@@ -377,6 +378,8 @@ Rules:
   | transitions in a state machine | 24 |
   | tables in an ERD | 10 |
   | columns in one table | 15 |
+  | types in a class diagram | 12 |
+  | members in one type | 15 |
 
   Past any of these the flow is still drawn as a graph, at natural size,
   scrolling inside its own frame; a note suggests splitting it across
@@ -477,6 +480,41 @@ Rules:
   table · column · type · keys · relationship · note — prints under every ERD, and
   a schema with no foreign key at all prints only that table, because a picture of
   unconnected boxes says nothing the table does not.
+- **Types** (```` ```class ```` fenced block in the *body* of the
+  `02_architecture/` doc, and only there) renders as a class diagram, in the
+  **Types & contracts** sub-section of §3 right after Data model. Data model is
+  the data as stored; this is the code's own contracts:
+
+  | line | meaning |
+  |---|---|
+  | `title:` `code:` | optional headers |
+  | `class: <name>` · `interface: <name>` | opens a type; an interface is drawn with an `«interface»` stereotype |
+  | `extends <name>` | a relation line inside the block — solid edge, hollow triangle at the parent |
+  | `implements <name>` | a relation line inside the block — **statically** dashed edge, hollow triangle at the interface |
+  | `+ <name> <type>` · `- <name> <type>` | a public · private member |
+  | a member containing `(` | a method — lower compartment, split at the paren rather than at whitespace |
+  | trailing ` — <gloss>` | optional explanation, the shared separator |
+
+  **Association is derived, never written.** A field whose type names another
+  declared type draws a plain edge, for the same reason `fk` draws an ERD
+  relationship: one source per fact. `*`, `[]`, `...` and a `map[…]` wrapper are
+  stripped first, so `*http.Client` matches nothing — a type from another package
+  is not in this picture. Method signatures are **not** scanned; a signature
+  naming every type in the package would draw a graph nobody can read.
+
+  Composition and aggregation are deliberately absent: the boundary between them
+  generates more argument than insight, and being hand-written it drifts from the
+  code. The `implements` dash is **static** — marching dashes already mean async
+  or fast-lane, and a realization arrow is neither. Visibility glyphs and the
+  stereotype stay graphite: they name no layer, so they buy no hue.
+
+  A class box is the ERD's entity box with a stereotype in its header band and a
+  hairline between the two compartments — not a second kind of node, and neither
+  addition changes any height.
+
+  Budget, warn-only: **12 types · 15 members in one type**. The member table —
+  type · member · kind · visibility · signature · note — prints under every class
+  diagram.
 - **Business flows** (```` ```flow ```` fenced block in the *body* of any
   `01_products/`, `02_architecture/` or `03_business-logic/` doc) render as a
   sequence figure —
