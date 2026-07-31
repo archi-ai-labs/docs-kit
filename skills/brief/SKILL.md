@@ -135,9 +135,10 @@ not delete it, do not write cleanup logic for it.
 
 `docs-kit` repos only, and only when an Issue was recorded in Phase 1.
 
-The gate has closed: every open decision now has an answer. Promote the Issue
-from `exploring` to `open`, then run the lane test — STANDARD §5, two questions,
-any "yes" means FULL. Full mechanics, including how the Backlog item is written
+The gate has closed: every open decision now has an answer. Promote the Issue to
+`open` if it is still `exploring` — it will already be `open` when the gate found
+nothing to ask about — then run the lane test: STANDARD §5, two questions, any
+"yes" means FULL. Full mechanics, including how the Backlog item is written
 and why the forward path appends no audit line, are in
 `references/issue-capture.md`.
 
