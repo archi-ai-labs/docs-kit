@@ -37,9 +37,15 @@ TINT_ASYNC = "#f1ecfe"
 MONO_STACK = "ui-monospace,Menlo,Consolas,monospace"
 
 ID_RE = re.compile(r"\b(ISSUE|PROPOSAL|DECISION|BACKLOG)-([0-9]{3,})\b")
+# A markdown link whose visible text is just an id. Promoting the id to a chip
+# means removing the WHOLE link — dropping only the id leaves '[](p/ISSUE-1-x.md)'
+# on the page, and mangles the href besides.
+MD_LINK_ID_RE = re.compile(
+    r"\[\s*(?:ISSUE|PROPOSAL|DECISION|BACKLOG)-[0-9]{3,}\s*\]\([^)\s]*\)")
 DATE_LINE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})\s*\|")
 AMEND_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})\s+(DECISION-[0-9]{3,})\s*(.*)$")
 KIND_RE = re.compile(r"\[(db|queue|ui|svc)\]")
+CODE_RE = re.compile(r"`([^`]+)`")  # a component's anchor in the source tree
 
 ID_PAGE = {"ISSUE": ("changes.html", "issues"), "PROPOSAL": ("changes.html", "proposals"),
            "DECISION": ("changes.html", "decisions"), "BACKLOG": ("changes.html", "backlog")}
@@ -49,6 +55,17 @@ ID_PAGE = {"ISSUE": ("changes.html", "issues"), "PROPOSAL": ("changes.html", "pr
 PAGE_LAYER = {"current.html": "l1", "changes.html": "l2"}
 
 CHAR_W = 6.95  # approx mono advance at 11.5px, used to size SVG nodes
+# Usable width inside .plot at full desktop width: .content 880 − 2×20 padding
+# − 2×1 border. A figure wider than this is drawn at natural size and scrolls;
+# anything at or under it may stretch to fill, but is never scaled down.
+CONTENT_W = 838
+
+# The density budget for the GRAPH style. Past any one of these a graph stops
+# being readable at natural size, so the renderer switches presentation instead
+# of drawing something nobody can follow. See STANDARD §10.
+FLOW_MAX_NODES = 12
+FLOW_MAX_EDGES = 18
+FLOW_MAX_ROWS = 7  # nodes stacked in one column
 
 
 def esc(s):
@@ -89,8 +106,30 @@ def renderer_version(script_dir):
 
 # ---------------------------------------------------------------- frontmatter
 
+def strip_comment(v):
+    """Drop a YAML inline comment — an unquoted '#' at the start or after
+    whitespace. Without this, 'components: []   # what goes here' parses as the
+    literal string rather than an empty list, and a documented example becomes a
+    phantom component. Quoted '#' (a colour, a ticket ref) is left alone."""
+    out, quote = [], None
+    for k, ch in enumerate(v):
+        if quote:
+            out.append(ch)
+            if ch == quote:
+                quote = None
+            continue
+        if ch in "\"'":
+            quote = ch
+            out.append(ch)
+            continue
+        if ch == "#" and (k == 0 or v[k - 1] in " \t"):
+            break
+        out.append(ch)
+    return "".join(out)
+
+
 def clean_value(v):
-    v = v.strip()
+    v = strip_comment(v).strip()
     if v.startswith('"') and v.endswith('"') and len(v) >= 2:
         v = v[1:-1]
     return v.strip()
@@ -114,7 +153,7 @@ def parse_frontmatter(text):
         m = re.match(r"^([A-Za-z_][A-Za-z0-9_]*):\s*(.*)$", raw)
         if not m:
             continue
-        key, val = m.group(1), m.group(2).strip()
+        key, val = m.group(1), strip_comment(m.group(2)).strip()
         if val.startswith("[") and val.endswith("]"):
             inner = val[1:-1].strip()
             fm[key] = [clean_value(x) for x in inner.split(",") if clean_value(x)] if inner else []
@@ -165,10 +204,39 @@ def inline_md(s, here):
     return link_ids(s, here)
 
 
-def md_to_html(md, here):
+def ids_in(text):
+    """Ids in reading order, deduped — a bullet may cite the same id twice
+    (once as link text, once inside the href) and must still show one chip."""
+    out = []
+    for m in ID_RE.finditer(text):
+        if m.group(0) not in out:
+            out.append(m.group(0))
+    return out
+
+
+def strip_ids(text):
+    """Drop id mentions that have been promoted to their own chips."""
+    text = MD_LINK_ID_RE.sub("", text)
+    text = ID_RE.sub("", text)
+    return re.sub(r"\s{2,}", " ", text).strip(" ()[]—–:-·,")
+
+
+class FigCounter:
+    """Figures are numbered per sheet, in the order they appear on it."""
+
+    def __init__(self):
+        self.n = 0
+
+    def next(self):
+        self.n += 1
+        return str(self.n)
+
+
+def md_to_html(md, here, comps=None, figs=None):
     """Supported subset: h1-h4, paragraphs, ul/ol (2 levels), fenced code,
-    tables, blockquotes, hr, inline code/bold/italic/links. Unknown lines
-    render as escaped paragraphs — never broken HTML."""
+    tables, blockquotes, hr, inline code/bold/italic/links. A ```flow fence
+    becomes a sequence figure. Unknown lines render as escaped paragraphs —
+    never broken HTML."""
     out, lines, i = [], md.split("\n"), 0
     n = len(lines)
 
@@ -181,15 +249,14 @@ def md_to_html(md, here):
     while i < n:
         line = lines[i]
         stripped = line.strip()
-        if stripped.startswith("```"):
+        if FENCE_OPEN_RE.match(line):
             flush_para(para)
-            i += 1
-            code = []
-            while i < n and not lines[i].strip().startswith("```"):
-                code.append(lines[i])
-                i += 1
-            i += 1
-            out.append("<pre><code>%s</code></pre>" % esc("\n".join(code)))
+            info, code, i = scan_fence(lines, i)
+            body = "\n".join(code)
+            fig = seq_figure(body, comps or {}, figs, here) if info == "flow" else None
+            # An unparseable flow block falls back to its own source text — the
+            # renderer never guesses at a diagram it could not read.
+            out.append(fig or ("<pre><code>%s</code></pre>" % esc(body)))
             continue
         m = re.match(r"^(#{1,4})\s+(.*)$", stripped)
         if m:
@@ -405,7 +472,10 @@ def parse_flows(data_flow):
 
 
 def parse_components(entries):
-    """'name [kind] — description' (or ': '). Returns ordered dict name -> (kind, desc)."""
+    """'name [kind] `path/in/repo` — what it does'. The kind and the code path are
+    optional; everything after the dash is prose. Stays a flat one-line grammar on
+    purpose — the validator parses this with awk, and authors write it by hand.
+    Returns an ordered dict: name -> {kind, desc, code}."""
     comps = {}
     for raw in as_list(entries):
         text = str(raw).strip()
@@ -416,13 +486,38 @@ def parse_components(entries):
             if sep in text:
                 name, desc = text.split(sep, 1)
                 break
-        kind = "svc"
+        kind, code = "svc", ""
         m = KIND_RE.search(name)
         if m:
             kind = m.group(1)
             name = KIND_RE.sub("", name)
-        comps[name.strip()] = (kind, desc.strip())
+        m = CODE_RE.search(name)
+        if m:
+            code = m.group(1).strip()
+            name = CODE_RE.sub("", name)
+        comps[name.strip()] = {"kind": kind, "desc": desc.strip(), "code": code}
     return comps
+
+
+def component_facts(name, edges, comps):
+    """What the flow graph already knows about a component. Derived, never authored —
+    an upstream list that disagrees with data_flow would just be a second thing to
+    keep in sync."""
+    upstream = [a for a, b, _x, _l in edges if b == name]
+    downstream = [b for a, b, _x, _l in edges if a == name]
+    upstream = sorted(set(upstream), key=str.lower)
+    downstream = sorted(set(downstream), key=str.lower)
+    if not upstream and downstream:
+        role = "source — nothing in the flow writes to it"
+    elif upstream and not downstream:
+        role = "sink — the flow ends here"
+    elif len(upstream) + len(downstream) >= 5:
+        role = "hub — %d in · %d out" % (len(upstream), len(downstream))
+    elif upstream or downstream:
+        role = "relay — %d in · %d out" % (len(upstream), len(downstream))
+    else:
+        role = "not wired into data_flow"
+    return {"upstream": upstream, "downstream": downstream, "role": role}
 
 
 NODE_STYLE = {  # kind -> (border, dashed, badge_bg, icon_color, icon, label_fill)
@@ -464,6 +559,45 @@ def layer_nodes(edges):
     return layer
 
 
+def kind_of(nd, comps):
+    if nd in comps:
+        return comps[nd]["kind"]
+    low = nd.lower()
+    return "ui" if low in ("client", "browser", "user", "app") else "ext"
+
+
+def svg_size(width, height, label):
+    """A figure is drawn at its natural size and never scaled below it — shrinking
+    to fit is what turns a busy diagram into an unreadable one. Small figures may
+    still stretch up to the column; wide ones scroll inside .plot instead."""
+    fit = 'width="100%"' if width <= CONTENT_W else 'width="%d" height="%d"' % (width, height)
+    return '<svg viewBox="0 0 %d %d" %s role="img" aria-label="%s">' % (width, height, fit, label)
+
+
+def chip_w_for(text):
+    return len(text) * 5.6 + 12
+
+
+def wrap_label(text, limit=17):
+    """Split a long edge label into two balanced lines. A gap is widened to hold
+    its widest label, so one long label pushes the whole figure wider; wrapping
+    keeps the graph inside the column instead of sending it off to a scrollbar."""
+    words = text.split()
+    if len(text) <= limit or len(words) < 2:
+        return [text]
+    best, cut = None, 1
+    for i in range(1, len(words)):
+        cost = max(len(" ".join(words[:i])), len(" ".join(words[i:])))
+        if best is None or cost < best:
+            best, cut = cost, i
+    return [" ".join(words[:cut]), " ".join(words[cut:])]
+
+
+def chip_box(lines):
+    """(width, height) of the label chip for these lines."""
+    return max(chip_w_for(x) for x in lines), 16 if len(lines) == 1 else 27
+
+
 def svg_dag(edges, comps, fig_no="1"):
     layer = layer_nodes(edges)
     if layer is None:
@@ -473,22 +607,28 @@ def svg_dag(edges, comps, fig_no="1"):
         cols.setdefault(layer[nd], []).append(nd)
     ncols = max(cols) + 1
 
-    def kind_of(nd):
-        if nd in comps:
-            return comps[nd][0]
-        low = nd.lower()
-        return "ui" if low in ("client", "browser", "user", "app") else "ext"
-
     def node_w(nd):
         return int(48 + CHAR_W * len(nd))
 
     col_w = {c: max(node_w(nd) for nd in cols[c]) for c in cols}
-    GAP, ROW_H, NODE_H, TOP = 46, 60, 34, 16
+    GAP_MIN, ROW_H, NODE_H, TOP = 46, 60, 34, 16
+
+    # Every label lives in the gap right after its source column, and each gap is
+    # widened to hold its widest label. Labels therefore never reach into a column,
+    # which is what used to put chips on top of node boxes.
+    labelled = [(a, b, asyn, lbl.strip()) for a, b, asyn, lbl in edges if lbl and lbl.strip()]
+    gap_w = {}
+    for c in range(ncols):
+        gap_w[c] = GAP_MIN
+    for a, _b, _asyn, text in labelled:
+        c = layer[a]
+        gap_w[c] = max(gap_w[c], chip_box(wrap_label(text))[0] + 18)
+
     x0, col_x = 16, {}
     for c in range(ncols):
         col_x[c] = x0
-        x0 += col_w.get(c, 0) + GAP
-    width = x0 - GAP + 16
+        x0 += col_w.get(c, 0) + gap_w[c]
+    width = x0 - gap_w[ncols - 1] + 16
     max_rows = max(len(v) for v in cols.values())
     height = TOP + max_rows * ROW_H + 26
 
@@ -498,12 +638,26 @@ def svg_dag(edges, comps, fig_no="1"):
         for r, nd in enumerate(members):
             pos[nd] = (col_x[c], TOP + pad + r * ROW_H)
 
-    s = ['<svg viewBox="0 0 %d %d" width="100%%" role="img" aria-label="data flow graph">'
-         % (width, height), "<defs>", marker_def("dag-a", INK), marker_def("dag-t", FAST),
-         symbol_defs(sorted({NODE_STYLE[kind_of(nd)][4] for nd in layer}))]
+    s = [svg_size(width, height, "data flow graph"),
+         "<defs>", marker_def("dag-a", INK), marker_def("dag-t", FAST),
+         symbol_defs(sorted({NODE_STYLE[kind_of(nd, comps)][4] for nd in layer}))]
     s.append("</defs>")
 
-    labels = []
+    labels, placed = [], []
+
+    def free_y(cx, cw, ch, y):
+        """Nudge a chip off any chip already placed. Deterministic: the offsets are
+        tried in a fixed order, and edges arrive in document order."""
+        for dy in (0, -19, 19, -38, 38, -57, 57):
+            box = (cx - cw / 2, y - 12 + dy, cw, ch)
+            if not any(not (box[0] + box[2] <= p[0] or p[0] + p[2] <= box[0]
+                            or box[1] + box[3] <= p[1] or p[1] + p[3] <= box[1])
+                       for p in placed):
+                placed.append(box)
+                return y + dy
+        placed.append((cx - cw / 2, y - 12, cw, ch))
+        return y
+
     for a, b, asyn, lbl in edges:
         ax, ay = pos[a]
         bx, by = pos[b]
@@ -525,19 +679,24 @@ def svg_dag(edges, comps, fig_no="1"):
             s.append('<path d="%s" class="pkt"/>' % d)
         text = lbl.strip() if lbl else ""
         if text:
-            mx = (x1 + x2) / 2
-            my = y1 - 11 if abs(y1 - y2) < 1 else (y1 + y2) / 2 - 10
-            chip_w = len(text) * 5.6 + 12
+            c = layer[a]
+            mx = col_x[c] + col_w[c] + gap_w[c] / 2.0
+            rows = wrap_label(text)
+            cw, ch = chip_box(rows)
+            t = 0.5 if x2 == x1 else max(0.0, min(1.0, (mx - x1) / float(x2 - x1)))
+            my = free_y(mx, cw, ch, y1 + (y2 - y1) * t - 10)
             chip_fill, chip_stroke = ("#e6faf5", "#7fd4c4") if asyn else ("#ffffff", "#e2e8ee")
-            labels.append('<rect x="%g" y="%g" width="%g" height="16" rx="2" fill="%s" stroke="%s"/>'
-                          % (mx - chip_w / 2, my - 12, chip_w, chip_fill, chip_stroke))
-            labels.append(svg_text(mx, my, text, 9, "700" if asyn else "500",
-                                   FAST if asyn else INK3, anchor="middle", ls=".6"))
+            labels.append('<rect x="%g" y="%g" width="%g" height="%d" rx="2" fill="%s" stroke="%s"/>'
+                          % (mx - cw / 2, my - 12, cw, ch, chip_fill, chip_stroke))
+            base = [my] if len(rows) == 1 else [my - 1, my + 10]
+            for row, by in zip(rows, base):
+                labels.append(svg_text(mx, by, row, 9, "700" if asyn else "500",
+                                       FAST if asyn else INK3, anchor="middle", ls=".6"))
     s.extend(labels)
 
     for nd in sorted(layer, key=lambda x: (layer[x], x.lower())):
         x, y = pos[nd]
-        border, dashed, badge_bg, icon_color, icon, label_fill = NODE_STYLE[kind_of(nd)]
+        border, dashed, badge_bg, icon_color, icon, label_fill = NODE_STYLE[kind_of(nd, comps)]
         dash = ' stroke-dasharray="5 4"' if dashed else ""
         s.append('<rect x="%g" y="%g" width="%d" height="%d" rx="2" fill="#ffffff" stroke="%s" stroke-width="1.5"%s/>'
                  % (x, y, node_w(nd), NODE_H, border, dash))
@@ -545,13 +704,333 @@ def svg_dag(edges, comps, fig_no="1"):
         s.append(use_icon(icon, x + 10, y + 10, icon_color, 14))
         s.append(svg_text(x + 36, y + 21.5, nd, 11.5, "650", label_fill))
     s.append("</svg>")
-    caption = ('FIG %s · from <code>data_flow</code> — '
+    caption = ('FIG %s · graph · from <code>data_flow</code> — '
                '<span style="color:%s;font-weight:700">▪ service</span> · '
                '<span style="color:%s;font-weight:700">▪ datastore</span> · '
                '<span style="color:%s;font-weight:700">▪ worker/queue</span> · '
                'dashed node = external · <span style="color:%s;font-weight:700">teal dashed edge = async</span>'
                % (fig_no, INK2, L1, L2, FAST))
     return '<div class="plot">%s<p class="figcap">%s</p></div>' % ("".join(s), caption)
+
+
+def within_budget(edges):
+    """Does this edge set still fit the graph style at natural size?"""
+    layer = layer_nodes(edges)
+    if layer is None:
+        return False
+    cols = {}
+    for nd in layer:
+        cols.setdefault(layer[nd], []).append(nd)
+    return (len(layer) <= FLOW_MAX_NODES and len(edges) <= FLOW_MAX_EDGES
+            and max(len(v) for v in cols.values()) <= FLOW_MAX_ROWS)
+
+
+def svg_matrix(edges, comps, fig_no="1"):
+    """The dense style: a source × target grid. Rows and columns grow linearly
+    where a graph's crossings grow quadratically, so this stays readable exactly
+    where the graph gives up — and it makes hubs visible as full rows/columns."""
+    nodes = []
+    for a, b, _asyn, _lbl in edges:
+        for nd in (a, b):
+            if nd not in nodes:
+                nodes.append(nd)
+    nodes.sort(key=lambda x: x.lower())
+    idx = {nd: i for i, nd in enumerate(nodes)}
+    n = len(nodes)
+
+    cell = {}
+    for a, b, asyn, lbl in edges:
+        prev = cell.get((idx[a], idx[b]))
+        cell[(idx[a], idx[b])] = (asyn if prev is None else (prev[0] and asyn),
+                                  lbl.strip() if lbl and lbl.strip() else (prev[1] if prev else ""))
+
+    CELL = 26
+    gutter = int(max(CHAR_W * len(nd) for nd in nodes) + 34)  # row labels + icon
+    head = int(max(len(nd) for nd in nodes) * 4.9) + 16       # rotated column labels
+    width = gutter + n * CELL + 16
+    height = head + n * CELL + 30
+
+    s = [svg_size(width, height, "data flow matrix"), "<defs>",
+         symbol_defs(sorted({NODE_STYLE[kind_of(nd, comps)][4] for nd in nodes})), "</defs>"]
+
+    # column headers, rotated so long names stay legible without widening the grid
+    for j, nd in enumerate(nodes):
+        cx = gutter + j * CELL + CELL / 2.0
+        s.append('<g transform="translate(%g,%g) rotate(-52)">%s</g>'
+                 % (cx + 4, head - 6,
+                    svg_text(0, 0, nd, 10.5, "600", NODE_STYLE[kind_of(nd, comps)][3], anchor="start")))
+
+    s.append('<rect x="%d" y="%d" width="%d" height="%d" fill="#ffffff" stroke="%s"/>'
+             % (gutter, head, n * CELL, n * CELL, "#e2e8ee"))
+    for k in range(n + 1):
+        s.append('<path d="M%d %d H%d" stroke="%s" stroke-width="1"/>'
+                 % (gutter, head + k * CELL, gutter + n * CELL, "#eef2f6"))
+        s.append('<path d="M%d %d V%d" stroke="%s" stroke-width="1"/>'
+                 % (gutter + k * CELL, head, head + n * CELL, "#eef2f6"))
+
+    for i, nd in enumerate(nodes):
+        cy = head + i * CELL
+        border, dashed, badge_bg, icon_color, icon, _lf = NODE_STYLE[kind_of(nd, comps)]
+        s.append('<rect x="2" y="%g" width="18" height="18" rx="4" fill="%s"/>' % (cy + 4, badge_bg))
+        s.append(use_icon(icon, 4, cy + 6, icon_color, 14))
+        s.append(svg_text(gutter - 8, cy + CELL / 2 + 3.5, nd, 10.5, "600", INK, anchor="end"))
+        # the diagonal is structurally impossible (no self-edges in a layered flow)
+        s.append('<rect x="%d" y="%d" width="%d" height="%d" fill="%s"/>'
+                 % (gutter + i * CELL + 1, cy + 1, CELL - 1, CELL - 1, "#f7f9fb"))
+
+    for (i, j), (asyn, lbl) in sorted(cell.items()):
+        cx = gutter + j * CELL + CELL / 2.0
+        cy = head + i * CELL + CELL / 2.0
+        if asyn:
+            s.append('<circle cx="%g" cy="%g" r="5.5" fill="%s" stroke="%s" stroke-width="1.8"/>'
+                     % (cx, cy, "#e6faf5", FAST))
+        else:
+            s.append('<rect x="%g" y="%g" width="9" height="9" rx="1.5" fill="%s"/>'
+                     % (cx - 4.5, cy - 4.5, INK))
+        if lbl:
+            s.append('<circle cx="%g" cy="%g" r="2" fill="%s"/>' % (cx + 8, cy - 6, MARK))
+    s.append("</svg>")
+
+    caption = ('FIG %s · matrix · from <code>data_flow</code> — row sends to column · '
+               '<span style="color:%s;font-weight:700">■ sync</span> · '
+               '<span style="color:%s;font-weight:700">○ async</span> · '
+               '<span style="color:%s;font-weight:700">•</span> edge carries a label, '
+               "spelled out in the table below" % (fig_no, INK, FAST, MARK))
+    return '<div class="plot">%s<p class="figcap">%s</p></div>' % ("".join(s), caption)
+
+
+def edge_table(edges, here):
+    """The complete, exact record of every edge — the matrix shows the shape,
+    this shows the words. Also the accessible reading of the figure."""
+    rows = []
+    for a, b, asyn, lbl in edges:
+        rows.append('<tr><td class="mono">%s</td><td>%s</td><td class="mono">%s</td><td>%s</td></tr>'
+                    % (esc(a),
+                       ('<span class="tag lane-fast">async</span>' if asyn
+                        else '<span class="dim">sync</span>'),
+                       esc(b),
+                       inline_md(lbl.strip(), here) if lbl and lbl.strip() else '<span class="dim">—</span>'))
+    return ('<table class="data"><tr><th style="width:180px">from</th>'
+            '<th style="width:90px">kind</th><th style="width:180px">to</th>'
+            "<th>carries</th></tr>%s</table>" % "".join(rows))
+
+
+# ---------------------------------------------------------------- business flows
+
+SEQ_HEAD_RE = re.compile(r"^(title|trigger|outcome|code)\s*:\s*(.*)$", re.I)
+SEQ_MAX_LANES = 8
+SEQ_MAX_STEPS = 16
+
+
+def parse_sequence(src):
+    """A ```flow fence: optional 'title/trigger/outcome/code' headers, then steps in
+    the same edge grammar as data_flow. Returns (meta, steps) or None if no step
+    parsed — a business flow reads as a scenario, so order is significant and the
+    steps are kept exactly as written."""
+    meta, steps = {}, []
+    for raw in src.split("\n"):
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        m = SEQ_HEAD_RE.match(line)
+        if m:  # checked before the arrow test: a trigger may itself contain '->'
+            meta[m.group(1).lower()] = m.group(2).strip()
+            continue
+        if "->" not in line and "~>" not in line:
+            continue
+        label = ""
+        if line.count("->") + line.count("~>") == 1 and ":" in line.split(">", 1)[-1]:
+            line, label = line.rsplit(":", 1)
+            label = label.strip()
+        parts = EDGE_RE.split(line)
+        if len(parts) < 3:
+            continue
+        nodes = [p.strip() for p in parts[0::2]]
+        ops = parts[1::2]
+        if any(not nd for nd in nodes):
+            continue
+        for k, op in enumerate(ops):
+            steps.append((nodes[k], nodes[k + 1], op == "~>", label if len(ops) == 1 else ""))
+    if not steps:
+        return None
+    return meta, steps
+
+
+def svg_sequence(steps, comps):
+    """Lifelines left to right, time down the page. Participants are ordered by
+    first appearance, so the picture follows the story rather than the alphabet."""
+    lanes = []
+    for a, b, _x, _l in steps:
+        for nd in (a, b):
+            if nd not in lanes:
+                lanes.append(nd)
+    n = len(lanes)
+    at = {nd: i for i, nd in enumerate(lanes)}
+
+    lane_w = int(max(120, max(CHAR_W * len(nd) for nd in lanes) + 52))
+    LEFT, HEAD_H, STEP_H = 30, 46, 46
+
+    # Measure the labels before committing to a canvas: a step label is centred on
+    # its arrow (or hangs right of a self-call) and can reach past the outermost
+    # lifeline, so the canvas is padded to hold it rather than clipping it.
+    over_l = over_r = 0.0
+    for a, b, _asyn, lbl in steps:
+        text = lbl.strip() if lbl else ""
+        if not text:
+            continue
+        cw = chip_w_for(text)
+        xa = LEFT + at[a] * lane_w + lane_w / 2.0
+        xb = LEFT + at[b] * lane_w + lane_w / 2.0
+        lo, hi = (xa + 40, xa + 40 + cw) if a == b else ((xa + xb) / 2.0 - cw / 2.0,
+                                                         (xa + xb) / 2.0 + cw / 2.0)
+        over_l = max(over_l, 4 - lo)
+        over_r = max(over_r, hi - (LEFT + n * lane_w))
+    LEFT += int(over_l)
+    width = LEFT + n * lane_w + int(over_r) + 16
+    height = HEAD_H + len(steps) * STEP_H + 30
+
+    def lx(nd):
+        return LEFT + at[nd] * lane_w + lane_w / 2.0
+
+    s = [svg_size(width, height, "business flow sequence"), "<defs>",
+         marker_def("seq-a", INK), marker_def("seq-t", FAST),
+         symbol_defs(sorted({NODE_STYLE[kind_of(nd, comps)][4] for nd in lanes})), "</defs>"]
+
+    for nd in lanes:
+        x = lx(nd)
+        border, dashed, badge_bg, icon_color, icon, label_fill = NODE_STYLE[kind_of(nd, comps)]
+        bw = int(CHAR_W * len(nd) + 42)
+        s.append('<rect x="%g" y="6" width="%d" height="30" rx="2" fill="#ffffff" stroke="%s" '
+                 'stroke-width="1.5"%s/>'
+                 % (x - bw / 2.0, bw, border, ' stroke-dasharray="5 4"' if dashed else ""))
+        s.append('<rect x="%g" y="11" width="20" height="20" rx="4" fill="%s"/>'
+                 % (x - bw / 2.0 + 5, badge_bg))
+        s.append(use_icon(icon, x - bw / 2.0 + 8, 14, icon_color, 14))
+        s.append(svg_text(x - bw / 2.0 + 31, 25, nd, 11, "650", label_fill))
+        s.append('<path d="M%g %d V%d" stroke="%s" stroke-width="1" stroke-dasharray="3 4"/>'
+                 % (x, HEAD_H - 6, height - 18, LINE2))
+
+    for k, (a, b, asyn, lbl) in enumerate(steps):
+        y = HEAD_H + k * STEP_H + 22
+        color, mid = (FAST, "seq-t") if asyn else (INK, "seq-a")
+        dash = ' stroke-dasharray="5 4" class="dashrun"' if asyn else ""
+        s.append(svg_text(LEFT - 12, y + 4, str(k + 1), 10, "700", INK3, anchor="end"))
+        x1, x2 = lx(a), lx(b)
+        if a == b:  # a self-call: the component doing its own work, not a hop
+            d = "M%g %g H%g V%g H%g" % (x1, y - 8, x1 + 34, y + 8, x1 + 4)
+            s.append('<path d="%s" fill="none" stroke="%s" stroke-width="1.6"%s '
+                     'marker-end="url(#%s)"/>' % (d, color, dash, mid))
+            mx, my = x1 + 46, y + 4
+            anchor = "start"
+        else:
+            back = x2 < x1
+            xa = x1 + (-9 if back else 9)
+            xb = x2 + (9 if back else -9)
+            s.append('<path d="M%g %g H%g" fill="none" stroke="%s" stroke-width="1.6"%s '
+                     'marker-end="url(#%s)"/>' % (xa, y, xb, color, dash, mid))
+            if not asyn:
+                s.append('<path d="M%g %g H%g" class="pkt"/>' % (xa, y, xb))
+            mx, my = (x1 + x2) / 2.0, y - 8
+            anchor = "middle"
+        text = lbl.strip() if lbl else ""
+        if text:
+            cw = chip_w_for(text)
+            # masked, so a long label reads cleanly where it crosses a lifeline
+            s.append('<rect x="%g" y="%g" width="%g" height="15" rx="2" fill="%s" stroke="%s"/>'
+                     % ((mx - cw / 2.0) if anchor == "middle" else mx - 6, my - 11, cw,
+                        "#e6faf5" if asyn else "#ffffff", "#7fd4c4" if asyn else "#e2e8ee"))
+            s.append(svg_text(mx, my, text, 9, "700" if asyn else "500",
+                              FAST if asyn else INK2,
+                              anchor=None if anchor == "start" else anchor, ls=".5"))
+    s.append("</svg>")
+    return "".join(s)
+
+
+def seq_steps_table(steps, here):
+    rows = []
+    for k, (a, b, asyn, lbl) in enumerate(steps):
+        rows.append('<tr><td class="mono">%d</td><td class="mono">%s</td><td>%s</td>'
+                    '<td class="mono">%s</td><td>%s</td></tr>'
+                    % (k + 1, esc(a),
+                       ('<span class="tag lane-fast">async</span>' if asyn
+                        else '<span class="dim">sync</span>'), esc(b),
+                       inline_md(lbl.strip(), here) if lbl and lbl.strip() else '<span class="dim">—</span>'))
+    return ('<table class="data"><tr><th style="width:40px">#</th><th style="width:150px">from</th>'
+            '<th style="width:90px">kind</th><th style="width:150px">to</th><th>step</th></tr>%s</table>'
+            % "".join(rows))
+
+
+FENCE_OPEN_RE = re.compile(r"^(\s{0,3})(`{3,})(.*)$")
+
+
+def scan_fence(lines, i):
+    """Fence starting at lines[i] → (info, body_lines, index_after). A fence closes
+    only on a marker at least as long as its opener (CommonMark), so a ```flow
+    example shown inside a ````markdown block is part of that block, not a flow."""
+    m = FENCE_OPEN_RE.match(lines[i])
+    fence, info = m.group(2), m.group(3).strip().lower()
+    close = re.compile(r"^\s{0,3}`{%d,}\s*$" % len(fence))
+    j, body = i + 1, []
+    while j < len(lines) and not close.match(lines[j]):
+        body.append(lines[j])
+        j += 1
+    return info, body, min(j + 1, len(lines))
+
+
+def extract_flows(md):
+    """Lift top-level ```flow blocks out of a body. They get their own section on
+    the sheet, so leaving them in place would print every flow twice."""
+    lines = md.split("\n")
+    kept, blocks, i = [], [], 0
+    while i < len(lines):
+        if not FENCE_OPEN_RE.match(lines[i]):
+            kept.append(lines[i])
+            i += 1
+            continue
+        info, body, nxt = scan_fence(lines, i)
+        if info == "flow":
+            blocks.append("\n".join(body))
+        else:
+            kept.extend(lines[i:nxt])
+        i = nxt
+    return blocks, "\n".join(kept)
+
+
+def seq_figure(src, comps, figs, here):
+    parsed = parse_sequence(src)
+    if parsed is None:
+        return None
+    meta, steps = parsed
+    lanes = {nd for st in steps for nd in st[:2]}
+    fig_no = figs.next() if figs is not None else "—"
+    title = meta.get("title", "")
+
+    head = []
+    if meta.get("trigger"):
+        head.append('<div class="seqline"><span class="lbl">Trigger</span>%s</div>'
+                    % inline_md(meta["trigger"], here))
+    if meta.get("code"):
+        head.append('<div class="seqline"><span class="lbl">Code</span><code>%s</code></div>'
+                    % esc(meta["code"]))
+    foot = ('<div class="seqline out"><span class="lbl">Outcome</span>%s</div>'
+            % inline_md(meta["outcome"], here)) if meta.get("outcome") else ""
+
+    # Past the budget a sequence stops being a picture and becomes a wall of
+    # arrows; the numbered steps say the same thing and stay readable.
+    if len(lanes) > SEQ_MAX_LANES or len(steps) > SEQ_MAX_STEPS:
+        body = seq_steps_table(steps, here)
+        style = "steps"
+    else:
+        body = svg_sequence(steps, comps)
+        style = "sequence"
+
+    caption = ("FIG %s · %s · %s%d step%s across %d participant%s"
+               % (fig_no, style,
+                  (esc(title) + " — ") if title else "",
+                  len(steps), "" if len(steps) == 1 else "s",
+                  len(lanes), "" if len(lanes) == 1 else "s"))
+    return ('<div class="plot flowfig">%s%s%s<p class="figcap">%s</p></div>'
+            % ("".join(head), body, foot, caption))
 
 
 def flow_groups(edges):
@@ -747,10 +1226,25 @@ details.more .md { margin-top: 8px; }
 .constraints li { border-left: 2px solid var(--ink); padding: 6px 12px; margin: 6px 0; background: var(--film); border-radius: 0 var(--r) var(--r) 0; font-size: 13.5px; color: var(--ink-2); }
 .empty { border: 1.5px dashed var(--line-2); border-radius: var(--r); padding: 18px; text-align: center; color: var(--ink-3); font-size: 13px; }
 code { font: 12.5px var(--mono); background: var(--film); border-radius: var(--r); padding: 1.5px 5px; color: var(--ink); }
-.comps { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; margin: 14px 0; }
-.comp { border: 1px solid var(--line); border-radius: var(--r); padding: 10px 13px; background: var(--paper); }
+.comps { display: grid; grid-template-columns: repeat(auto-fill, minmax(288px, 1fr)); gap: 12px; margin: 14px 0; }
+.comp { border: 1px solid var(--line); border-radius: var(--r); padding: 11px 13px 9px; background: var(--paper); scroll-margin-top: 74px; }
+.comp:target { border-color: var(--mark-2); box-shadow: inset 3px 0 0 var(--mark-2); }
 .comp .cn { font: 650 13px var(--mono); color: var(--ink); display: flex; align-items: center; gap: 9px; }
-.comp .cr { font-size: 12.5px; color: var(--ink-2); margin-top: 5px; line-height: 1.5; }
+.comp .cn .nm { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.comp .cn .kd { flex: none; font: 650 9.5px var(--mono); letter-spacing: .09em; text-transform: uppercase; color: var(--ink-3); border: 1px solid var(--line); border-radius: var(--r); padding: 1px 5px; }
+.comp .cn .kd.k-db { color: var(--l1-deep); border-color: var(--l1-edge); background: var(--l1-wash); }
+.comp .cn .kd.k-queue { color: var(--l2-deep); border-color: var(--l2-edge); background: var(--l2-wash); }
+.comp .cr { font-size: 12.5px; color: var(--ink-2); margin-top: 6px; line-height: 1.5; }
+table.spec.tight { margin-top: 9px; font-size: 12px; }
+table.spec.tight th { width: 62px; padding: 5px 10px 5px 0; font-size: 9.5px; }
+table.spec.tight td { padding: 5px 0; }
+table.spec.tight td code { font-size: 11.5px; }
+.tag.cref { padding: 0 6px; font-size: 10.5px; margin: 0 4px 3px 0; text-decoration: none; }
+.seqline { display: flex; align-items: baseline; gap: 10px; font-size: 13px; color: var(--ink-2); padding: 0 0 12px; }
+.seqline.out { padding: 12px 0 0; border-top: 1px dashed var(--line-2); margin-top: 4px; }
+.seqline .lbl { flex: none; font: 700 9.5px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); }
+.seqline.out .lbl { color: var(--l1); }
+.plot.flowfig { background-image: none; background: var(--paper); }
 .ibadge { flex: none; width: 24px; height: 24px; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; }
 .hubgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 a.hub { display: block; border: 1px solid var(--line-2); border-radius: var(--r); padding: 16px 18px; text-decoration: none; color: inherit; background: var(--paper); }
@@ -867,6 +1361,42 @@ def slugify(text, seen=None):
     return s
 
 
+KIND_LABEL = {"svc": "service", "db": "datastore", "queue": "worker/queue",
+              "ui": "interface", "ext": "external"}
+
+
+def comp_slug(name):
+    return "c-" + slugify(name)
+
+
+def comp_ref(name):
+    """A component chip that jumps to that component's own card."""
+    return '<a class="tag cref" href="#%s">%s</a>' % (comp_slug(name), esc(name))
+
+
+def body_sections(md, names):
+    """Pull the '### <name>' body section for each named component. STANDARD §4
+    already says the detail belongs in the body; this is what puts it on the card
+    instead of leaving it somewhere nobody scrolls to."""
+    want = {}
+    for n in names:
+        want[str(n).strip().lower()] = str(n).strip()
+    out, cur, buf = {}, None, []
+    for line in md.split("\n"):
+        m = re.match(r"^(#{2,4})\s+(.*)$", line.strip())
+        if m:
+            if cur:
+                out[cur] = "\n".join(buf).strip()
+            cur = want.get(m.group(2).strip().strip("`").lower())
+            buf = []
+            continue
+        if cur is not None:
+            buf.append(line)
+    if cur:
+        out[cur] = "\n".join(buf).strip()
+    return out
+
+
 # Roadmap column labels the renderer recognises, and the temporal weight each
 # carries. Headings are labels and stay English (see STANDARD §11), but a
 # Vietnamese heading is a likely slip, and the failure is silent — the column
@@ -967,6 +1497,7 @@ def trim(s, n=110):
 
 def build_current(ctx, docs, data):
     here = "current.html"
+    figs = FigCounter()
     products = data["products"]
     backlog_by_id = {fm_str(d, "id"): d for d in data["backlog"]}
     # one slug per product, computed once: the card id and the sidebar link
@@ -998,6 +1529,10 @@ def build_current(ctx, docs, data):
         arch_fm, arch_body = parse_frontmatter(arch_file.read_text(encoding="utf-8", errors="replace"))
     comps = parse_components(arch_fm.get("components", []))
     edges, flow_ok = parse_flows(arch_fm.get("data_flow", []))
+    arch_flows, arch_body = extract_flows(arch_body)
+    # (source label, anchor, blocks) — business flows collected from every Layer-1
+    # doc and shown together, so they read as a set instead of one per card.
+    flow_src = []
     amends = []
     for entry in as_list(arch_fm.get("amended_by", [])):
         m = AMEND_RE.match(str(entry).strip())
@@ -1054,7 +1589,10 @@ def build_current(ctx, docs, data):
         metric = fm_str(d, "success_metric")
         metric_tag = ('<span class="tag hard" style="margin-left:auto">TARGET · %s</span>'
                       % esc(trim(metric, 48))) if metric else ""
-        body_html = md_to_html(d["body"], here)
+        prod_flows, prod_body = extract_flows(d["body"])
+        if prod_flows:
+            flow_src.append((name, "#p-" + slug, prod_flows))
+        body_html = md_to_html(prod_body, here, comps, figs)
         details = ('<details class="more"><summary>Full document</summary><div class="md">%s</div></details>'
                    % body_html) if body_html.strip() else ""
         parts.append(
@@ -1081,26 +1619,26 @@ def build_current(ctx, docs, data):
             muted = kind == "not-doing"
             items = []
             for b in bullets:
-                m = re.search(r"\bBACKLOG-[0-9]{3,}\b", b)
+                ids = ids_in(b)
+                live = [x for x in ids if x.startswith("BACKLOG") and x in backlog_by_id]
+                other_ids = [x for x in ids if x not in live]
                 dot, badge, refs = "", "", ""
-                text = b
-                if m and m.group(0) in backlog_by_id:
-                    st = fm_str(backlog_by_id[m.group(0)], "status")
+                if live:
+                    st = fm_str(backlog_by_id[live[0]], "status")
                     dot_kind = {"open": "open", "in-progress": "progress", "done": "done"}.get(st, "open")
-                    dot = status_dot(dot_kind if dot_kind != "open" else "open")
                     dot = '<span class="dot%s"></span>' % ("" if dot_kind == "open" else " d-" + dot_kind)
-                    badge = id_tag(m.group(0), here)
-                    text = ID_RE.sub("", b).strip(" —:-·")
-                other_ids = [x.group(0) for x in ID_RE.finditer(b) if not x.group(0).startswith("BACKLOG")]
+                    badge = id_tag(live[0], here)
                 if other_ids:
                     refs = "".join(id_tag(x, here, "tag") for x in other_ids)
-                    text = ID_RE.sub("", text if m else b).strip(" ()—:-·")
+                # The remaining prose is still markdown — a bullet carrying an id
+                # gets the same bold/code/link treatment as one that carries none.
+                text = strip_ids(b) if ids else b
                 head = ('<div class="im">%s%s</div>' % (dot, badge)) if (dot or badge) else ""
                 tail = ('<div class="im" style="margin-top:5px">%s</div>' % refs) if refs else ""
                 items.append('<div class="item%s">%s<div class="it"%s>%s</div>%s</div>'
                              % (" muted" if muted else "", head,
                                 ' style="margin-top:0"' if not head else "",
-                                inline_md(text, here) if not (dot or badge or refs) else esc(text), tail))
+                                inline_md(text, here), tail))
             col_cls = ("col-h now" if kind == "now"
                        else "col-h later" if kind in ("later", "not-doing") else "col-h")
             cols.append('<div><div class="%s">%s <span class="n">%d</span></div>%s</div>'
@@ -1118,15 +1656,41 @@ def build_current(ctx, docs, data):
 
     parts.append('<h3 id="a-components">Components</h3>')
     if comps:
+        parts.append(section_sub("Mỗi component: nó là gì và làm gì, đọc ở đâu trong source, "
+                                 "ai bơm vào và nó bơm ra đâu. Hai dòng cuối suy ra từ "
+                                 "data_flow — không ai phải chép tay lần thứ hai."))
+        detail = body_sections(arch_body, comps.keys())
         cards = []
-        for name, (kind, desc) in comps.items():
+        for name, c in comps.items():
+            kind = c["kind"]
             _b, _d, badge_bg, icon_color, icon, _lf = NODE_STYLE.get(kind, NODE_STYLE["svc"])
             icon_svg = ('<span class="ibadge" style="background:%s"><svg width="14" height="14" '
                         'viewBox="0 0 16 16" style="color:%s"><g fill="none" stroke="currentColor" '
                         'stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">%s</g></svg></span>'
                         % (badge_bg, icon_color, ICONS[icon]))
-            cards.append('<div class="comp"><div class="cn">%s%s</div><div class="cr">%s</div></div>'
-                         % (icon_svg, esc(name), inline_md(desc, here) if desc else "&nbsp;"))
+            facts = component_facts(name, edges, comps)
+            head = ('<div class="cn">%s<span class="nm">%s</span>'
+                    '<span class="kd k-%s">%s</span></div>'
+                    % (icon_svg, esc(name), esc(kind), esc(KIND_LABEL.get(kind, kind))))
+            rows = []
+            if c["code"]:
+                rows.append('<tr><th>code</th><td><code>%s</code></td></tr>' % esc(c["code"]))
+            rows.append('<tr><th>role</th><td>%s</td></tr>' % esc(facts["role"]))
+            if facts["upstream"]:
+                rows.append('<tr><th>in from</th><td>%s</td></tr>'
+                            % "".join(comp_ref(x) for x in facts["upstream"]))
+            if facts["downstream"]:
+                rows.append('<tr><th>out to</th><td>%s</td></tr>'
+                            % "".join(comp_ref(x) for x in facts["downstream"]))
+            body = detail.get(name, "")
+            more = ('<details class="more"><summary>Chi tiết</summary><div class="md">%s</div></details>'
+                    % md_to_html(body, here, comps, figs)) if body.strip() else ""
+            cards.append('<div class="comp" id="%s">%s<div class="cr">%s</div>'
+                         '<table class="spec tight">%s</table>%s</div>'
+                         % (comp_slug(name), head, inline_md(c["desc"], here) if c["desc"]
+                            else '<span class="dim">chưa mô tả — đọc source rồi điền một câu '
+                                 "nó là gì</span>",
+                            "".join(rows), more))
         parts.append('<div class="comps">%s</div>' % "".join(cards))
     else:
         parts.append(empty_state("NO COMPONENTS — điền danh sách <code>components</code> trong "
@@ -1134,17 +1698,33 @@ def build_current(ctx, docs, data):
 
     parts.append('<h3 id="a-flow">Data flow</h3>')
     if edges and flow_ok:
-        groups = flow_groups(edges) if len({n for e in edges for n in e[:2]}) > 12 else [edges]
-        for gi, group in enumerate(groups):
-            fig_no = "1" if len(groups) == 1 else "1%s" % chr(97 + gi)
-            dag = svg_dag(group, comps, fig_no)
-            if dag:
-                parts.append(dag)
-            else:
-                parts.append('<div class="note"><span class="lbl">Note</span>'
-                             "<code>data_flow</code> có chu trình — hiển thị dạng text bên dưới.</div>")
-                parts.append('<div class="md">%s</div>' % md_to_html("\n".join(
-                    "- `%s` %s `%s`" % (a, "⇝" if x else "→", b) for a, b, x, _l in group), here))
+        # The presentation standard (STANDARD §10): draw the graph while it still
+        # reads at natural size, otherwise switch style rather than shrink.
+        cyclic = layer_nodes(edges) is None
+        if not cyclic and within_budget(edges):
+            parts.append(svg_dag(edges, comps, figs.next()))
+        else:
+            nodes = {n for e in edges for n in e[:2]}
+            parts.append('<div class="note"><span class="lbl">%s</span>%s Luồng được vẽ bằng kiểu '
+                         "<b>matrix</b> thay cho <b>graph</b>: hàng gửi tới cột. Bảng cạnh bên dưới "
+                         "là bản ghi đầy đủ, chính xác từng chữ.</div>"
+                         % ("Cycle" if cyclic else "Dense",
+                            ("<code>data_flow</code> có chu trình nên không xếp tầng được."
+                             if cyclic else
+                             "%d component và %d cạnh — quá ngưỡng đọc được của kiểu graph "
+                             "(%d node · %d cạnh · %d hàng một cột)."
+                             % (len(nodes), len(edges), FLOW_MAX_NODES, FLOW_MAX_EDGES,
+                                FLOW_MAX_ROWS))))
+            parts.append(svg_matrix(edges, comps, figs.next()))
+            # Sub-flows that do fit are still worth drawing — the matrix gives the
+            # whole shape, these give the parts a reader can actually follow.
+            for group in flow_groups(edges):
+                if len(group) < len(edges) and within_budget(group):
+                    dag = svg_dag(group, comps, figs.next())
+                    if dag:
+                        parts.append(dag)
+            parts.append('<h4 id="a-edges">Mọi cạnh</h4>')
+            parts.append(edge_table(edges, here))
     elif as_list(arch_fm.get("data_flow")):
         parts.append('<div class="note"><span class="lbl">Note</span>Không đọc được '
                      "<code>data_flow</code> — hiển thị nguyên văn. Cú pháp cạnh: "
@@ -1186,10 +1766,37 @@ def build_current(ctx, docs, data):
         parts.append(empty_state("NO REVISIONS — <code>amended_by</code> đang rỗng; "
                                  "architecture chưa bị sửa lần nào kể từ lúc scaffold"))
 
-    body_html = md_to_html(arch_body, here)
+    body_html = md_to_html(arch_body, here, comps, figs)
     if body_html.strip():
         parts.append('<details class="more" style="margin-top:20px"><summary>Full architecture document'
                      "</summary><div class=\"md\">%s</div></details>" % body_html)
+
+    # --- business flows
+    if arch_flows:
+        flow_src.append(("Architecture", "#architecture", arch_flows))
+    parts.append('<h2 id="flows" class="s-l1"><span class="idx">§4</span>Business flows '
+                 '<span class="src tag">```flow trong docs/01_products/ · 02_architecture/</span></h2>')
+    parts.append(section_sub("Nghiệp vụ chạy ra sao, theo thứ tự thời gian — mỗi kịch bản một hình. "
+                             "Đây là chỗ trả lời “đặt một lệnh thì chuyện gì xảy ra”, thứ mà sơ đồ "
+                             "component tĩnh phía trên không nói được."))
+    if flow_src:
+        for label, anchor, blocks in flow_src:
+            parts.append('<h3>%s <a class="tag" href="%s">nguồn</a></h3>' % (esc(label), anchor))
+            for block in blocks:
+                fig = seq_figure(block, comps, figs, here)
+                if fig:
+                    parts.append(fig)
+                else:
+                    parts.append('<div class="note"><span class="lbl">Note</span>Một khối '
+                                 "<code>```flow</code> không đọc được bước nào — cú pháp mỗi bước là "
+                                 "<code>a -&gt; b : việc gì</code>, <code>~&gt;</code> cho async.</div>")
+                    parts.append("<pre><code>%s</code></pre>" % esc(block.strip()))
+    else:
+        parts.append(empty_state(
+            "NO BUSINESS FLOWS — thêm một khối <code>```flow</code> vào thân file product "
+            "hoặc architecture. Mỗi dòng là một bước: <code>api -&gt; engine : validate</code>; "
+            "kèm <code>title:</code>, <code>trigger:</code>, <code>outcome:</code>, "
+            "<code>code:</code> nếu có"))
 
     sidebar = ['<li><a href="#products">§1 Products</a></li>']
     for d in products:
@@ -1202,6 +1809,7 @@ def build_current(ctx, docs, data):
                           ("a-stack", "Tech stack"), ("a-constraints", "Constraints"),
                           ("a-rev", "Revision block")]:
         sidebar.append('<li class="sub"><a href="#%s">%s</a></li>' % (anchor, label))
+    sidebar.append('<li><a href="#flows">§4 Business flows</a></li>')
 
     return page_html(ctx, "%s · Foundation — current state" % ctx["project"],
                      "Foundation", "".join(sidebar), "".join(parts), "FOUNDATION — CURRENT"), latest_rev

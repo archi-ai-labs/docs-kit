@@ -89,11 +89,27 @@ success_metric: ""  # how success is measured
 ---
 ```
 
+The body may carry one or more ```` ```flow ```` blocks — the product's business
+flows, rendered as sequence figures (see §10). One block per scenario:
+
+````markdown
+```flow
+title: Đặt lệnh limit
+trigger: POST /orders với idempotency key
+code: src/engine/match.go
+api -> engine : validate payload, kiểm tra key trùng
+engine -> risk : còn đủ margin không
+engine -> engine : khớp vào order book
+engine ~> audit : append trade event
+outcome: lệnh nằm trên sổ, tiền đã bị giữ
+```
+````
+
 ### `02_architecture/*.md` — Architecture
 ```yaml
 ---
-components: []      # main components; detail in body
-data_flow: ""       # one-line summary; detail in body
+components: []      # "name [kind] `path/in/repo` — what it does"
+data_flow: []       # "a -> b : label" per entry; "~>" for async
 tech_stack: []
 constraints: []
 amended_by: []      # ONLY the Decision workflow appends entries here.
@@ -102,6 +118,21 @@ amended_by: []      # ONLY the Decision workflow appends entries here.
 ```
 Each `amended_by` entry must contain a `DECISION-NNN` token that resolves to an
 existing Decision `id:`.
+
+A component entry is one flat line — the validator reads frontmatter with awk,
+so this grammar never nests:
+
+```yaml
+components:
+  - engine `src/engine/match.go` — khớp lệnh limit/market, order book trong RAM
+  - store [db] `deploy/pg/` — postgres, nguồn sự thật sau khi commit
+```
+
+`[kind]` is one of `db` · `queue` · `ui` · `svc` (default). The backticked path
+is where the component lives in the source tree. The description states what the
+component **is** — written after reading that code, not guessed from its name.
+Longer explanation goes in a `### <name>` section in the body, which the
+rendered card picks up as expandable detail.
 
 ### `20_issues/*.md` — Issue (id prefix `ISSUE-`)
 ```yaml
@@ -248,7 +279,7 @@ network) generates three self-contained pages into `docs/`, styled per
 | Page | Content |
 |---|---|
 | `docs/index.html` | Menu beside README.md: system map (clickable), sheet cards, Layer-3/Oversight listing, the one hard rule |
-| `docs/current.html` | Layer 1: product cards, roadmap board, components, data-flow graph, constraints, revision block |
+| `docs/current.html` | Layer 1: product cards, roadmap board, component cards, data-flow figure, constraints, revision block, business-flow sequences |
 | `docs/changes.html` | Layer 2: issue/backlog boards, proposal & decision tables, trace chains, audit table |
 
 Rules:
@@ -265,10 +296,46 @@ Rules:
   Component entries may annotate a kind — `postgres [db]`, `jobs [queue]`,
   `dashboard [ui]` — which sets the node icon/tint; unannotated entries are
   services; nodes absent from `components` are drawn dashed as external.
-  Branching flows render as a layered graph (longest-path layering,
-  alphabetical within a column); >12 nodes → one figure per connected flow
-  group; unparseable or cyclic flows fall back to text — never a guessed
-  diagram.
+- **Figure standard — a figure is never shrunk to fit.** Text that has been
+  scaled down to make a diagram fit is a diagram nobody reads. Every figure is
+  drawn at its natural size; one wider than the column scrolls inside its own
+  frame. When a flow outgrows the style it is drawn in, the renderer changes
+  *style* rather than scale. The graph style's density budget:
+
+  | limit | value |
+  |---|---|
+  | nodes | 12 |
+  | edges | 18 |
+  | nodes stacked in one column | 7 |
+  | participants in a sequence | 8 |
+  | steps in a sequence | 16 |
+
+  Within budget, `data_flow` is a **graph**: longest-path layering, alphabetical
+  within a column, every edge label placed in the gap after its source column —
+  a gap widened to hold it, so a label can never land on a node. Over budget, or
+  cyclic, it becomes a **matrix**: rows send to columns, which grows linearly
+  where a graph's crossings grow quadratically, and which makes hubs visible as
+  full rows. A matrix is always accompanied by the complete edge table, and by a
+  graph of each connected sub-flow that does fit. A sequence over budget degrades
+  to its numbered step table. Unparseable input falls back to its own source
+  text — never a guessed diagram.
+- **Business flows** (```` ```flow ```` fenced block in the *body* of any
+  `01_products/` or `02_architecture/` doc) render as a sequence figure —
+  lifelines left to right, time down the page, participants ordered by first
+  appearance. Steps use the same edge grammar as `data_flow`; `a -> a` is a
+  self-call. Optional `title:`, `trigger:`, `outcome:`, `code:` header lines
+  frame the scenario. They are collected into one **Business flows** section on
+  `current.html` rather than left inside each card, and a participant naming a
+  component picks up that component's icon and kind. This is deliberately a body
+  fence and not frontmatter: the validator parses frontmatter with awk, and the
+  flows belong next to the prose that explains them.
+- **Component entries carry their anchor in the source.** Full grammar:
+  `name [kind] `path/in/repo` — what it does`. The description says what the
+  component *is*, in one sentence, written after reading the code; the backticked
+  path says where to go read it. Everything a card shows beyond that —
+  role, upstream, downstream — is derived from `data_flow`, never authored twice.
+  A `### <name>` section in the architecture body becomes that card's expandable
+  detail.
 - **Colour (the hue budget).** Four hue families, spent by meaning and never for
   decoration: blue = Layer 1 · violet = Layer 2 · teal = the fast-lane bypass ·
   orange = interactive or happening right now. Green and red are stamped

@@ -1,1 +1,22 @@
+# OS
 .DS_Store
+
+# Editors
+.idea/
+.vscode/
+
+# Claude Code local state (never commit machine-specific settings)
+.claude/settings.local.json
+
+# Logs / temp
+*.log
+node_modules/
+
+# Bytecode caches. docs_render.py gets imported directly by the test recipe, so
+# a lost PYTHONDONTWRITEBYTECODE drops a cache tree next to the scripts.
+__pycache__/
+*.pyc
+
+# NOW board — local working state, per machine
+NOW.json
+NOW.md

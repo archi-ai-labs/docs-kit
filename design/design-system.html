@@ -284,10 +284,27 @@ code, .md code { font: 12.5px var(--mono); background: var(--film);
   border-radius: var(--r); padding: 1.5px 5px; color: var(--ink); }
 
 /* ---- component grid ---- */
-.comps { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; margin: 14px 0; }
-.comp { border: 1px solid var(--line); border-radius: var(--r); padding: 10px 13px; background: var(--paper); }
-.comp .cn { font: 650 13px var(--mono); color: var(--ink); }
-.comp .cr { font-size: 12.5px; color: var(--ink-2); margin-top: 3px; line-height: 1.5; }
+.comps { display: grid; grid-template-columns: repeat(auto-fill, minmax(288px, 1fr)); gap: 12px; margin: 14px 0; }
+.comp { border: 1px solid var(--line); border-radius: var(--r); padding: 11px 13px 9px; background: var(--paper); scroll-margin-top: 74px; }
+.comp:target { border-color: var(--mark-2); box-shadow: inset 3px 0 0 var(--mark-2); }
+.comp .cn { font: 650 13px var(--mono); color: var(--ink); display: flex; align-items: center; gap: 9px; }
+.comp .cn .nm { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.comp .cn .kd { flex: none; font: 650 9.5px var(--mono); letter-spacing: .09em; text-transform: uppercase; color: var(--ink-3); border: 1px solid var(--line); border-radius: var(--r); padding: 1px 5px; }
+.comp .cn .kd.k-db { color: var(--l1-deep); border-color: var(--l1-edge); background: var(--l1-wash); }
+.comp .cn .kd.k-queue { color: var(--l2-deep); border-color: var(--l2-edge); background: var(--l2-wash); }
+.comp .cr { font-size: 12.5px; color: var(--ink-2); margin-top: 6px; line-height: 1.5; }
+table.spec.tight { margin-top: 9px; font-size: 12px; }
+table.spec.tight th { width: 62px; padding: 5px 10px 5px 0; font-size: 9.5px; }
+table.spec.tight td { padding: 5px 0; }
+table.spec.tight td code { font-size: 11.5px; }
+.tag.cref { padding: 0 6px; font-size: 10.5px; margin: 0 4px 3px 0; text-decoration: none; }
+
+/* ---- business-flow sequence framing ---- */
+.seqline { display: flex; align-items: baseline; gap: 10px; font-size: 13px; color: var(--ink-2); padding: 0 0 12px; }
+.seqline.out { padding: 12px 0 0; border-top: 1px dashed var(--line-2); margin-top: 4px; }
+.seqline .lbl { flex: none; font: 700 9.5px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); }
+.seqline.out .lbl { color: var(--l1); }
+.plot.flowfig { background-image: none; background: var(--paper); }
 
 /* ---- title block ---- */
 .tblock { display: flex; flex-wrap: wrap;

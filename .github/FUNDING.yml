@@ -1,0 +1,13 @@
+# Adds a "Sponsor" button to the repo. GitHub only renders it once at least one
+# entry below is uncommented and filled in — while everything is commented, no
+# button appears, which is the intended "not live yet" state.
+# Docs: https://docs.github.com/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/displaying-a-sponsor-button-in-your-repository
+
+# GitHub Sponsors — requires Sponsors enabled + a payout method on the account.
+# github: [archimonde12]
+
+# Ko-fi — the handle after ko-fi.com/ (e.g. ko-fi.com/archimonde12 -> archimonde12).
+# ko_fi: your-handle
+
+# Buy Me a Coffee (and any other link) goes through custom:
+# custom: ["https://buymeacoffee.com/your-handle"]

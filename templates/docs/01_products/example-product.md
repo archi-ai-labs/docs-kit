@@ -24,3 +24,21 @@ Nói rõ thêm về `scope_in` / `scope_out` nếu danh sách cần diễn giả
 ## Success
 
 `success_metric` được đo bằng cách nào, và thế nào là "đạt".
+
+## Business flows
+
+Mỗi kịch bản nghiệp vụ một khối ```` ```flow ````; `current.html` sẽ vẽ thành
+sequence diagram ở mục **Business flows**. Tên các bên tham gia nên trùng tên
+trong `components` của architecture — trùng thì hình lấy đúng icon và kind của
+component đó.
+
+````markdown
+```flow
+title: <tên kịch bản>
+trigger: <cái gì khởi động nó>
+code: <file/thư mục đọc để hiểu>
+a -> b : bước này làm gì
+b ~> c : bước async
+outcome: <kết thúc thì hệ thống ở trạng thái nào>
+```
+````

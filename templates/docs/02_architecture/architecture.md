@@ -1,6 +1,6 @@
 ---
-components: []
-data_flow: ""
+components: []      # "name [kind] `path/in/repo` — nó LÀ GÌ, một câu"
+data_flow: []       # "a -> b : nhãn" mỗi dòng một cạnh; "~>" cho async
 tech_stack: []
 constraints: []
 amended_by: []
@@ -15,11 +15,54 @@ amended_by: []
 
 ## Components
 
-_Liệt kê các component chính và trách nhiệm của từng cái. Khớp với danh sách `components` phía trên._
+Danh sách có thẩm quyền là `components` trong frontmatter. Mỗi dòng một
+component, cú pháp phẳng — **không lồng nhau**:
+
+```yaml
+components:
+  - engine `src/engine/match.go` — khớp lệnh limit/market, order book giữ trong RAM
+  - store [db] `deploy/pg/` — postgres, nguồn sự thật sau khi commit
+  - jobs [queue] `src/worker/` — worker nền, retry có backoff
+```
+
+`[kind]` là một trong `db` · `queue` · `ui` · `svc` (mặc định). Đường dẫn trong
+backtick là **chỗ đọc code**. Phần mô tả phải trả lời "nó là gì" — viết sau khi
+đã đọc source, không suy từ cái tên.
+
+Muốn giải thích dài hơn thì mở một mục `### <tên component>` bên dưới; card
+tương ứng trên `current.html` sẽ tự gắn phần đó vào.
 
 ## Data flow
 
-_Dữ liệu đi qua các component ra sao. Một sơ đồ, hoặc một luồng đánh số ngắn gọn._
+Danh sách có thẩm quyền là `data_flow` trong frontmatter. Mỗi dòng một cạnh:
+
+```yaml
+data_flow:
+  - api -> engine : validate + idempotency key
+  - engine -> ledger : ghi bút toán kép
+  - engine ~> audit : append trade event
+```
+
+Renderer tự chọn kiểu vẽ theo độ dày (STANDARD §10): trong ngân sách thì vẽ
+**graph**, quá dày hoặc có chu trình thì chuyển sang **matrix** kèm bảng cạnh
+đầy đủ. Không bao giờ thu nhỏ hình cho vừa cột.
+
+## Business flows
+
+Mỗi kịch bản nghiệp vụ một khối ```` ```flow ````. Đây là chỗ trả lời "làm việc X
+thì chuyện gì xảy ra, theo thứ tự nào" — thứ mà sơ đồ component tĩnh không nói được.
+
+````markdown
+```flow
+title: <tên kịch bản>
+trigger: <cái gì khởi động nó>
+code: <file/thư mục đọc để hiểu bước này>
+a -> b : bước này làm gì
+b -> b : tự xử lý bên trong chính nó
+b ~> c : bước async
+outcome: <kết thúc thì hệ thống ở trạng thái nào>
+```
+````
 
 ## Tech stack
 

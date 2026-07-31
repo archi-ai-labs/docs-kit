@@ -67,7 +67,35 @@ amendment now:
 This is the only legitimate write path into layer 1. The PostToolUse hook will
 still print its warning — expected; mention the Decision ref in your report.
 
-## Step 5 — Validate and report
+## Step 5 — Architecture drift: does the doc still match the code?
+
+Only when this session changed code. The Architecture doc describes the source;
+the source moves and the doc does not, so this step compares them and **reports**
+— it never edits `docs/02_architecture/` outside the Decision path in Step 4.
+
+Read `components` and `data_flow` from `docs/02_architecture/architecture.md`
+and the ```` ```flow ```` blocks in `docs/01_products/*.md`, then check them
+against what this session actually touched:
+
+- a component whose backticked path **no longer exists**, or moved;
+- a new component-sized thing added this session (a new service, datastore,
+  queue, or scheduled worker) that is absent from `components`;
+- a `data_flow` edge whose call site was deleted, or a new call/publish between
+  two documented components with no edge for it;
+- a business-flow step that no longer matches the code path it names;
+- a component whose description is now false — the behaviour changed underneath
+  a sentence that still claims the old one.
+
+For each finding, judge the lane by the usual two-question test. Documentation
+that has fallen out of date is itself an Issue: create
+`docs/20_issues/ISSUE-NNN-<slug>.md` describing the drift concretely (what the
+doc says, what the code now does, the file to read), and let the Decision
+workflow decide the amendment. Do not quietly rewrite layer 1 to match the code
+— that is exactly the edit the model exists to prevent.
+
+Report every finding even when you create no Issue for it.
+
+## Step 6 — Validate and report
 
 Run the validator (resolve the plugin root as in docs-init Step 0):
 
@@ -91,5 +119,6 @@ Then summarize:
 - **Updated**: backlog statuses changed, audit lines appended, amendments
   applied, HTML views refreshed.
 - **Created**: retroactive Issues (+ fast-lane Backlog items).
+- **Architecture drift**: what Step 5 found, and the Issues opened for it.
 - **Needs your decision**: full-lane work without a Decision, ambiguous mappings
   between work and Backlog items, unresolved validator failures. Ask — never guess.

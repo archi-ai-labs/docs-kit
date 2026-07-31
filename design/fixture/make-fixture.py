@@ -58,6 +58,34 @@ success_metric: "99% đơn được xác nhận trong < 2s"
 
 OrderHub API là cửa vào duy nhất để tạo đơn và theo dõi vòng đời đơn. Merchant
 tích hợp một lần và nhận về cùng một state machine, bất kể đơn đến từ kênh bán nào.
+
+## Business flows
+
+```flow
+title: Nhận một đơn mới
+trigger: POST /v1/orders kèm Idempotency-Key của merchant
+code: internal/order/create.go
+api-gateway -> order-service : HMAC hợp lệ, đã qua rate limit
+order-service -> order-service : từ chối nếu Idempotency-Key đã dùng
+order-service -> payment-adapter : capture số tiền của đơn
+payment-adapter -> order-service : capture ok kèm mã giao dịch PSP
+order-service -> postgres : ghi orders + outbox trong MỘT transaction
+postgres ~> worker : outbox có dòng mới
+worker ~> api-gateway : gửi webhook order.confirmed
+outcome: Đơn ở trạng thái confirmed, tiền đã capture, webhook đã xếp hàng
+```
+
+```flow
+title: Hoàn tiền một đơn đã capture
+trigger: Nhân viên vận hành bấm Refund trên Merchant Dashboard
+code: internal/order/refund.go
+api-gateway -> order-service : refund cho order id
+order-service -> order-service : chỉ cho refund khi đang ở confirmed
+order-service -> payment-adapter : refund theo mã giao dịch PSP
+order-service -> postgres : ghi trạng thái refunded + outbox
+postgres ~> worker : gửi webhook order.refunded
+outcome: Đơn ở trạng thái refunded; lệch tiền sẽ hiện ở Reconciliation cuối ngày
+```
 """
 
 FILES["01_products/merchant-dashboard.md"] = """---
@@ -98,11 +126,11 @@ success_metric: "Mọi khoản lệch trong ngày được quy về một giao d
 
 FILES["02_architecture/architecture.md"] = """---
 components:
-  - "api-gateway — Xác thực, giới hạn tần suất theo merchant, nắn request"
-  - "order-service — State machine vòng đời đơn, nơi duy nhất ghi trạng thái đơn"
-  - "payment-adapter — Lối ra duy nhất tới PSP ngoài; chuẩn hoá capture/refund"
-  - "postgres [db] — Bảng orders + outbox, nguồn trạng thái bền vững"
-  - "worker [queue] — Consumer của outbox: gửi webhook, retry, dead-letter"
+  - "api-gateway `cmd/gateway/` — Xác thực merchant bằng HMAC, giới hạn 200 req/s mỗi key, nắn request rồi chuyển tiếp"
+  - "order-service `internal/order/` — Giữ state machine vòng đời đơn; nơi DUY NHẤT được ghi cột `orders.status`"
+  - "payment-adapter `internal/psp/` — Lối ra duy nhất tới PSP ngoài; chuẩn hoá capture/refund về một interface, dịch mã lỗi PSP"
+  - "postgres [db] `deploy/postgres/` — Bảng `orders` + `outbox` trong cùng một transaction; nguồn trạng thái bền vững"
+  - "worker [queue] `cmd/worker/` — Consumer của outbox: gửi webhook, retry backoff luỹ thừa, dead-letter sau 12 lần"
 data_flow:
   - "client -> api-gateway -> order-service"
   - "order-service -> payment-adapter : capture"
@@ -126,6 +154,18 @@ amended_by:
 ## Components
 
 Xem danh sách trong frontmatter — mỗi component một dòng.
+
+### order-service
+
+Single-writer cho `orders.status`. Mọi chuyển trạng thái đi qua một transaction
+duy nhất ghi đồng thời `orders` và `outbox`, nên không có cửa sổ nào mà đơn đã
+đổi trạng thái còn webhook thì chưa được xếp hàng. Chuyển trạng thái không hợp lệ
+bị từ chối ở tầng domain, không phải ở tầng HTTP.
+
+### payment-adapter
+
+Không giữ state. Mỗi lần capture mang theo idempotency key sinh từ order id, nên
+PSP nhận lại cùng một key sẽ trả về kết quả cũ thay vì thu tiền hai lần.
 
 ## Data flow
 

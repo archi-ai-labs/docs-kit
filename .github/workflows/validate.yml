@@ -1,0 +1,108 @@
+name: validate
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # The portability floor is python 3.9 (STANDARD §portability) — pin it so
+      # CI fails on a 3.10+ construct instead of shipping it to users on 3.9.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+
+      # On a version tag (v1.2.3), fail unless it matches plugin.json's version.
+      # The renderer stamps that version into every generated page, so a drifting
+      # tag mislabels the output people paste into review.
+      - name: Check tag matches plugin version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg="$(node -p "require('./.claude-plugin/plugin.json').version")"
+          echo "tag: $tag   plugin.json: $pkg"
+          if [ "$tag" != "$pkg" ]; then
+            echo "::error::Tag v$tag does not match plugin.json version $pkg — bump plugin.json or retag."
+            exit 1
+          fi
+          echo "OK — tag matches plugin.json ($pkg)"
+
+      # Belt-and-suspenders: a deterministic JSON gate that needs no auth, so a
+      # broken manifest fails even if the CLI step has trouble.
+      - name: Lint manifest (JSON syntax)
+        run: node -e "JSON.parse(require('fs').readFileSync('.claude-plugin/plugin.json','utf8'))"
+
+      - name: Shell + Python syntax
+        run: |
+          for f in scripts/*.sh; do bash -n "$f"; done
+          python3 -m py_compile scripts/docs_render.py scripts/hook_*.py
+
+      # The scaffold must validate clean out of the box: the shipped -000 example
+      # chain is self-consistent by design, and a fresh tree is the first thing
+      # every new user sees.
+      - name: Scaffold a fresh repo and validate it
+        run: |
+          work="$(mktemp -d)"
+          git -C "$work" init -q
+          bash scripts/docs_scaffold.sh "$work"
+          bash scripts/docs_validate.sh "$work/docs"
+
+      # A mutation the validator is supposed to catch must actually fail it —
+      # otherwise the check above only proves the script exits 0.
+      - name: Validator catches a dangling ref
+        run: |
+          work="$(mktemp -d)"
+          git -C "$work" init -q
+          bash scripts/docs_scaffold.sh "$work" >/dev/null
+          sed -i 's/^issue_ref: ISSUE-000/issue_ref: ISSUE-999/' \
+            "$work/docs/21_proposals/PROPOSAL-000-example.md"
+          if bash scripts/docs_validate.sh "$work/docs"; then
+            echo "::error::validator passed a dangling issue_ref — the ref check is broken."
+            exit 1
+          fi
+          echo "OK — dangling ref rejected"
+
+      # Hooks are deterministic and warn-only: they must speak on a real
+      # architecture edit and stay silent on anything else.
+      - name: Hooks warn on architecture, silent elsewhere
+        run: |
+          warn=$(echo '{"tool_input":{"file_path":"docs/02_architecture/architecture.md"}}' \
+                 | python3 scripts/hook_architecture_warn.py | wc -c)
+          quiet=$(echo '{"tool_input":{"file_path":"src/main.go"}}' \
+                  | python3 scripts/hook_architecture_warn.py | wc -c)
+          echo "architecture: $warn bytes   unrelated: $quiet bytes"
+          [ "$warn" -gt 0 ] || { echo "::error::hook stayed silent on an architecture edit."; exit 1; }
+          [ "$quiet" -eq 0 ] || { echo "::error::hook fired on an unrelated file."; exit 1; }
+          echo '{"transcript_path":"/nonexistent"}' | python3 scripts/hook_stop_scan.py
+
+      # The samples ARE the design contract, and they are real renderer output.
+      # Regenerating them must produce no diff — a dirty tree here means either
+      # the committed samples are stale or the renderer stopped being
+      # deterministic, and both are release blockers.
+      - name: Design samples are reproducible
+        run: |
+          samples="design/sample-index.html design/sample-current.html design/sample-changes.html"
+          bash design/make-samples.sh
+          if ! git diff --quiet -- $samples; then
+            echo "::error::design/sample-*.html differ from a fresh render — run design/make-samples.sh and commit."
+            git --no-pager diff --stat -- $samples
+            exit 1
+          fi
+          echo "OK — samples byte-identical to a fresh render"
+
+      - name: Install Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Validate plugin (also checks skill frontmatter)
+        run: claude plugin validate .
