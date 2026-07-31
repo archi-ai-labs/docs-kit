@@ -841,13 +841,16 @@ def lane_tag(lane):
 
 
 def slugify(text, seen=None):
-    """Anchor slug that survives Vietnamese file names.
+    """Anchor slug built from a file name.
 
-    A plain [^a-z0-9] filter drops every diacritic-bearing letter outright, so
-    'phân-quyền' and 'phần-quyền' both collapse to 'ph-n-quy-n' — two products,
-    one HTML id, and a sidebar link that jumps to the wrong card. Decompose to
-    NFD and drop the combining marks instead, so the base letters survive.
-    'đ' has no decomposition, so it is mapped by hand.
+    File names are supposed to stay ASCII (STANDARD §11) — only the title is
+    translated — so the diacritic folding here is a safety net, not the normal
+    path. It matters because nothing enforces that rule: a plain [^a-z0-9]
+    filter drops every diacritic-bearing letter outright, so 'phân-quyền' and
+    'phần-quyền' would both collapse to 'ph-n-quy-n' — two products, one HTML
+    id, and a sidebar link that jumps to the wrong card. Decomposing to NFD and
+    dropping the combining marks keeps the base letters instead. 'đ' has no
+    decomposition, so it is mapped by hand.
 
     Pass `seen` to guarantee uniqueness within a page; names that still collide
     after folding get a numeric suffix rather than a duplicate id.

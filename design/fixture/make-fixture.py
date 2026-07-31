@@ -6,9 +6,8 @@ Usage: make-fixture.py <dir>   — writes <dir>/docs/... and nothing else.
 The fixture deliberately exercises every branch of the renderer: both lanes,
 an amended architecture (two revisions), all board columns including archived
 and not-doing, a recorded deviation, an empty Layer-3 folder, and a product
-whose file name carries Vietnamese diacritics (so the samples prove slugify()
-folds them instead of dropping them). Driven by ../make-samples.sh, which
-renders it and writes design/sample-*.html.
+whose title is Vietnamese while its file name is not. Driven by
+../make-samples.sh, which renders it and writes design/sample-*.html.
 
 Language follows STANDARD §11: structure and terms in English, explanation in
 Vietnamese — the fixture has to look like real output, not a translation test.
@@ -79,9 +78,9 @@ Một console chủ yếu để đọc, đặt trên cùng API đó, tập trung
 gian tới thao tác đầu tiên khi một đơn có vấn đề.
 """
 
-# A Vietnamese file name on purpose: 'đối-soát' folds to 'doi-soat'. Under the old
-# ASCII-only slug it became '-i-so-t', which is both unreadable and collision-prone.
-FILES["01_products/đối-soát.md"] = """---
+# Vietnamese title, English file name — the split STANDARD §11 asks for. The name:
+# field is explanation and gets translated; the file name is structure and does not.
+FILES["01_products/reconciliation.md"] = """---
 name: "Đối soát giao dịch"
 users: "Kế toán merchant — làm việc theo ngày, đối chiếu số liệu cuối phiên"
 problem: "Số liệu giữa OrderHub và sao kê PSP lệch nhau mà không biết lệch ở đâu"

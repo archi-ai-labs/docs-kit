@@ -319,7 +319,13 @@ Rules:
 - **Roadmap headings are labels, so they stay English**, but `roadmap_kind()`
   also accepts the obvious Vietnamese equivalents. The failure it guards against
   is silent: an unrecognised heading loses its column colour without any error.
-- **Anchor slugs fold diacritics** rather than dropping them (`slugify()`), and
-  dedupe within a page — otherwise `phân-quyền` and `phần-quyền` collide on one
-  HTML id.
+- **A document's title may be Vietnamese; its file name may not.** `name:` is
+  explanation and gets translated — `name: "Đối soát giao dịch"`. The file it
+  lives in stays ASCII — `reconciliation.md`. File names are keys, not prose:
+  they appear in shell commands, git output, and URLs, and §3 already makes them
+  non-referential, so there is nothing to gain by translating them.
+- **Anchor slugs fold diacritics anyway** (`slugify()`), and dedupe within a
+  page. Nothing enforces the rule above, and the failure it prevents is quiet:
+  a plain `[^a-z0-9]` filter would collapse both `phân-quyền` and `phần-quyền`
+  to one HTML id, so the sidebar link would open the wrong document.
 - `<html lang="vi">`, since the prose dominates the page.
