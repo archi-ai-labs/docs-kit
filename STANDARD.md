@@ -269,6 +269,15 @@ Rules:
   alphabetical within a column); >12 nodes → one figure per connected flow
   group; unparseable or cyclic flows fall back to text — never a guessed
   diagram.
+- **Colour (the hue budget).** Four hue families, spent by meaning and never for
+  decoration: blue = Layer 1 · violet = Layer 2 · teal = the fast-lane bypass ·
+  orange = interactive or happening right now. Green and red are stamped
+  verdicts only. A reference tag takes the hue of the layer it sends you *to*;
+  section marks and board column rules follow the same rule (the live column
+  takes orange, a shelved one goes grey). Anything with no layer — a git rev, a
+  timestamp, a tool version — stays graphite, and prose, tables, and body copy
+  never take a hue at all. Each sheet opens with a 3px `hue-rule` strip drawn to
+  scale from its own real counts.
 - **Motion (pure CSS, zero JS).** Exactly three meaning-bearing animations:
   a white packet gliding along solid edges (data direction), marching dashes on
   dashed strokes (async / fast-lane / amendment), and an LED pulse on live dots

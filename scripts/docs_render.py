@@ -43,6 +43,10 @@ KIND_RE = re.compile(r"\[(db|queue|ui|svc)\]")
 ID_PAGE = {"ISSUE": ("changes.html", "issues"), "PROPOSAL": ("changes.html", "proposals"),
            "DECISION": ("changes.html", "decisions"), "BACKLOG": ("changes.html", "backlog")}
 
+# Tags are colored by destination: which layer the reference sends you to.
+# Derived from ID_PAGE so the hue stays honest if a prefix ever moves sheets.
+PAGE_LAYER = {"current.html": "l1", "changes.html": "l2"}
+
 CHAR_W = 6.95  # approx mono advance at 11.5px, used to size SVG nodes
 
 
@@ -144,7 +148,9 @@ def link_ids(escaped_text, here):
         prefix = m.group(1)
         page, anchor = ID_PAGE[prefix]
         href = ("#" + anchor) if page == here else (page + "#" + anchor)
-        return '<a class="tag id" href="%s">%s</a>' % (href, m.group(0))
+        layer = PAGE_LAYER.get(page)
+        return '<a class="tag id%s" href="%s">%s</a>' % (
+            " " + layer if layer else "", href, m.group(0))
     return ID_RE.sub(repl, escaped_text)
 
 
@@ -576,9 +582,15 @@ CSS = r"""
   --paper: #ffffff; --film: #f4f6f8; --well: #fbfcfd; --grid-faint: #e9eef3;
   --line: #e2e8ee; --line-2: #c8d2dc;
   --ink: #16181d; --ink-2: #454e5a; --ink-3: #7d8794;
-  --mark: #c2410c; --mark-2: #ea580c;
-  --l1: #1d4ed8; --l2: #7c3aed; --fastc: #0d9488;
-  --approve: #15803d; --reject: #b91c1c;
+  /* four hue families. each: line · deep (text on wash) · edge (borders) · wash (fills) */
+  --mark: #c2410c; --mark-2: #ea580c; --mark-deep: #9a3412; --mark-edge: #f3c3a3;
+  --mark-wash: #fdf0e7; --mark-film: #fef7f2;
+  --l1: #1d4ed8; --l1-deep: #1e3a8a; --l1-edge: #b6c8f2; --l1-wash: #eef3ff;
+  --l2: #7c3aed; --l2-deep: #5b21b6; --l2-edge: #cdb8f5; --l2-wash: #f5f0ff;
+  --fastc: #0d9488; --fast-deep: #115e59; --fast-edge: #8fd6ca; --fast-wash: #e6faf5;
+  --approve: #15803d; --approve-wash: #eaf6ee;
+  --reject: #b91c1c; --reject-wash: #fdeeee;
+  --hl: rgba(234,88,12,.22); /* highlighter — the redline pen, laid flat */
   --mono: ui-monospace, "SF Mono", Menlo, "Cascadia Mono", Consolas, "Liberation Mono", monospace;
   --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --r: 2px;
@@ -620,10 +632,20 @@ a:hover { color: var(--mark); }
 .kicker::before { content: ""; width: 22px; height: 2px; background: var(--mark-2); }
 h1 { font: 750 27px/1.25 var(--mono); letter-spacing: -.035em; color: var(--ink); margin: 10px 0 8px; }
 .lede { color: var(--ink-2); font-size: 15.5px; margin: 0 0 8px; max-width: 640px; }
-.meta-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 16px 0 0; padding-bottom: 28px; border-bottom: 1px solid var(--line); }
-h2 { display: flex; align-items: baseline; gap: 12px; font: 700 16.5px/1.3 var(--mono); letter-spacing: -.02em; color: var(--ink); margin: 60px 0 8px; padding-top: 22px; border-top: 1px solid var(--line); scroll-margin-top: 74px; }
+.meta-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 16px 0 0; padding-bottom: 22px; }
+.hue-rule { display: flex; gap: 2px; height: 3px; margin: 0; }
+.hue-rule i { background: var(--c); border-radius: 1.5px; }
+h2 { position: relative; display: flex; align-items: baseline; gap: 12px; font: 700 16.5px/1.3 var(--mono); letter-spacing: -.02em; color: var(--ink); margin: 60px 0 8px; padding-top: 22px; border-top: 1px solid var(--line); scroll-margin-top: 74px; --sec: var(--ink-3); --sec-wash: var(--film); --sec-edge: var(--line-2); }
+h2::before { content: ""; position: absolute; top: -1.5px; left: 0; width: 54px; height: 3px; border-radius: 1.5px; background: var(--sec); }
+h2.s-l1 { --sec: var(--l1); --sec-wash: var(--l1-wash); --sec-edge: var(--l1-edge); }
+h2.s-l2 { --sec: var(--l2); --sec-wash: var(--l2-wash); --sec-edge: var(--l2-edge); }
+h2.s-fast { --sec: var(--fastc); --sec-wash: var(--fast-wash); --sec-edge: var(--fast-edge); }
+h2.s-mark { --sec: var(--mark); --sec-wash: var(--mark-wash); --sec-edge: var(--mark-edge); }
+h2.s-ink::before { background: var(--line-2); }
+h2.s-lines::before { background: linear-gradient(90deg, var(--l1) 0 50%, var(--l2) 50% 100%); }
 .page.solo h2 { font-size: 15px; border-top: 0; padding-top: 0; margin: 48px 0 14px; }
-h2 .idx { flex: none; font: 700 11px var(--mono); color: var(--ink-3); border: 1px solid var(--line-2); border-radius: var(--r); padding: 2px 7px; background: var(--film); letter-spacing: .04em; }
+.page.solo h2::before { top: -11px; }
+h2 .idx { flex: none; font: 700 11px var(--mono); color: var(--sec); border: 1px solid var(--sec-edge); border-radius: var(--r); padding: 2px 7px; background: var(--sec-wash); letter-spacing: .04em; }
 h2 .src { margin-left: auto; align-self: center; }
 h2 .dim2 { font: 500 10.5px var(--mono); color: var(--ink-3); letter-spacing: .08em; }
 h3 { font: 700 12px var(--mono); letter-spacing: .09em; text-transform: uppercase; color: var(--ink); margin: 30px 0 10px; scroll-margin-top: 74px; }
@@ -634,10 +656,16 @@ p strong, li strong { color: var(--ink); }
 .tag { display: inline-flex; align-items: center; gap: 6px; padding: 1.5px 8px; border: 1px solid var(--line-2); border-radius: var(--r); background: var(--paper); font: 500 11.5px/1.7 var(--mono); color: var(--ink-2); white-space: nowrap; }
 .tag.id { color: var(--ink); background: var(--film); font-weight: 650; }
 .tag.hard { border-color: var(--ink); color: var(--ink); font-weight: 650; }
-.tag.lane-fast { border: 1.5px dashed var(--fastc); color: var(--fastc); font-weight: 700; letter-spacing: .05em; }
-.tag.lane-full { border: 1.5px solid var(--l2); color: var(--l2); font-weight: 700; letter-spacing: .05em; }
+.tag.l1 { --h: var(--l1); --hd: var(--l1-deep); --he: var(--l1-edge); --hw: var(--l1-wash); }
+.tag.l2 { --h: var(--l2); --hd: var(--l2-deep); --he: var(--l2-edge); --hw: var(--l2-wash); }
+.tag.l1, .tag.l2 { color: var(--hd); border-color: var(--he); }
+.tag.id.l1, .tag.id.l2 { background: var(--hw); padding-left: 11px; box-shadow: inset 3px 0 0 var(--h); }
+.tag.lane-fast { border: 1.5px dashed var(--fastc); background: var(--fast-wash); color: var(--fast-deep); font-weight: 700; letter-spacing: .05em; }
+.tag.lane-full { border: 1.5px solid var(--l2); background: var(--l2-wash); color: var(--l2-deep); font-weight: 700; letter-spacing: .05em; }
 a.tag { text-decoration: none; }
 a.tag:hover { border-color: var(--mark); color: var(--mark); }
+a.tag.id.l1:hover, a.tag.id.l2:hover { box-shadow: inset 3px 0 0 var(--mark); }
+.hl { background: linear-gradient(100deg, transparent 0, var(--hl) 4%, var(--hl) 96%, transparent 100%); color: var(--ink); font-weight: 500; padding: 1px 3px; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
 .status { display: inline-flex; align-items: center; gap: 7px; font: 650 11px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); }
 .dot { flex: none; width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid var(--ink); background: var(--paper); }
 .d-progress { border-color: var(--mark-2); background: linear-gradient(90deg, var(--mark-2) 50%, transparent 50%); }
@@ -647,15 +675,15 @@ a.tag:hover { border-color: var(--mark); color: var(--mark); }
 .d-archived { background: var(--line-2); border-color: var(--line-2); }
 .status.live { color: var(--mark); }
 .stamp { display: inline-block; padding: 2px 9px; border: 1.5px solid currentColor; border-radius: var(--r); font: 700 10.5px/1.8 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
-.st-approved { color: var(--approve); }
-.st-rejected { color: var(--reject); }
+.st-approved { color: var(--approve); background: var(--approve-wash); }
+.st-rejected { color: var(--reject); background: var(--reject-wash); }
 .rail { display: flex; align-items: flex-start; margin: 30px 0 4px; }
 .rail .st { flex: none; display: flex; flex-direction: column; align-items: center; gap: 9px; min-width: 116px; text-align: center; }
-.rail .st .c { width: 16px; height: 16px; border-radius: 50%; background: var(--l1); }
+.rail .st .c { width: 16px; height: 16px; border-radius: 50%; background: var(--l1); box-shadow: 0 0 0 4px var(--l1-wash); }
 .rail .st a { font: 700 12.5px var(--mono); color: var(--ink); text-decoration: none; }
 .rail .st a:hover { color: var(--mark); }
 .rail .st small { font: 400 11px var(--sans); color: var(--ink-3); margin-top: -4px; }
-.rail .trk { flex: 1; height: 2.5px; background: var(--l1); margin-top: 6px; }
+.rail .trk { flex: 1; height: 2.5px; margin-top: 7px; background: linear-gradient(90deg, var(--l1), var(--l1-deep)); }
 .plot { border: 1px solid var(--line); border-radius: var(--r); padding: 20px; background-color: var(--well); background-image: linear-gradient(var(--grid-faint) 1px, transparent 1px), linear-gradient(90deg, var(--grid-faint) 1px, transparent 1px); background-size: 24px 24px; margin: 14px 0; overflow-x: auto; }
 .plot svg { min-width: 560px; }
 .plot svg a:hover text { fill: var(--mark); }
@@ -667,6 +695,9 @@ a.tag:hover { border-color: var(--mark); color: var(--mark); }
 .board { display: grid; grid-template-columns: repeat(auto-fit, minmax(185px, 1fr)); gap: 22px; margin: 18px 0; }
 .col-h { display: flex; align-items: center; justify-content: space-between; border-top: 2px solid var(--ink); padding: 8px 0 10px; font: 700 11px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--ink); }
 .col-h .n { font: 600 11px var(--mono); color: var(--ink-3); }
+.col-h.now { border-top-color: var(--mark-2); }
+.col-h.now .n { color: var(--mark); }
+.col-h.later { border-top-color: var(--line-2); color: var(--ink-3); }
 .item { border: 1px solid var(--line); border-radius: var(--r); background: var(--paper); padding: 9px 11px; margin-bottom: 8px; font-size: 13px; }
 .item .im { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .item .it { color: var(--ink); font-weight: 600; margin: 4px 0 0; line-height: 1.45; }
@@ -678,11 +709,14 @@ table.spec tr:last-child th, table.spec tr:last-child td { border-bottom: 0; }
 table.data { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 table.data th { text-align: left; font: 700 10px var(--mono); text-transform: uppercase; letter-spacing: .09em; color: var(--ink-3); padding: 8px 12px 8px 0; border-bottom: 1.5px solid var(--ink); }
 table.data td { padding: 9px 12px 9px 0; border-bottom: 1px solid var(--line); color: var(--ink-2); vertical-align: top; }
-table.data tr:hover td { background: var(--well); }
+table.data tr:hover td { background: var(--mark-film); }
+table.data td.rev { font-weight: 700; color: var(--mark); }
 .mono { font-family: var(--mono); font-size: 12.5px; white-space: nowrap; }
 .dim { color: var(--ink-3); }
 .devtag { font: 700 10.5px var(--mono); letter-spacing: .09em; text-transform: uppercase; color: var(--mark); white-space: nowrap; }
 .card { border: 1px solid var(--line-2); border-radius: var(--r); background: var(--paper); margin: 14px 0; }
+.card.l1 { border-top: 2px solid var(--l1); }
+.card.l2 { border-top: 2px solid var(--l2); }
 .card-h { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px 16px; border-bottom: 1px solid var(--line); }
 .card-h .t { font: 700 14.5px var(--mono); letter-spacing: -.02em; color: var(--ink); }
 .card-b { padding: 12px 16px 14px; }
@@ -703,9 +737,9 @@ details.more .md { margin-top: 8px; }
 .md blockquote { margin: 10px 0; padding: 2px 14px; border-left: 3px solid var(--line-2); color: var(--ink-3); }
 .md ul, .md ol { padding-left: 22px; }
 .note { border: 1px solid var(--line); border-left: 3px solid var(--ink); border-radius: var(--r); background: var(--film); padding: 10px 14px; font-size: 13.5px; color: var(--ink-2); margin: 14px 0; }
-.note.dev { border-left-color: var(--mark-2); }
+.note.dev { border-color: var(--mark-edge); border-left-color: var(--mark-2); background: var(--mark-wash); }
 .note .lbl { font: 700 10.5px var(--mono); letter-spacing: .09em; color: var(--ink); text-transform: uppercase; margin-right: 8px; }
-.note.dev .lbl { color: var(--mark); }
+.note.dev .lbl { color: var(--mark-deep); }
 .constraints { list-style: none; margin: 10px 0; padding: 0; }
 .constraints li { border-left: 2px solid var(--ink); padding: 6px 12px; margin: 6px 0; background: var(--film); border-radius: 0 var(--r) var(--r) 0; font-size: 13.5px; color: var(--ink-2); }
 .empty { border: 1.5px dashed var(--line-2); border-radius: var(--r); padding: 18px; text-align: center; color: var(--ink-3); font-size: 13px; }
@@ -782,7 +816,8 @@ def id_tag(ident, here, cls="tag id"):
         return tag(ident or "?", "tag")
     page, anchor = ID_PAGE[m.group(1)]
     href = ("#" + anchor) if page == here else (page + "#" + anchor)
-    return tag(m.group(0), cls, href)
+    layer = PAGE_LAYER.get(page)
+    return tag(m.group(0), "%s %s" % (cls, layer) if layer else cls, href)
 
 
 def status_dot(kind):
@@ -800,6 +835,21 @@ def lane_tag(lane):
     if lane == "full":
         return '<span class="tag lane-full">full</span>'
     return ""
+
+
+def hue_rule(segments):
+    """The 3px strip under the meta row: the hue budget this sheet actually spends,
+    drawn to scale from real counts. segments = [(css var, weight, label)];
+    empty segments drop out so the strip never lies about a zero."""
+    live = [(c, w, lbl) for c, w, lbl in segments if w > 0]
+    if not live:
+        # nothing documented yet: no hue has been spent, so the strip is graphite.
+        # It still terminates the page header, which is all it does on an empty sheet.
+        return '<div class="hue-rule" aria-hidden="true"><i style="--c:var(--line);flex:1"></i></div>'
+    # "noun: n" rather than "n noun" — reads correctly at any count, no plural agreement
+    return ('<div class="hue-rule" role="img" aria-label="%s">%s</div>'
+            % (esc(" · ".join("%s: %d" % (lbl, w) for _c, w, lbl in live)),
+               "".join('<i style="--c:var(--%s);flex:%d"></i>' % (c, w) for c, w, _l in live)))
 
 
 def empty_state(msg):
@@ -900,7 +950,7 @@ def build_current(ctx, docs, data):
             tag("%d product%s" % (len(products), "" if len(products) == 1 else "s")),
             tag("%d component%s" % (len(comps), "" if len(comps) == 1 else "s"))]
     if latest_rev:
-        meta.append(tag("REV " + latest_rev, "tag id"))
+        meta.append(tag("REV " + latest_rev, "tag id l1"))
     arch_sub = "%d components" % len(comps) + (" · rev %s" % latest_rev if latest_rev else "")
     rail = ('<div class="rail">'
             '<div class="st"><span class="c"></span><a href="#products">Products</a><small>%s</small></div>'
@@ -916,10 +966,14 @@ def build_current(ctx, docs, data):
              "<h1>Foundation — current state</h1>",
              '<p class="lede">Products, roadmap, and architecture exactly as documented in '
              "<code>docs/</code>. This sheet is generated — the markdown stays the source of truth.</p>",
-             '<div class="meta-row">%s</div>' % "".join(meta), rail]
+             '<div class="meta-row">%s</div>' % "".join(meta),
+             # a Layer 1 sheet spends one hue — plus redline for every amendment it carries
+             hue_rule([("l1", len(products) + len(comps), "foundation entries"),
+                       ("mark-2", len(amends), "amendments")]),
+             rail]
 
     # --- products
-    parts.append('<h2 id="products"><span class="idx">§1</span>Products '
+    parts.append('<h2 id="products" class="s-l1"><span class="idx">§1</span>Products '
                  '<span class="src tag">docs/01_products/</span></h2>')
     if not products:
         parts.append(empty_state("NO PRODUCTS — add a file to <code>docs/01_products/</code> "
@@ -938,7 +992,7 @@ def build_current(ctx, docs, data):
         details = ('<details class="more"><summary>Full document</summary><div class="md">%s</div></details>'
                    % body_html) if body_html.strip() else ""
         parts.append(
-            '<div class="card" id="p-%s"><div class="card-h"><span class="t">%s</span>%s%s</div>'
+            '<div class="card l1" id="p-%s"><div class="card-h"><span class="t">%s</span>%s%s</div>'
             '<div class="card-b"><table class="spec">%s</table>'
             '<div class="grid2" style="margin-top:12px">'
             '<div><p class="klabel">In scope</p><ul class="scope in">%s</ul></div>'
@@ -947,7 +1001,7 @@ def build_current(ctx, docs, data):
                scope_in or "<li>—</li>", scope_out or "<li>—</li>", details))
 
     # --- roadmap
-    parts.append('<h2 id="roadmap"><span class="idx">§2</span>Roadmap '
+    parts.append('<h2 id="roadmap" class="s-l1"><span class="idx">§2</span>Roadmap '
                  '<span class="src tag">docs/00_roadmap/roadmap.md</span></h2>')
     if not sections:
         parts.append(empty_state("NO ROADMAP — fill in <code>docs/00_roadmap/roadmap.md</code>"))
@@ -979,12 +1033,16 @@ def build_current(ctx, docs, data):
                              % (" muted" if muted else "", head,
                                 ' style="margin-top:0"' if not head else "",
                                 inline_md(text, here) if not (dot or badge or refs) else esc(text), tail))
-            cols.append('<div><div class="col-h">%s <span class="n">%d</span></div>%s</div>'
-                        % (esc(heading), len(bullets), "".join(items) or empty_state("empty")))
+            h_low = heading.lower()
+            col_cls = ("col-h now" if h_low.startswith("now")
+                       else "col-h later" if muted or h_low.startswith("later") else "col-h")
+            cols.append('<div><div class="%s">%s <span class="n">%d</span></div>%s</div>'
+                        % (col_cls, esc(heading), len(bullets),
+                           "".join(items) or empty_state("empty")))
         parts.append('<div class="board">%s</div>' % "".join(cols))
 
     # --- architecture
-    parts.append('<h2 id="architecture"><span class="idx">§3</span>Architecture '
+    parts.append('<h2 id="architecture" class="s-l1"><span class="idx">§3</span>Architecture '
                  '<span class="src tag">docs/02_architecture/architecture.md</span></h2>')
     parts.append('<div class="note"><span class="lbl">Note</span>Amended <b>only</b> through the '
                  'Decision workflow — every revision in the <a href="#a-rev">revision block</a> '
@@ -1032,7 +1090,7 @@ def build_current(ctx, docs, data):
     parts.append('<h3 id="a-stack">Tech stack</h3>')
     stack = as_list(arch_fm.get("tech_stack"))
     if stack:
-        parts.append('<div class="meta-row" style="border-bottom:0;padding-bottom:0;margin-top:8px">%s</div>'
+        parts.append('<div class="meta-row" style="padding-bottom:0;margin-top:8px">%s</div>'
                      % "".join(tag(x) for x in stack))
     else:
         parts.append(empty_state("NO TECH STACK listed yet"))
@@ -1049,7 +1107,7 @@ def build_current(ctx, docs, data):
     if amends:
         rows = []
         for a in reversed(amends):
-            rows.append('<tr><td class="mono" style="font-weight:700">%s</td><td class="mono">%s</td>'
+            rows.append('<tr><td class="mono rev">%s</td><td class="mono">%s</td>'
                         "<td>%s</td><td>%s</td></tr>"
                         % (rev_letter[a["decision"]], esc(a["date"] or "—"),
                            id_tag(a["decision"], here), inline_md(a["summary"] or "—", here)))
@@ -1118,6 +1176,11 @@ def build_changes(ctx, docs, data, audit):
              '<p class="lede">Every change from first Issue to done Backlog item, with its paper trail. '
              "The fast lane is a bypass track; anything touching Architecture takes the full line.</p>",
              '<div class="meta-row">%s</div>' % "".join(meta),
+             # the change sheet's real lane split: full line vs bypass, plus recorded deviations
+             hue_rule([("l2", len(proposals), "full lane"),
+                       ("fastc", sum(1 for b in backlog
+                                     if fm_str(b, "source_ref").startswith("ISSUE-")), "fast lane"),
+                       ("mark-2", audit["deviations_30d"], "deviations / 30d")]),
              '<div class="plot" style="margin:26px 0 14px">%s'
              '<p class="figcap">FIG 1 · the <span style="color:%s;font-weight:700">change line</span> '
              "— station counts are live; the <span style=\"color:%s;font-weight:700\">teal track</span> "
@@ -1125,7 +1188,7 @@ def build_changes(ctx, docs, data, audit):
              % (svg_pipeline([len(issues), len(proposals), len(decisions), len(backlog)]), L2, FAST)]
 
     # --- issues board
-    parts.append('<h2 id="issues"><span class="idx">§1</span>Issues '
+    parts.append('<h2 id="issues" class="s-l2"><span class="idx">§1</span>Issues '
                  '<span class="src tag">docs/20_issues/</span></h2>')
     if not issues:
         parts.append(empty_state("NO ISSUES — every change starts with a file in <code>docs/20_issues/</code>"))
@@ -1155,12 +1218,14 @@ def build_changes(ctx, docs, data, audit):
                                 id_tag(ident, here, "tag id" if st != "archived" else "tag"),
                                 lane_tag(fm_str(d, "lane")),
                                 esc(trim(fm_str(d, "description") or doc_title(d), 90)), tail))
-            cols.append('<div><div class="col-h">%s <span class="n">%d</span></div>%s</div>'
-                        % (st.replace("-", " "), len(members), "".join(items)))
+            col_cls = ("col-h now" if st == "open"
+                       else "col-h later" if st == "archived" else "col-h")
+            cols.append('<div><div class="%s">%s <span class="n">%d</span></div>%s</div>'
+                        % (col_cls, st.replace("-", " "), len(members), "".join(items)))
         parts.append('<div class="board">%s</div>' % "".join(cols))
 
     # --- proposals
-    parts.append('<h2 id="proposals"><span class="idx">§2</span>Proposals '
+    parts.append('<h2 id="proposals" class="s-l2"><span class="idx">§2</span>Proposals '
                  '<span class="src tag">docs/21_proposals/</span></h2>')
     if not proposals:
         parts.append(empty_state("NO PROPOSALS — full-lane Issues get one in <code>docs/21_proposals/</code>"))
@@ -1183,7 +1248,7 @@ def build_changes(ctx, docs, data, audit):
                      '<th style="width:210px">decision</th></tr>%s</table>' % "".join(rows))
 
     # --- decisions
-    parts.append('<h2 id="decisions"><span class="idx">§3</span>Decisions '
+    parts.append('<h2 id="decisions" class="s-l2"><span class="idx">§3</span>Decisions '
                  '<span class="src tag">docs/22_decisions/</span></h2>')
     if not decisions:
         parts.append(empty_state("NO DECISIONS yet — approved Proposals land here"))
@@ -1244,7 +1309,7 @@ def build_changes(ctx, docs, data, audit):
                      + "".join(chains))
 
     # --- backlog board
-    parts.append('<h2 id="backlog"><span class="idx">§4</span>Backlog '
+    parts.append('<h2 id="backlog" class="s-l2"><span class="idx">§4</span>Backlog '
                  '<span class="src tag">docs/23_backlog/</span></h2>')
     if not backlog:
         parts.append(empty_state("NO BACKLOG ITEMS — promoted work lands in <code>docs/23_backlog/</code>"))
@@ -1263,12 +1328,13 @@ def build_changes(ctx, docs, data, audit):
                 items.append('<div class="item"><div class="im">%s%s</div><div class="it">%s</div>%s</div>'
                              % (dot_html(BACKLOG_DOTS[st]), id_tag(fm_str(b, "id"), here),
                                 esc(trim(fm_str(b, "description") or doc_title(b), 90)), tail))
-            cols.append('<div><div class="col-h">%s <span class="n">%d</span></div>%s</div>'
-                        % (col_label, len(members), "".join(items)))
+            col_cls = "col-h now" if st == "in-progress" else "col-h"
+            cols.append('<div><div class="%s">%s <span class="n">%d</span></div>%s</div>'
+                        % (col_cls, col_label, len(members), "".join(items)))
         parts.append('<div class="board">%s</div>' % "".join(cols))
 
     # --- audit
-    parts.append('<h2 id="audit"><span class="idx">§5</span>Audit log '
+    parts.append('<h2 id="audit" class="s-ink"><span class="idx">§5</span>Audit log '
                  '<span class="src tag">docs/92_audit/LOG.md</span></h2>')
     if audit["entries"]:
         if audit["deviations_30d"]:
@@ -1333,7 +1399,7 @@ def build_index(ctx, docs, data, audit, latest_rev, check_result):
 
     hub1_stats = [tag("%d products" % len(products)), tag("%d components" % comps)]
     if latest_rev:
-        hub1_stats.append(tag("REV " + latest_rev, "tag id"))
+        hub1_stats.append(tag("REV " + latest_rev, "tag id l1"))
     hub2_stats = [tag("%d open" % counts["open"]), tag("%d in-progress" % counts["in-progress"]),
                   tag("%d done" % counts["done"])]
     if audit["deviations_30d"]:
@@ -1341,8 +1407,10 @@ def build_index(ctx, docs, data, audit, latest_rev, check_result):
                                                         "" if audit["deviations_30d"] == 1 else "s")))
 
     refrows = []
+    l3_files = 0
     for folder, desc in LAYER3:
         n = len(md_files(docs / folder))
+        l3_files += n
         cls = "refrow is-empty" if n == 0 else "refrow"
         count = "empty" if n == 0 else "%d file%s" % (n, "" if n == 1 else "s")
         refrows.append('<div class="%s"><span class="rf"><a href="%s/">%s/</a></span>'
@@ -1365,13 +1433,14 @@ def build_index(ctx, docs, data, audit, latest_rev, check_result):
         '<p class="lede">Generated map of everything in <code>docs/</code>. The 30-second text version '
         'lives in <a href="README.md">README.md</a>; the markdown files are always the source of truth.</p>'
         '<div class="meta-row">%s</div>'
+        "%s"
         '<div class="plot" style="margin:28px 0 0">%s'
         '<p class="figcap">FIG 1 · the three-layer model — one color per line: '
         '<span style="color:%s;font-weight:700">foundation</span> · '
         '<span style="color:%s;font-weight:700">change</span> · '
         '<span style="color:%s;font-weight:700">fast lane</span> · '
         '<span style="color:%s;font-weight:700">amendment</span>. Every station is a link.</p></div>'
-        '<h2><span class="idx">§1</span>Sheets</h2>'
+        '<h2 class="s-lines"><span class="idx">§1</span>Sheets</h2>'
         '<div class="hubgrid">'
         '<a class="hub" href="current.html"><span class="hk k1">Layer 1 · state</span>'
         '<div class="ht">Foundation — current state</div>'
@@ -1381,13 +1450,18 @@ def build_index(ctx, docs, data, audit, latest_rev, check_result):
         '<div class="ht">Change pipeline</div>'
         '<div class="hd">Issues → Proposals → Decisions → Backlog, with full traceability '
         'and the audit log.</div><div class="hs">%s</div></a></div>'
-        '<h2><span class="idx">§2</span>Reference <span class="dim2">LAYER 3 · EDIT DIRECTLY, '
+        '<h2 class="s-ink"><span class="idx">§2</span>Reference <span class="dim2">LAYER 3 · EDIT DIRECTLY, '
         'NO DECISION NEEDED</span></h2><div class="reflist">%s</div>'
-        '<h2><span class="idx">§3</span>Oversight</h2><div class="reflist">%s</div>'
-        '<div class="note"><span class="lbl">Rule</span><b>Code changes to schema, API contracts, or '
-        "component boundaries need a pre-existing Decision</b> — if there is none, open an Issue "
-        "first. Lane test and trigger table: <code>docs/README.md</code>.</div>"
-        % (esc(ctx["project"]), "".join(meta), svg_system_map(), L1, L2, FAST, MARK,
+        '<h2 class="s-ink"><span class="idx">§3</span>Oversight</h2><div class="reflist">%s</div>'
+        '<div class="note"><span class="lbl">Rule</span><b class="hl">Code changes to schema, API '
+        "contracts, or component boundaries need a pre-existing Decision</b> — if there is none, "
+        "open an Issue first. Lane test and trigger table: <code>docs/README.md</code>.</div>"
+        % (esc(ctx["project"]), "".join(meta),
+           # the whole corpus by layer — how much of docs/ is state, process, reference
+           hue_rule([("l1", len(products) + comps, "Layer 1"),
+                     ("l2", counts["open"] + counts["in-progress"] + counts["done"], "Layer 2"),
+                     ("line-2", l3_files, "Layer 3")]),
+           svg_system_map(), L1, L2, FAST, MARK,
            "".join(hub1_stats), "".join(hub2_stats), "".join(refrows), oversight))
     return page_html(ctx, "%s · docs" % ctx["project"], "Overview", None, content, "OVERVIEW")
 

@@ -13,14 +13,30 @@
   --ink: #16181d;        /* graphite — headings, marks, rails */
   --ink-2: #454e5a;      /* body */
   --ink-3: #7d8794;      /* labels, captions */
+  /* four hue families. each: line · deep (text on wash, gradient end) · edge (borders) · wash (fills) */
   --mark: #c2410c;       /* redline — links, active, live */
   --mark-2: #ea580c;     /* redline chunky (dots, underlines) */
+  --mark-deep: #9a3412;
+  --mark-edge: #f3c3a3;
   --mark-wash: #fdf0e7;
+  --mark-film: #fef7f2;  /* lightest — row hover */
   --l1: #1d4ed8;         /* foundation line + datastore tint */
+  --l1-deep: #1e3a8a;
+  --l1-edge: #b6c8f2;
+  --l1-wash: #eef3ff;
   --l2: #7c3aed;         /* change line + async tint */
+  --l2-deep: #5b21b6;
+  --l2-edge: #cdb8f5;
+  --l2-wash: #f5f0ff;
   --fastc: #0d9488;      /* fast-lane track */
+  --fast-deep: #115e59;
+  --fast-edge: #8fd6ca;
+  --fast-wash: #e6faf5;
   --approve: #15803d;    /* stamp only */
+  --approve-wash: #eaf6ee;
   --reject: #b91c1c;     /* stamp only */
+  --reject-wash: #fdeeee;
+  --hl: rgba(234,88,12,.22); /* highlighter — the redline pen, laid flat */
   --mono: ui-monospace, "SF Mono", Menlo, "Cascadia Mono", Consolas, "Liberation Mono", monospace;
   --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --r: 2px;
@@ -75,7 +91,8 @@ a:hover { color: var(--mark); }
 .toc a { display: block; padding: 4.5px 13px; border-left: 2px solid var(--line);
   font-size: 13px; color: var(--ink-2); text-decoration: none; }
 .toc a:hover { color: var(--ink); border-left-color: var(--line-2); }
-.toc a.on { color: var(--ink); border-left-color: var(--mark-2); font-weight: 600; }
+.toc a.on { color: var(--ink); border-left-color: var(--mark-2); font-weight: 600;
+  background: linear-gradient(90deg, var(--mark-wash), transparent 88%); }
 .toc .sub a { padding-left: 27px; font-size: 12.5px; }
 .content { padding: 42px 0 96px; max-width: 880px; }
 
@@ -86,16 +103,38 @@ a:hover { color: var(--mark); }
 h1 { font: 750 27px/1.25 var(--mono); letter-spacing: -.035em; color: var(--ink); margin: 10px 0 8px; }
 .lede { color: var(--ink-2); font-size: 15.5px; margin: 0 0 8px; max-width: 620px; }
 .meta-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
-  margin: 16px 0 0; padding-bottom: 28px; border-bottom: 1px solid var(--line); }
+  margin: 16px 0 0; padding-bottom: 22px; }
+
+/* ---- the hue budget rule: this system's colour policy, drawn to scale ---- */
+.hue-rule { display: flex; gap: 2px; height: 3px; margin: 0; }
+.hue-rule i { background: var(--c); border-radius: 1.5px; }
+.budget { margin: 20px 0 4px; }
+.budget .bar { display: flex; gap: 2px; height: 11px; }
+.budget .bar i { background: var(--c); border-radius: 1.5px; }
+.budget .keys { display: flex; gap: 2px; margin-top: 7px; }
+.budget .keys i { font: 700 9.5px/1 var(--mono); letter-spacing: .09em; text-transform: uppercase;
+  color: var(--c); font-style: normal; overflow: hidden; white-space: nowrap; }
 
 /* ---- sections ---- */
-h2 { display: flex; align-items: baseline; gap: 12px;
+h2 { position: relative; display: flex; align-items: baseline; gap: 12px;
   font: 700 16.5px/1.3 var(--mono); letter-spacing: -.02em; color: var(--ink);
   margin: 60px 0 8px; padding-top: 22px; border-top: 1px solid var(--line);
-  scroll-margin-top: 74px; }
-h2 .idx { flex: none; font: 700 11px var(--mono); color: var(--ink-3);
-  border: 1px solid var(--line-2); border-radius: var(--r); padding: 2px 7px;
-  background: var(--film); letter-spacing: .04em; }
+  scroll-margin-top: 74px;
+  --sec: var(--ink-3); --sec-wash: var(--film); --sec-edge: var(--line-2); }
+/* colored index tab riding the section rule — the hue the section spends */
+h2::before { content: ""; position: absolute; top: -1.5px; left: 0; width: 54px; height: 3px;
+  border-radius: 1.5px; background: var(--sec); }
+h2.s-l1   { --sec: var(--l1);    --sec-wash: var(--l1-wash);   --sec-edge: var(--l1-edge); }
+h2.s-l2   { --sec: var(--l2);    --sec-wash: var(--l2-wash);   --sec-edge: var(--l2-edge); }
+h2.s-fast { --sec: var(--fastc); --sec-wash: var(--fast-wash); --sec-edge: var(--fast-edge); }
+h2.s-mark { --sec: var(--mark);  --sec-wash: var(--mark-wash); --sec-edge: var(--mark-edge); }
+h2.s-ink::before { background: var(--line-2); }
+h2.s-lines::before { background: linear-gradient(90deg, var(--l1) 0 50%, var(--l2) 50% 100%); }
+h2.s-budget::before { background: linear-gradient(90deg,
+  var(--l1) 0 25%, var(--l2) 25% 50%, var(--fastc) 50% 75%, var(--mark-2) 75% 100%); }
+h2 .idx { flex: none; font: 700 11px var(--mono); color: var(--sec);
+  border: 1px solid var(--sec-edge); border-radius: var(--r); padding: 2px 7px;
+  background: var(--sec-wash); letter-spacing: .04em; }
 h2 .src { margin-left: auto; align-self: center; }
 h3 { font: 700 12px var(--mono); letter-spacing: .09em; text-transform: uppercase;
   color: var(--ink); margin: 30px 0 10px; scroll-margin-top: 74px; }
@@ -107,10 +146,24 @@ p strong, li strong { color: var(--ink); }
   border: 1px solid var(--line-2); border-radius: var(--r); background: var(--paper);
   font: 500 11.5px/1.7 var(--mono); color: var(--ink-2); white-space: nowrap; }
 .tag.id { color: var(--ink); background: var(--film); font-weight: 650; }
-.tag.lane-fast { border: 1.5px dashed var(--fastc); color: var(--fastc); font-weight: 700; letter-spacing: .05em; }
-.tag.lane-full { border: 1.5px solid var(--l2); color: var(--l2); font-weight: 700; letter-spacing: .05em; }
+/* tags are colored by destination: which layer the reference sends you to */
+.tag.l1 { --h: var(--l1); --hd: var(--l1-deep); --he: var(--l1-edge); --hw: var(--l1-wash); }
+.tag.l2 { --h: var(--l2); --hd: var(--l2-deep); --he: var(--l2-edge); --hw: var(--l2-wash); }
+.tag.l1, .tag.l2 { color: var(--hd); border-color: var(--he); }
+.tag.id.l1, .tag.id.l2 { background: var(--hw); padding-left: 11px;
+  box-shadow: inset 3px 0 0 var(--h); }
+.tag.lane-fast { border: 1.5px dashed var(--fastc); background: var(--fast-wash);
+  color: var(--fast-deep); font-weight: 700; letter-spacing: .05em; }
+.tag.lane-full { border: 1.5px solid var(--l2); background: var(--l2-wash);
+  color: var(--l2-deep); font-weight: 700; letter-spacing: .05em; }
 a.tag { text-decoration: none; }
 a.tag:hover { border-color: var(--mark); color: var(--mark); }
+a.tag.id.l1:hover, a.tag.id.l2:hover { box-shadow: inset 3px 0 0 var(--mark); }
+
+/* highlighter — the redline pen laid flat. used on operative rules only */
+.hl { background: linear-gradient(100deg, transparent 0, var(--hl) 4%, var(--hl) 96%, transparent 100%);
+  color: var(--ink); font-weight: 500; padding: 1px 3px; box-decoration-break: clone;
+  -webkit-box-decoration-break: clone; }
 
 /* ---- status geometry: dot family ---- */
 .status { display: inline-flex; align-items: center; gap: 7px;
@@ -129,18 +182,20 @@ a.tag:hover { border-color: var(--mark); color: var(--mark); }
 .stamp { display: inline-block; padding: 2px 9px; border: 1.5px solid currentColor;
   border-radius: var(--r); font: 700 10.5px/1.8 var(--mono); letter-spacing: .1em;
   text-transform: uppercase; }
-.st-approved { color: var(--approve); }
-.st-rejected { color: var(--reject); }
+.st-approved { color: var(--approve); background: var(--approve-wash); }
+.st-rejected { color: var(--reject); background: var(--reject-wash); }
 
 /* ---- rails & stations (hero) ---- */
 .rail { display: flex; align-items: flex-start; margin: 30px 0 4px; }
 .rail .st { flex: none; display: flex; flex-direction: column; align-items: center;
   gap: 9px; min-width: 116px; text-align: center; }
-.rail .st .c { width: 16px; height: 16px; border-radius: 50%; background: var(--l1); }
+.rail .st .c { width: 16px; height: 16px; border-radius: 50%; background: var(--l1);
+  box-shadow: 0 0 0 4px var(--l1-wash); }
 .rail .st a { font: 700 12.5px var(--mono); color: var(--ink); text-decoration: none; }
 .rail .st a:hover { color: var(--mark); }
 .rail .st small { font: 400 11px var(--sans); color: var(--ink-3); margin-top: -4px; }
-.rail .trk { flex: 1; height: 2.5px; background: var(--l1); margin-top: 7px; }
+.rail .trk { flex: 1; height: 2.5px; margin-top: 7px;
+  background: linear-gradient(90deg, var(--l1), var(--l1-deep)); }
 
 /* ---- plot wells (diagram paper) ---- */
 .plot { border: 1px solid var(--line); border-radius: var(--r); padding: 20px;
@@ -163,6 +218,10 @@ a.tag:hover { border-color: var(--mark); color: var(--mark); }
   border-top: 2px solid var(--ink); padding: 8px 0 10px;
   font: 700 11px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--ink); }
 .col-h .n { font: 600 11px var(--mono); color: var(--ink-3); }
+/* column rule intensity = temporal proximity: live now / committed / shelved */
+.col-h.now   { border-top-color: var(--mark-2); }
+.col-h.now .n { color: var(--mark); }
+.col-h.later { border-top-color: var(--line-2); color: var(--ink-3); }
 .item { border: 1px solid var(--line); border-radius: var(--r); background: var(--paper);
   padding: 9px 11px; margin-bottom: 8px; font-size: 13px; }
 .item .im { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
@@ -182,12 +241,15 @@ table.data th { text-align: left; font: 700 10px var(--mono); text-transform: up
   border-bottom: 1.5px solid var(--ink); }
 table.data td { padding: 9px 12px 9px 0; border-bottom: 1px solid var(--line);
   color: var(--ink-2); vertical-align: top; }
-table.data tr:hover td { background: var(--well); }
+table.data tr:hover td { background: var(--mark-film); }
+table.data td.rev { font-weight: 700; color: var(--mark); }
 .mono { font-family: var(--mono); font-size: 12.5px; white-space: nowrap; }
 .dim { color: var(--ink-3); }
 
 /* ---- cards ---- */
 .card { border: 1px solid var(--line-2); border-radius: var(--r); background: var(--paper); margin: 14px 0; }
+.card.l1 { border-top: 2px solid var(--l1); }
+.card.l2 { border-top: 2px solid var(--l2); }
 .card-h { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   padding: 12px 16px; border-bottom: 1px solid var(--line); }
 .card-h .t { font: 700 14.5px var(--mono); letter-spacing: -.02em; color: var(--ink); }
@@ -207,10 +269,11 @@ details.more[open] summary::before { content: "− "; }
 .note { border: 1px solid var(--line); border-left: 3px solid var(--ink);
   border-radius: var(--r); background: var(--film); padding: 10px 14px;
   font-size: 13.5px; color: var(--ink-2); margin: 14px 0; }
-.note.dev { border-left-color: var(--mark-2); }
+.note.dev { border-color: var(--mark-edge); border-left-color: var(--mark-2);
+  background: var(--mark-wash); }
 .note .lbl { font: 700 10.5px var(--mono); letter-spacing: .09em; color: var(--ink);
   text-transform: uppercase; margin-right: 8px; }
-.note.dev .lbl { color: var(--mark); }
+.note.dev .lbl { color: var(--mark-deep); }
 .constraints { list-style: none; margin: 10px 0; padding: 0; }
 .constraints li { border-left: 2px solid var(--ink); padding: 6px 12px; margin: 6px 0;
   background: var(--film); border-radius: 0 var(--r) var(--r) 0;
@@ -240,8 +303,26 @@ code, .md code { font: 12.5px var(--mono); background: var(--film);
   .grid2 { grid-template-columns: 1fr; }
   .rail .st { min-width: 84px; }
 }
+@media (max-width: 720px) {
+  /* the budget bar keeps its proportions; its keys become a plain legend */
+  .budget .keys { flex-wrap: wrap; gap: 6px 14px; }
+  .budget .keys i { flex: none !important; overflow: visible; }
+}
 
 /* ============ styles used only by this design-system document ============ */
+/* hue families as 4-step ramps: line · deep · edge · wash */
+.ramp { display: grid; gap: 8px; margin: 14px 0; }
+.ramp .row { display: flex; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+.ramp .nm { flex: none; width: 148px; padding: 9px 12px; border-right: 1px solid var(--line);
+  font: 700 11.5px var(--mono); color: var(--h); }
+.ramp .nm small { display: block; margin-top: 2px;
+  font: 400 10.5px/1.35 var(--sans); color: var(--ink-3); }
+.ramp .s { flex: 1; min-width: 0; padding: 9px 10px; font: 600 10px var(--mono); letter-spacing: .02em; }
+.ramp .s b { display: block; font-weight: 700; letter-spacing: .1em;
+  text-transform: uppercase; font-size: 9px; margin-bottom: 3px; }
+.steps { display: flex; gap: 18px; flex-wrap: wrap; margin: 10px 0 0;
+  font: 11px var(--mono); color: var(--ink-3); }
+.steps b { color: var(--ink); font-weight: 700; }
 .swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin: 14px 0; }
 .sw { border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
 .sw .c { height: 44px; }
@@ -261,11 +342,21 @@ ol.principles li { counter-increment: p; position: relative; padding: 11px 0 11p
 ol.principles li::before { content: counter(p, decimal-leading-zero); position: absolute; left: 0; top: 13px;
   font: 700 12px var(--mono); color: var(--mark); }
 ol.principles b { color: var(--ink); }
+
+/* must stay last: overrides the .ramp rules declared above */
+@media (max-width: 720px) {
+  /* the ramp folds — family name over its four steps, chips still one row */
+  .ramp .row { flex-wrap: wrap; }
+  .ramp .nm { width: 100%; border-right: 0; border-bottom: 1px solid var(--line); }
+  .ramp .s { flex: 1 1 25%; }
+  .type-row { flex-wrap: wrap; gap: 4px 18px; }
+  .type-row .spec-l { width: 100%; }
+}
 </style>
 
 <nav class="topnav"><div class="topnav-in">
   <span class="brand">docs-kit <span class="dim">/ render design system</span></span>
-  <span class="nav-meta">v2 · change-control print · for review</span>
+  <span class="nav-meta">v3 · change-control print · for review</span>
 </div></nav>
 
 <div class="page">
@@ -297,27 +388,40 @@ ol.principles b { color: var(--ink); }
   <p class="kicker">docs-kit render</p>
   <h1>Change-control print</h1>
   <p class="lede">docs-kit is change control for documentation — so its pages borrow the visual
-  language of engineering drawings: cool paper, graphite ink, one redline marking color,
-  stamped verdicts, and a title block on every sheet.</p>
+  language of engineering drawings: cool paper, graphite ink, stamped verdicts, and a title block
+  on every sheet. <span class="hl">Colour is never decoration here — every hue names a layer,
+  a lane, or a live state</span>, and the bar below is that policy drawn to scale.</p>
   <div class="meta-row">
     <span class="tag">audience: developers</span>
     <span class="tag">light theme only</span>
     <span class="tag">zero JS · zero network</span>
     <span class="tag">single-file pages</span>
   </div>
+  <div class="hue-rule" aria-hidden="true">
+    <i style="--c:var(--ink);flex:62"></i>
+    <i style="--c:var(--l1);flex:12"></i>
+    <i style="--c:var(--l2);flex:12"></i>
+    <i style="--c:var(--fastc);flex:6"></i>
+    <i style="--c:var(--mark-2);flex:8"></i>
+  </div>
 
-  <h2 id="direction"><span class="idx">§1</span>Direction</h2>
+  <h2 id="direction" class="s-ink"><span class="idx">§1</span>Direction</h2>
   <ol class="principles">
     <li><b>One metaphor, carried through.</b> Every visual device is borrowed from drawing
       control: the amendment table is a <i>revision block</i>, the footer is a <i>title block</i>,
       decisions are <i>stamped</i>, diagrams sit on faint <i>grid paper</i>, and the pipeline is
       drawn as a <i>line with stations</i>. Nothing is decorated for its own sake.</li>
-    <li><b>Hue is budgeted on the page, spent in the diagrams.</b> Page chrome keeps a single
-      accent — redline orange, the color of marked-up changes — for what is <i>live or
-      interactive</i>. The diagrams own the rest of the palette, transit-map style: every line has
-      its color (foundation blue, change violet, fast-lane teal), node kinds carry tints and icons,
-      and verdict greens/reds exist only inside stamps. Completion is still geometry (hollow /
-      half / filled dots) — color adds a second channel, never the only one.</li>
+    <li><b>Hue is budgeted, and the budget is a rule you can see.</b> Four families, no more:
+      foundation blue, change violet, fast-lane teal, redline orange — plus verdict green/red,
+      which live inside stamps and nowhere else. <span class="hl">Roughly two thirds of every
+      sheet stays graphite on paper</span>; §2 draws that ratio to scale. Colour never carries
+      meaning alone: completion is still geometry (hollow / half / filled dots), lanes are still
+      pattern-coded, and hue is the second channel on top.</li>
+    <li><b>The map's colors travel with the references.</b> A hue is not decoration attached to a
+      component — it names a <i>layer</i>. So the tracks' colors leave the diagram and follow
+      every id, path, and card that points into that layer: blue sends you up to the stable
+      Foundation, violet sends you across to the Change pipeline, orange means live right now.
+      Scanning a page of tags tells you where the work will take you before you read a word.</li>
     <li><b>Type is inverted.</b> Headings, ids, and labels are monospace — the ids <i>are</i> the
       protagonists of this system. Body prose is a quiet system sans. This is the opposite of the
       default docs look (sans display, mono details), and it is deliberate.</li>
@@ -330,34 +434,114 @@ ol.principles b { color: var(--ink); }
       redline. No template produces this; it is the model's own topology.</li>
   </ol>
 
-  <h2 id="palette"><span class="idx">§2</span>Palette &amp; hue budget</h2>
+  <h2 id="palette" class="s-budget"><span class="idx">§2</span>Palette &amp; hue budget</h2>
+  <p>The budget is not a guideline, it is a ratio — and this is it, drawn to scale. Graphite and
+  paper carry the sheet; the four hue families are the minority that has to earn its place.</p>
+  <div class="budget">
+    <div class="bar" aria-hidden="true">
+      <i style="--c:var(--ink);flex:62"></i>
+      <i style="--c:var(--l1);flex:12"></i>
+      <i style="--c:var(--l2);flex:12"></i>
+      <i style="--c:var(--fastc);flex:6"></i>
+      <i style="--c:var(--mark-2);flex:8"></i>
+    </div>
+    <div class="keys">
+      <i style="--c:var(--ink-3);flex:62">graphite &amp; paper</i>
+      <i style="--c:var(--l1);flex:12">L1</i>
+      <i style="--c:var(--l2);flex:12">L2</i>
+      <i style="--c:var(--fastc);flex:6">fast</i>
+      <i style="--c:var(--mark);flex:8">live</i>
+    </div>
+  </div>
+
+  <h3>The four hue families</h3>
+  <p>Every family ships four steps so a hue can appear as a stroke, as text, as a border, and as a
+  fill without ever being eyeballed. No hue exists outside these rows.</p>
+  <div class="ramp">
+    <div class="row" style="--h:var(--l1-deep)">
+      <div class="nm">foundation<small>Layer 1 · products, roadmap, architecture, datastores</small></div>
+      <div class="s" style="background:#1d4ed8;color:#fff"><b>line</b>#1d4ed8</div>
+      <div class="s" style="background:#1e3a8a;color:#fff"><b>deep</b>#1e3a8a</div>
+      <div class="s" style="background:#b6c8f2;color:#1e3a8a"><b>edge</b>#b6c8f2</div>
+      <div class="s" style="background:#eef3ff;color:#1e3a8a"><b>wash</b>#eef3ff</div>
+    </div>
+    <div class="row" style="--h:var(--l2-deep)">
+      <div class="nm">change<small>Layer 2 · issue → proposal → decision → backlog, async</small></div>
+      <div class="s" style="background:#7c3aed;color:#fff"><b>line</b>#7c3aed</div>
+      <div class="s" style="background:#5b21b6;color:#fff"><b>deep</b>#5b21b6</div>
+      <div class="s" style="background:#cdb8f5;color:#5b21b6"><b>edge</b>#cdb8f5</div>
+      <div class="s" style="background:#f5f0ff;color:#5b21b6"><b>wash</b>#f5f0ff</div>
+    </div>
+    <div class="row" style="--h:var(--fast-deep)">
+      <div class="nm">fast lane<small>the bypass track and the async hop — always dashed too</small></div>
+      <div class="s" style="background:#0d9488;color:#16181d"><b>line</b>#0d9488</div>
+      <div class="s" style="background:#115e59;color:#fff"><b>deep</b>#115e59</div>
+      <div class="s" style="background:#8fd6ca;color:#115e59"><b>edge</b>#8fd6ca</div>
+      <div class="s" style="background:#e6faf5;color:#115e59"><b>wash</b>#e6faf5</div>
+    </div>
+    <div class="row" style="--h:var(--mark-deep)">
+      <div class="nm">redline<small>live, interactive, amending — the reviewer's pen</small></div>
+      <div class="s" style="background:#c2410c;color:#fff"><b>line</b>#c2410c</div>
+      <div class="s" style="background:#9a3412;color:#fff"><b>deep</b>#9a3412</div>
+      <div class="s" style="background:#f3c3a3;color:#9a3412"><b>edge</b>#f3c3a3</div>
+      <div class="s" style="background:#fdf0e7;color:#9a3412"><b>wash</b>#fdf0e7</div>
+    </div>
+  </div>
+  <p class="steps"><span><b>line</b> strokes, tracks, dots</span><span><b>deep</b> text on a wash</span>
+    <span><b>edge</b> borders, hairlines</span><span><b>wash</b> fills, halos, row states</span></p>
+
+  <h3>Graphite &amp; paper — the other two thirds</h3>
   <div class="swatches">
     <div class="sw"><div class="c" style="background:#ffffff;border-bottom:1px solid var(--line)"></div><div class="l"><b>paper</b>#ffffff · page</div></div>
     <div class="sw"><div class="c" style="background:#f4f6f8"></div><div class="l"><b>film</b>#f4f6f8 · panels</div></div>
     <div class="sw"><div class="c" style="background:#fbfcfd;background-image:linear-gradient(#e9eef3 1px,transparent 1px),linear-gradient(90deg,#e9eef3 1px,transparent 1px);background-size:12px 12px"></div><div class="l"><b>well + grid</b>#fbfcfd / #e9eef3</div></div>
     <div class="sw"><div class="c" style="background:#e2e8ee"></div><div class="l"><b>line</b>#e2e8ee · hairlines</div></div>
+    <div class="sw"><div class="c" style="background:#c8d2dc"></div><div class="l"><b>line-2</b>#c8d2dc · strong rules</div></div>
     <div class="sw"><div class="c" style="background:#16181d"></div><div class="l"><b>ink</b>#16181d · graphite</div></div>
     <div class="sw"><div class="c" style="background:#454e5a"></div><div class="l"><b>ink-2</b>#454e5a · body</div></div>
     <div class="sw"><div class="c" style="background:#7d8794"></div><div class="l"><b>ink-3</b>#7d8794 · labels</div></div>
-    <div class="sw"><div class="c" style="background:#c2410c"></div><div class="l"><b>redline</b>#c2410c · links, live</div></div>
-    <div class="sw"><div class="c" style="background:#ea580c"></div><div class="l"><b>redline-2</b>#ea580c · dots, rules</div></div>
-    <div class="sw"><div class="c" style="background:#15803d"></div><div class="l"><b>approve</b>#15803d · stamp only</div></div>
-    <div class="sw"><div class="c" style="background:#b91c1c"></div><div class="l"><b>reject</b>#b91c1c · stamp only</div></div>
   </div>
-  <h3>Lines &amp; tints — diagram palette</h3>
-  <div class="swatches">
-    <div class="sw"><div class="c" style="background:#1d4ed8"></div><div class="l"><b>foundation</b>#1d4ed8 · L1 line, datastores</div></div>
-    <div class="sw"><div class="c" style="background:#7c3aed"></div><div class="l"><b>change</b>#7c3aed · L2 line, full lane, async</div></div>
-    <div class="sw"><div class="c" style="background:#0d9488"></div><div class="l"><b>fast</b>#0d9488 · fast-lane track</div></div>
-    <div class="sw"><div class="c" style="background:#e8f0fe"></div><div class="l"><b>tint-db</b>#e8f0fe · datastore fill</div></div>
-    <div class="sw"><div class="c" style="background:#f1ecfe"></div><div class="l"><b>tint-async</b>#f1ecfe · worker/queue fill</div></div>
-  </div>
-  <p class="rule-p"><b>The budget:</b> orange = interactive or happening right now; green/red =
-  stamped verdicts; blue/violet/teal belong to the lines, lanes, and node kinds inside diagrams.
-  Text and tables stay ink on paper — the drawing is the colorful thing, exactly like a real
-  engineering sheet.</p>
 
-  <h2 id="type"><span class="idx">§3</span>Typography</h2>
+  <h3>Where the color goes</h3>
+  <p>One rule generates almost all of it: <span class="hl">a tag is colored by its
+  destination</span>. Nothing is tinted for emphasis; a reader can scan a page of references and
+  see which layer each one leads to before reading a single label.</p>
+  <div class="demo">
+    <p class="demo-label">Foundation-layer references — blue</p>
+    <div class="rowwrap" style="margin-bottom:16px">
+      <span class="tag l1">docs/01_products/</span>
+      <span class="tag l1">docs/02_architecture/</span>
+      <span class="tag l1">payment-adapter</span>
+      <span class="tag l1">orderhub-api.md</span>
+    </div>
+    <p class="demo-label">Change-layer references — violet</p>
+    <div class="rowwrap" style="margin-bottom:16px">
+      <span class="tag id l2">DECISION-002</span>
+      <span class="tag id l2">ISSUE-004</span>
+      <span class="tag id l2">BACKLOG-005</span>
+      <span class="tag l2">docs/03_changes/</span>
+    </div>
+    <p class="demo-label">Neither layer — plain ink</p>
+    <div class="rowwrap" style="margin-bottom:16px">
+      <span class="tag">main @ 3f2c9a1</span>
+      <span class="tag">2026-07-30 14:45</span>
+      <span class="tag">docs-kit render v0.2.0</span>
+    </div>
+    <p class="demo-label">Verdict inks — stamps only, never anywhere else</p>
+    <div class="rowwrap">
+      <span class="stamp st-approved">approved</span>
+      <span class="stamp st-rejected">rejected</span>
+      <span style="font:11.5px var(--sans);color:var(--ink-3)">#15803d / #b91c1c — outside a stamp
+        these two hues do not exist in the system</span>
+    </div>
+  </div>
+  <p class="rule-p"><b>The budget, in words:</b> orange = interactive or happening right now ·
+  blue = Layer 1 · violet = Layer 2 · teal = the bypass · green/red = a stamped verdict. An id
+  carries a 3px bar of its layer along its left edge, paths and component refs stay outlined in
+  the same hue, and anything with no layer — a git rev, a timestamp, a tool version — stays
+  graphite. Prose, tables, and body copy never take a hue at all.</p>
+
+  <h2 id="type" class="s-ink"><span class="idx">§3</span>Typography</h2>
   <p>Two roles, deliberately inverted. Display and labels: the system <b>mono</b> stack
   (SF Mono / Cascadia / Consolas — zero network, present everywhere). Body: the system sans.
   Numerals in tables are tabular by nature of the mono face.</p>
@@ -373,7 +557,7 @@ ol.principles b { color: var(--ink); }
   column headers — is mono. Prose links are ink with a 1.5px redline underline; chrome links
   (nav, TOC, tags) carry no underline.</p>
 
-  <h2 id="geometry"><span class="idx">§4</span>Status geometry</h2>
+  <h2 id="geometry" class="s-mark"><span class="idx">§4</span>Status geometry</h2>
   <p>Statuses are drawn, not painted. One dot family covers both Backlog and Issues —
   readable in grayscale, unambiguous to color-blind readers, and calmer than colored pills:</p>
   <div class="demo">
@@ -412,21 +596,23 @@ ol.principles b { color: var(--ink); }
   filled = finished · dashed = tentative · ring = handed on · gray = shelved. The same grammar
   the map uses for its tracks.</p>
 
-  <h2 id="primitives"><span class="idx">§5</span>Primitives</h2>
+  <h2 id="primitives" class="s-l1"><span class="idx">§5</span>Primitives</h2>
 
   <h3 id="p-tags">Tags &amp; stamps</h3>
   <div class="demo">
     <div class="rowwrap">
-      <span class="tag id">DECISION-002</span>
-      <span class="tag id">ISSUE-004</span>
-      <span class="tag">→ PROPOSAL-002</span>
-      <span class="tag">docs/02_architecture/</span>
+      <span class="tag id l2">DECISION-002</span>
+      <span class="tag id l2">ISSUE-004</span>
+      <span class="tag l2">→ PROPOSAL-002</span>
+      <span class="tag l1">docs/02_architecture/</span>
       <span class="tag">main @ 3f2c9a1</span>
       <span class="stamp st-approved">approved</span>
     </div>
   </div>
-  <p class="rule-p">Tags are rectangular print labels (2px radius, never pill-shaped): ids sit on
-  film with heavier weight; plain refs and paths stay outlined. Hover of a linked tag redlines it.</p>
+  <p class="rule-p">Tags are rectangular print labels (2px radius, never pill-shaped). An id sits
+  on its layer's wash behind a 3px bar of the layer's line color; refs and paths stay outlined in
+  the same hue; layerless facts stay graphite. Hover of a linked tag redlines it — bar included,
+  because hover <i>is</i> the live state.</p>
 
   <h3 id="p-rail">Rails &amp; stations — the hero of every sheet</h3>
   <div class="demo" style="padding-bottom:24px">
@@ -457,13 +643,13 @@ ol.principles b { color: var(--ink); }
     <figcaption>FIG · order placement — solid nodes are ours, dashed nodes are external</figcaption>
   </div>
 
-  <h2 id="map"><span class="idx">§6</span>The system map</h2>
+  <h2 id="map" class="s-lines"><span class="idx">§6</span>The system map</h2>
   <p>The master diagram — the whole model as two lines. Foundation runs along the top;
   the Change line runs beneath it; the fast lane is a dashed bypass track around
   Proposal → Decision; and the only edge allowed to touch Layer 1 — a Decision amending
   Architecture — is drawn in redline. The index page opens with this exact figure:</p>
   <div class="plot">
-    <svg viewBox="0 0 880 268" width="100%" role="img" aria-label="docs system map: blue foundation line, violet change line, teal fast-lane bypass, orange amendment edge"><defs><marker id="map-ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M1 1.5 8 5 1 8.5" fill="none" stroke="#c2410c" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></marker><symbol id="i-pkg" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="3" width="11" height="10" rx="1"/><path d="M2.5 6.2h11M8 6.2V13"/></g></symbol><symbol id="i-flag" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 13.5V2.5"/><path d="M4.5 3h7.5l-1.8 2.4L12 7.8H4.5"/></g></symbol><symbol id="i-layers" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="2.5" width="10" height="4.2" rx="1"/><rect x="3" y="9.3" width="10" height="4.2" rx="1"/></g></symbol><symbol id="i-issue" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5.5"/><path d="M8 5.2v3.4"/><path d="M8 10.9v.1"/></g></symbol><symbol id="i-doc" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 2.5H10l2.5 2.5v8.5h-8z"/><path d="M10 2.5V5h2.5"/><path d="M6.5 8.5h3.5M6.5 10.8h3.5"/></g></symbol><symbol id="i-seal" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5.5"/><path d="M5.6 8.1l1.7 1.7 3.1-3.4"/></g></symbol><symbol id="i-list" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 4.2h.01M6.5 4.2H13M3.5 8h.01M6.5 8H13M3.5 11.8h.01M6.5 11.8H13"/></g></symbol></defs><text x="30" y="62" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10" font-weight="700" fill="#1d4ed8" letter-spacing="1.5">L1</text><text x="30" y="196" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10" font-weight="700" fill="#7c3aed" letter-spacing="1.5">L2</text><line x1="140" y1="58" x2="760" y2="58" stroke="#1d4ed8" stroke-width="2.5"/><line x1="140" y1="192" x2="760" y2="192" stroke="#7c3aed" stroke-width="2.5"/><path d="M140 205 C 210 246, 690 246, 760 205" fill="none" stroke="#0d9488" stroke-width="2" stroke-dasharray="6 5" class="dashrun"/><path d="M560 176 C 600 126, 664 96, 742 74" fill="none" stroke="#c2410c" stroke-width="1.7" stroke-dasharray="5 4" class="dashrun" marker-end="url(#map-ah)"/><text x="650" y="116" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="9.5" font-weight="700" fill="#c2410c" letter-spacing="1.2">AMENDS</text><text x="450" y="262" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="9.5" font-weight="400" fill="#0d9488" text-anchor="middle" letter-spacing="1.2">FAST LANE · NO ARCHITECTURE CHANGE &amp; REVERT &lt; 1 DAY</text><a href="current.html#products"><circle cx="140" cy="58" r="13" fill="#1d4ed8"/><use href="#i-pkg" x="133" y="51" width="14" height="14" color="#ffffff"/><text x="140" y="34" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="700" fill="#16181d" text-anchor="middle">Products</text></a><a href="current.html#roadmap"><circle cx="450" cy="58" r="13" fill="#1d4ed8"/><use href="#i-flag" x="443" y="51" width="14" height="14" color="#ffffff"/><text x="450" y="34" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="700" fill="#16181d" text-anchor="middle">Roadmap</text></a><a href="current.html#architecture"><circle cx="760" cy="58" r="13" fill="#1d4ed8"/><use href="#i-layers" x="753" y="51" width="14" height="14" color="#ffffff"/><text x="760" y="34" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="700" fill="#16181d" text-anchor="middle">Architecture</text></a><a href="changes.html#issues"><circle cx="140" cy="192" r="13" fill="#7c3aed"/><use href="#i-issue" x="133" y="185" width="14" height="14" color="#ffffff"/><text x="140" y="168" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="700" fill="#16181d" text-anchor="middle">Issue</text></a><a href="changes.html#proposals"><circle cx="345" cy="192" r="13" fill="#7c3aed"/><use href="#i-doc" x="338" y="185" width="14" height="14" color="#ffffff"/><text x="345" y="168" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="700" fill="#16181d" text-anchor="middle">Proposal</text></a><a href="changes.html#decisions"><circle cx="550" cy="192" r="13" fill="#7c3aed"/><use href="#i-seal" x="543" y="185" width="14" height="14" color="#ffffff"/><text x="550" y="168" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="700" fill="#16181d" text-anchor="middle">Decision</text></a><a href="changes.html#backlog"><circle cx="760" cy="192" r="13" fill="#7c3aed"/><use href="#i-list" x="753" y="185" width="14" height="14" color="#ffffff"/><text x="760" y="168" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="700" fill="#16181d" text-anchor="middle">Backlog</text></a></svg>
+    <svg viewBox="0 0 880 268" width="100%" role="img" aria-label="docs system map: blue foundation line, violet change line, teal fast-lane bypass, orange amendment edge"><defs><linearGradient id="g-l1" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#3b6fe0"/><stop offset="1" stop-color="#1e3a8a"/></linearGradient><linearGradient id="g-l2" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#9260f0"/><stop offset="1" stop-color="#5b21b6"/></linearGradient><linearGradient id="g-fast" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#14b8a6"/><stop offset="1" stop-color="#115e59"/></linearGradient><marker id="map-ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M1 1.5 8 5 1 8.5" fill="none" stroke="#c2410c" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></marker><symbol id="i-pkg" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="3" width="11" height="10" rx="1"/><path d="M2.5 6.2h11M8 6.2V13"/></g></symbol><symbol id="i-flag" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 13.5V2.5"/><path d="M4.5 3h7.5l-1.8 2.4L12 7.8H4.5"/></g></symbol><symbol id="i-layers" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="2.5" width="10" height="4.2" rx="1"/><rect x="3" y="9.3" width="10" height="4.2" rx="1"/></g></symbol><symbol id="i-issue" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5.5"/><path d="M8 5.2v3.4"/><path d="M8 10.9v.1"/></g></symbol><symbol id="i-doc" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 2.5H10l2.5 2.5v8.5h-8z"/><path d="M10 2.5V5h2.5"/><path d="M6.5 8.5h3.5M6.5 10.8h3.5"/></g></symbol><symbol id="i-seal" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5.5"/><path d="M5.6 8.1l1.7 1.7 3.1-3.4"/></g></symbol><symbol id="i-list" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 4.2h.01M6.5 4.2H13M3.5 8h.01M6.5 8H13M3.5 11.8h.01M6.5 11.8H13"/></g></symbol></defs><text x="30" y="62" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10" font-weight="700" fill="#1d4ed8" letter-spacing="1.5">L1</text><text x="30" y="196" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="10" font-weight="700" fill="#7c3aed" letter-spacing="1.5">L2</text><line x1="140" y1="58" x2="760" y2="58" stroke="url(#g-l1)" stroke-width="2.5"/><line x1="140" y1="192" x2="760" y2="192" stroke="url(#g-l2)" stroke-width="2.5"/><path d="M140 205 C 210 246, 690 246, 760 205" fill="none" stroke="url(#g-fast)" stroke-width="2" stroke-dasharray="6 5" class="dashrun"/><path d="M560 176 C 600 126, 664 96, 742 74" fill="none" stroke="#c2410c" stroke-width="1.7" stroke-dasharray="5 4" class="dashrun" marker-end="url(#map-ah)"/><text x="650" y="116" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="9.5" font-weight="700" fill="#c2410c" letter-spacing="1.2">AMENDS</text><text x="450" y="262" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="9.5" font-weight="400" fill="#0d9488" text-anchor="middle" letter-spacing="1.2">FAST LANE · NO ARCHITECTURE CHANGE &amp; REVERT &lt; 1 DAY</text><a href="current.html#products"><circle cx="140" cy="58" r="17" fill="#eef3ff"/><circle cx="140" cy="58" r="13" fill="#1d4ed8"/><use href="#i-pkg" x="133" y="51" width="14" height="14" color="#ffffff"/><text x="140" y="34" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="700" fill="#16181d" text-anchor="middle">Products</text></a><a href="current.html#roadmap"><circle cx="450" cy="58" r="17" fill="#eef3ff"/><circle cx="450" cy="58" r="13" fill="#1d4ed8"/><use href="#i-flag" x="443" y="51" width="14" height="14" color="#ffffff"/><text x="450" y="34" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="700" fill="#16181d" text-anchor="middle">Roadmap</text></a><a href="current.html#architecture"><circle cx="760" cy="58" r="17" fill="#eef3ff"/><circle cx="760" cy="58" r="13" fill="#1d4ed8"/><use href="#i-layers" x="753" y="51" width="14" height="14" color="#ffffff"/><text x="760" y="34" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="700" fill="#16181d" text-anchor="middle">Architecture</text></a><a href="changes.html#issues"><circle cx="140" cy="192" r="17" fill="#f5f0ff"/><circle cx="140" cy="192" r="13" fill="#7c3aed"/><use href="#i-issue" x="133" y="185" width="14" height="14" color="#ffffff"/><text x="140" y="168" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="700" fill="#16181d" text-anchor="middle">Issue</text></a><a href="changes.html#proposals"><circle cx="345" cy="192" r="17" fill="#f5f0ff"/><circle cx="345" cy="192" r="13" fill="#7c3aed"/><use href="#i-doc" x="338" y="185" width="14" height="14" color="#ffffff"/><text x="345" y="168" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="700" fill="#16181d" text-anchor="middle">Proposal</text></a><a href="changes.html#decisions"><circle cx="550" cy="192" r="17" fill="#f5f0ff"/><circle cx="550" cy="192" r="13" fill="#7c3aed"/><use href="#i-seal" x="543" y="185" width="14" height="14" color="#ffffff"/><text x="550" y="168" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="700" fill="#16181d" text-anchor="middle">Decision</text></a><a href="changes.html#backlog"><circle cx="760" cy="192" r="17" fill="#f5f0ff"/><circle cx="760" cy="192" r="13" fill="#7c3aed"/><use href="#i-list" x="753" y="185" width="14" height="14" color="#ffffff"/><text x="760" y="168" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="700" fill="#16181d" text-anchor="middle">Backlog</text></a></svg>
     <figcaption>FIG 1 · the three-layer model as a transit map — one color per line: <span style="color:#1d4ed8;font-weight:700">foundation</span> · <span style="color:#7c3aed;font-weight:700">change</span> · <span style="color:#0d9488;font-weight:700">fast lane</span> · <span style="color:#c2410c;font-weight:700">amendment</span></figcaption>
   </div>
   <p class="rule-p"><b>Diagram rules:</b> 2–2.5px tracks, each line owns its color · metro-style
@@ -479,7 +665,7 @@ ol.principles b { color: var(--ink); }
   fully deterministic, no layout engine), edges are drawn with the same ink strokes and chevrons.
   Fan-out, fan-in, and async hops all read at a glance:</p>
   <div class="plot">
-    <svg viewBox="0 0 1013 162" width="100%" role="img" aria-label="data flow graph"><defs><marker id="dag-a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M1 1.5 8 5 1 8.5" fill="none" stroke="#16181d" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></marker><marker id="dag-t" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M1 1.5 8 5 1 8.5" fill="none" stroke="#0d9488" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></marker><symbol id="i-bolt" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2.5 4.8 9h2.7L6.3 13.5 10.9 7H8.2z"/></g></symbol><symbol id="i-db" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="8" cy="4.2" rx="5" ry="1.9"/><path d="M3 4.2v7.6c0 1 2.2 1.9 5 1.9s5-.9 5-1.9V4.2"/></g></symbol><symbol id="i-globe" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5.5"/><path d="M2.5 8h11"/><path d="M8 2.5c1.9 1.6 1.9 9.4 0 11-1.9-1.6-1.9-9.4 0-11z"/></g></symbol><symbol id="i-svc" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2.8" y="2.8" width="10.4" height="10.4" rx="1.5"/><rect x="6" y="6" width="4" height="4"/></g></symbol><symbol id="i-ui" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="3" width="11" height="9" rx="1"/><path d="M2.5 5.8h11"/><path d="M4.3 4.4h.01"/></g></symbol></defs><path d="M105 63 H145" fill="none" stroke="#16181d" stroke-width="1.6" marker-end="url(#dag-a)"/><path d="M105 63 H145" class="pkt"/><path d="M275 63 H315" fill="none" stroke="#16181d" stroke-width="1.6" marker-end="url(#dag-a)"/><path d="M275 63 H315" class="pkt"/><path d="M459 63 C 477 63, 481 33, 499 33" fill="none" stroke="#16181d" stroke-width="1.6" marker-end="url(#dag-a)"/><path d="M459 63 C 477 63, 481 33, 499 33" class="pkt"/><path d="M657 33 H697" fill="none" stroke="#16181d" stroke-width="1.6" marker-end="url(#dag-a)"/><path d="M657 33 H697" class="pkt"/><path d="M459 63 C 477 63, 481 93, 499 93" fill="none" stroke="#16181d" stroke-width="1.6" marker-end="url(#dag-a)"/><path d="M459 63 C 477 63, 481 93, 499 93" class="pkt"/><path d="M608 93 H697" fill="none" stroke="#0d9488" stroke-width="1.6" stroke-dasharray="5 4" class="dashrun" marker-end="url(#dag-t)"/><path d="M792 93 C 810 93, 814 63, 832 63" fill="none" stroke="#16181d" stroke-width="1.6" marker-end="url(#dag-a)"/><path d="M792 93 C 810 93, 814 63, 832 63" class="pkt"/><rect x="453.4" y="26" width="51.2" height="16" rx="2" fill="#ffffff" stroke="#e2e8ee"/><text x="479" y="38" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="9" font-weight="500" fill="#7d8794" text-anchor="middle" letter-spacing=".6">capture</text><rect x="629.7" y="70" width="45.6" height="16" rx="2" fill="#e6faf5" stroke="#7fd4c4"/><text x="652.5" y="82" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="9" font-weight="700" fill="#0d9488" text-anchor="middle" letter-spacing=".6">outbox</text><rect x="16" y="46" width="89" height="34" rx="2" fill="#ffffff" stroke="#c8d2dc" stroke-width="1.5" stroke-dasharray="5 4"/><rect x="22" y="52" width="22" height="22" rx="4" fill="#f4f6f8"/><use href="#i-ui" x="26" y="56" width="14" height="14" color="#7d8794"/><text x="52" y="67.5" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11.5" font-weight="650" fill="#454e5a">client</text><rect x="151" y="46" width="124" height="34" rx="2" fill="#ffffff" stroke="#16181d" stroke-width="1.5"/><rect x="157" y="52" width="22" height="22" rx="4" fill="#f4f6f8"/><use href="#i-svc" x="161" y="56" width="14" height="14" color="#454e5a"/><text x="187" y="67.5" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11.5" font-weight="650" fill="#16181d">api-gateway</text><rect x="321" y="46" width="138" height="34" rx="2" fill="#ffffff" stroke="#16181d" stroke-width="1.5"/><rect x="327" y="52" width="22" height="22" rx="4" fill="#f4f6f8"/><use href="#i-svc" x="331" y="56" width="14" height="14" color="#454e5a"/><text x="357" y="67.5" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11.5" font-weight="650" fill="#16181d">order-service</text><rect x="505" y="16" width="152" height="34" rx="2" fill="#ffffff" stroke="#16181d" stroke-width="1.5"/><rect x="511" y="22" width="22" height="22" rx="4" fill="#f4f6f8"/><use href="#i-svc" x="515" y="26" width="14" height="14" color="#454e5a"/><text x="541" y="37.5" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11.5" font-weight="650" fill="#16181d">payment-adapter</text><rect x="505" y="76" width="103" height="34" rx="2" fill="#ffffff" stroke="#1d4ed8" stroke-width="1.5"/><rect x="511" y="82" width="22" height="22" rx="4" fill="#e8f0fe"/><use href="#i-db" x="515" y="86" width="14" height="14" color="#1d4ed8"/><text x="541" y="97.5" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11.5" font-weight="650" fill="#16181d">postgres</text><rect x="703" y="16" width="68" height="34" rx="2" fill="#ffffff" stroke="#c8d2dc" stroke-width="1.5" stroke-dasharray="5 4"/><rect x="709" y="22" width="22" height="22" rx="4" fill="#f4f6f8"/><use href="#i-globe" x="713" y="26" width="14" height="14" color="#7d8794"/><text x="739" y="37.5" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11.5" font-weight="650" fill="#454e5a">PSP</text><rect x="703" y="76" width="89" height="34" rx="2" fill="#ffffff" stroke="#7c3aed" stroke-width="1.5"/><rect x="709" y="82" width="22" height="22" rx="4" fill="#f1ecfe"/><use href="#i-bolt" x="713" y="86" width="14" height="14" color="#7c3aed"/><text x="739" y="97.5" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11.5" font-weight="650" fill="#16181d">worker</text><rect x="838" y="46" width="159" height="34" rx="2" fill="#ffffff" stroke="#c8d2dc" stroke-width="1.5" stroke-dasharray="5 4"/><rect x="844" y="52" width="22" height="22" rx="4" fill="#f4f6f8"/><use href="#i-globe" x="848" y="56" width="14" height="14" color="#7d8794"/><text x="874" y="67.5" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11.5" font-weight="650" fill="#454e5a">merchant webhook</text></svg>
+    <svg viewBox="0 0 1013 162" width="100%" role="img" aria-label="data flow graph"><defs><marker id="dag-a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M1 1.5 8 5 1 8.5" fill="none" stroke="#16181d" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></marker><marker id="dag-t" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M1 1.5 8 5 1 8.5" fill="none" stroke="#0d9488" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></marker><symbol id="i-bolt" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2.5 4.8 9h2.7L6.3 13.5 10.9 7H8.2z"/></g></symbol><symbol id="i-db" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="8" cy="4.2" rx="5" ry="1.9"/><path d="M3 4.2v7.6c0 1 2.2 1.9 5 1.9s5-.9 5-1.9V4.2"/></g></symbol><symbol id="i-globe" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5.5"/><path d="M2.5 8h11"/><path d="M8 2.5c1.9 1.6 1.9 9.4 0 11-1.9-1.6-1.9-9.4 0-11z"/></g></symbol><symbol id="i-svc" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2.8" y="2.8" width="10.4" height="10.4" rx="1.5"/><rect x="6" y="6" width="4" height="4"/></g></symbol><symbol id="i-ui" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="3" width="11" height="9" rx="1"/><path d="M2.5 5.8h11"/><path d="M4.3 4.4h.01"/></g></symbol></defs><path d="M105 63 H145" fill="none" stroke="#16181d" stroke-width="1.6" marker-end="url(#dag-a)"/><path d="M105 63 H145" class="pkt"/><path d="M275 63 H315" fill="none" stroke="#16181d" stroke-width="1.6" marker-end="url(#dag-a)"/><path d="M275 63 H315" class="pkt"/><path d="M459 63 C 477 63, 481 33, 499 33" fill="none" stroke="#16181d" stroke-width="1.6" marker-end="url(#dag-a)"/><path d="M459 63 C 477 63, 481 33, 499 33" class="pkt"/><path d="M657 33 H697" fill="none" stroke="#16181d" stroke-width="1.6" marker-end="url(#dag-a)"/><path d="M657 33 H697" class="pkt"/><path d="M459 63 C 477 63, 481 93, 499 93" fill="none" stroke="#16181d" stroke-width="1.6" marker-end="url(#dag-a)"/><path d="M459 63 C 477 63, 481 93, 499 93" class="pkt"/><path d="M608 93 H697" fill="none" stroke="#0d9488" stroke-width="1.6" stroke-dasharray="5 4" class="dashrun" marker-end="url(#dag-t)"/><path d="M792 93 C 810 93, 814 63, 832 63" fill="none" stroke="#16181d" stroke-width="1.6" marker-end="url(#dag-a)"/><path d="M792 93 C 810 93, 814 63, 832 63" class="pkt"/><rect x="453.4" y="26" width="51.2" height="16" rx="2" fill="#ffffff" stroke="#e2e8ee"/><text x="479" y="38" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="9" font-weight="500" fill="#7d8794" text-anchor="middle" letter-spacing=".6">capture</text><rect x="629.7" y="70" width="45.6" height="16" rx="2" fill="#e6faf5" stroke="#7fd4c4"/><text x="652.5" y="82" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="9" font-weight="700" fill="#0d9488" text-anchor="middle" letter-spacing=".6">outbox</text><rect x="16" y="46" width="89" height="34" rx="2" fill="#ffffff" stroke="#c8d2dc" stroke-width="1.5" stroke-dasharray="5 4"/><rect x="22" y="52" width="22" height="22" rx="4" fill="#f4f6f8"/><use href="#i-ui" x="26" y="56" width="14" height="14" color="#7d8794"/><text x="52" y="67.5" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11.5" font-weight="650" fill="#454e5a">client</text><rect x="151" y="46" width="124" height="34" rx="2" fill="#ffffff" stroke="#16181d" stroke-width="1.5"/><rect x="157" y="52" width="22" height="22" rx="4" fill="#f4f6f8"/><use href="#i-svc" x="161" y="56" width="14" height="14" color="#454e5a"/><text x="187" y="67.5" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11.5" font-weight="650" fill="#16181d">api-gateway</text><rect x="321" y="46" width="138" height="34" rx="2" fill="#ffffff" stroke="#16181d" stroke-width="1.5"/><rect x="327" y="52" width="22" height="22" rx="4" fill="#f4f6f8"/><use href="#i-svc" x="331" y="56" width="14" height="14" color="#454e5a"/><text x="357" y="67.5" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11.5" font-weight="650" fill="#16181d">order-service</text><rect x="505" y="16" width="152" height="34" rx="2" fill="#ffffff" stroke="#16181d" stroke-width="1.5"/><rect x="511" y="22" width="22" height="22" rx="4" fill="#f4f6f8"/><use href="#i-svc" x="515" y="26" width="14" height="14" color="#454e5a"/><text x="541" y="37.5" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11.5" font-weight="650" fill="#16181d">payment-adapter</text><rect x="505" y="76" width="103" height="34" rx="2" fill="#f7faff" stroke="#1d4ed8" stroke-width="1.5"/><rect x="511" y="82" width="22" height="22" rx="4" fill="#e8f0fe"/><use href="#i-db" x="515" y="86" width="14" height="14" color="#1d4ed8"/><text x="541" y="97.5" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11.5" font-weight="650" fill="#16181d">postgres</text><rect x="703" y="16" width="68" height="34" rx="2" fill="#ffffff" stroke="#c8d2dc" stroke-width="1.5" stroke-dasharray="5 4"/><rect x="709" y="22" width="22" height="22" rx="4" fill="#f4f6f8"/><use href="#i-globe" x="713" y="26" width="14" height="14" color="#7d8794"/><text x="739" y="37.5" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11.5" font-weight="650" fill="#454e5a">PSP</text><rect x="703" y="76" width="89" height="34" rx="2" fill="#faf7ff" stroke="#7c3aed" stroke-width="1.5"/><rect x="709" y="82" width="22" height="22" rx="4" fill="#f1ecfe"/><use href="#i-bolt" x="713" y="86" width="14" height="14" color="#7c3aed"/><text x="739" y="97.5" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11.5" font-weight="650" fill="#16181d">worker</text><rect x="838" y="46" width="159" height="34" rx="2" fill="#ffffff" stroke="#c8d2dc" stroke-width="1.5" stroke-dasharray="5 4"/><rect x="844" y="52" width="22" height="22" rx="4" fill="#f4f6f8"/><use href="#i-globe" x="848" y="56" width="14" height="14" color="#7d8794"/><text x="874" y="67.5" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11.5" font-weight="650" fill="#454e5a">merchant webhook</text></svg>
     <figcaption>FIG 2 · <code>data_flow</code> with branches — <span style="color:#454e5a;font-weight:700">■ service</span> · <span style="color:#1d4ed8;font-weight:700">■ datastore</span> · <span style="color:#7c3aed;font-weight:700">■ async worker/queue</span> · dashed node = external · <span style="color:#0d9488;font-weight:700">teal dashed edge = async hop</span></figcaption>
   </div>
   <p class="rule-p"><b>Flow syntax the renderer parses</b> (one edge per line in <code>data_flow</code>):
@@ -509,7 +695,7 @@ ol.principles b { color: var(--ink); }
     </div>
   </div>
 
-  <h2 id="shell"><span class="idx">§7</span>Shell &amp; title block</h2>
+  <h2 id="shell" class="s-mark"><span class="idx">§7</span>Shell &amp; title block</h2>
   <table class="spec">
     <tr><th>top nav</th><td>54px hairline bar — mono brand (<b>project</b> <span class="dim">/ docs</span>), sans tabs with a 2px redline underline on the active view, generated stamp right in mono</td></tr>
     <tr><th>sidebar</th><td>224px sticky TOC on a 2px rule spine; active item ticks redline. Collapses above content under 960px</td></tr>
@@ -525,11 +711,11 @@ ol.principles b { color: var(--ink); }
     <div class="tb"><div class="tl">By</div><div class="tv">docs-kit render v0.2.0</div></div>
   </div>
 
-  <h2 id="components"><span class="idx">§8</span>Components</h2>
+  <h2 id="components" class="s-l2"><span class="idx">§8</span>Components</h2>
 
   <h3 id="c-card">Product card</h3>
-  <div class="card">
-    <div class="card-h"><span class="t">OrderHub API</span><span class="tag">orderhub-api.md</span>
+  <div class="card l1">
+    <div class="card-h"><span class="t">OrderHub API</span><span class="tag l1">orderhub-api.md</span>
       <span class="tag" style="margin-left:auto;border-color:var(--ink);color:var(--ink);font-weight:650">TARGET · 99% ack &lt; 2s</span></div>
     <div class="card-b">
       <table class="spec">
@@ -549,20 +735,22 @@ ol.principles b { color: var(--ink); }
   rides the header as a <code>TARGET</code> tag — the one number a reader scans for.</p>
 
   <h3 id="c-board">Board — one geometry for roadmap, issues, backlog</h3>
-  <p>Columns are drawing zones: a 2px ink rule with a mono header and count, cards beneath.
-  Status lives in the dot, lane in the tag pattern — no colored card borders:</p>
+  <p>Columns are drawing zones: a 2px rule with a mono header and count, cards beneath. The rule's
+  color is the column's distance from now — redline for <b>Now</b>, ink for <b>Next</b>, gray for
+  <b>Not doing</b>. Status still lives in the dot and lane in the tag pattern; cards themselves
+  never take a border color:</p>
   <div class="board">
-    <div><div class="col-h">Now <span class="n">2</span></div>
-      <div class="item"><div class="im"><span class="dot d-progress"></span><span class="tag id">BACKLOG-004</span><span class="tag lane-fast">fast</span></div>
+    <div><div class="col-h now">Now <span class="n">2</span></div>
+      <div class="item"><div class="im"><span class="dot d-progress"></span><span class="tag id l2">BACKLOG-004</span><span class="tag lane-fast">fast</span></div>
         <div class="it">Webhook retry with backoff</div></div>
-      <div class="item"><div class="im"><span class="dot d-open"></span><span class="tag id">BACKLOG-005</span></div>
+      <div class="item"><div class="im"><span class="dot d-open"></span><span class="tag id l2">BACKLOG-005</span></div>
         <div class="it">Idempotent order intake</div></div></div>
     <div><div class="col-h">Next <span class="n">2</span></div>
       <div class="item"><div class="it" style="margin-top:0">Refund flow v2</div></div>
       <div class="item"><div class="it" style="margin-top:0">Per-merchant rate limits</div></div></div>
-    <div><div class="col-h">Not doing <span class="n">1</span></div>
+    <div><div class="col-h later">Not doing <span class="n">1</span></div>
       <div class="item muted"><div class="it" style="margin-top:0">Building our own PSP</div>
-        <div class="im" style="margin-top:5px"><span class="tag">DECISION-002</span></div></div></div>
+        <div class="im" style="margin-top:5px"><span class="tag l2">DECISION-002</span></div></div></div>
   </div>
 
   <h3 id="c-tables">Tables &amp; the rev block</h3>
@@ -572,8 +760,8 @@ ol.principles b { color: var(--ink); }
   <div class="demo">
     <table class="data">
       <tr><th style="width:56px">rev</th><th style="width:110px">date</th><th style="width:150px">decision</th><th>description</th></tr>
-      <tr><td class="mono" style="font-weight:700">B</td><td class="mono">2026-07-02</td><td><span class="tag id">DECISION-002</span></td><td>PSP calls only via <code>payment-adapter</code></td></tr>
-      <tr><td class="mono" style="font-weight:700">A</td><td class="mono">2026-06-14</td><td><span class="tag id">DECISION-001</span></td><td>Outbox + delivery worker</td></tr>
+      <tr><td class="mono rev">B</td><td class="mono">2026-07-02</td><td><span class="tag id l2">DECISION-002</span></td><td>PSP calls only via <code>payment-adapter</code></td></tr>
+      <tr><td class="mono rev">A</td><td class="mono">2026-06-14</td><td><span class="tag id l2">DECISION-001</span></td><td>Outbox + delivery worker</td></tr>
     </table>
   </div>
 
@@ -586,7 +774,7 @@ ol.principles b { color: var(--ink); }
     <div class="empty" style="margin-bottom:0">NO ENTRIES — add a file to <code>docs/01_products/</code> and re-run <code>/docs-kit:docs-render</code></div>
   </div>
 
-  <h2 id="access"><span class="idx">§9</span>Motion &amp; access</h2>
+  <h2 id="access" class="s-mark"><span class="idx">§9</span>Motion &amp; access</h2>
   <table class="spec">
     <tr><th>motion</th><td>only meaning-bearing motion, all pure CSS (still zero JS), three moves total:
       <b>packet</b> — a white light gliding along solid edges shows data direction (2.4s cycle);
@@ -594,24 +782,26 @@ ol.principles b { color: var(--ink); }
       target (slow, 16s); <b>LED pulse</b> — a soft ring on live dots: orange = in-progress,
       green = docs-check clean (2.2s). Nothing animates on entrance or hover, and
       <code>prefers-reduced-motion</code> kills every animation (packets hide entirely)</td></tr>
+    <tr><th>color</th><td>five places, all rule-driven, none decorative: the <b>section tab</b> (3px, the hue that section spends) · <b>tags</b> (destination layer, §2) · <b>washes</b> behind stamps, deviation notes, lane tags, the active TOC row and hovered table rows · <b>gradients</b> on tracks only — each line deepens toward its terminus, so the drawing reads as drawn with pressure · the <b>highlighter</b>, the redline pen laid flat, reserved for the one operative sentence in a section — three marks on this whole sheet</td></tr>
     <tr><th>focus</th><td>2px redline <code>:focus-visible</code> outline on every link, tab, and summary</td></tr>
-    <tr><th>contrast</th><td>body ≥ 7:1, labels ≥ 4:1, redline text #c2410c on paper 4.9:1; statuses never rely on hue alone — the dot shape carries the meaning</td></tr>
+    <tr><th>contrast</th><td>body ≥ 7:1; every <code>deep</code> step clears AAA on paper and AA on its own wash (blue 9.3, violet 8.0, teal 7.0, redline 6.5); verdict inks ≥ 4.5 on their stamp fill. Teal is a mid-tone — small text on the raw <code>line</code> step takes graphite, not white. Statuses never rely on hue alone: the dot shape carries the meaning and the lanes stay pattern-coded</td></tr>
     <tr><th>responsive</th><td>sidebar folds above content &lt; 960px; boards and the title block reflow; SVG maps scale full-width</td></tr>
   </table>
 
-  <h2 id="renderer"><span class="idx">§10</span>Renderer contract</h2>
+  <h2 id="renderer" class="s-ink"><span class="idx">§10</span>Renderer contract</h2>
   <table class="spec">
     <tr><th>pages</th><td><code>docs/index.html</code> (map + menu, beside README.md) · <code>docs/current.html</code> (Layer 1) · <code>docs/changes.html</code> (Layer 2 + audit)</td></tr>
     <tr><th>engine</th><td><code>scripts/docs_render.sh</code> → <code>docs_render.py</code>, Python 3.9 stdlib — deterministic, 0 tokens, no LLM; same guarantees as the validator</td></tr>
     <tr><th>markdown</th><td>subset: h1–h4, paragraphs, nested lists, fenced code, tables, blockquotes, bold/italic/inline code/links; anything else escapes to text — never broken HTML</td></tr>
     <tr><th>mapping</th><td>roadmap <code>##</code> → board columns · product frontmatter → card · <code>components</code>/<code>data_flow</code> → chains, or layered graphs when flows branch (edge syntax in §6) · statuses → dot geometry · amendments → rev letters (A, B, …) · <code>ID-NNN</code> mentions → tags linked across sheets</td></tr>
+    <tr><th>hue</th><td>derived, never authored. A tag's family comes from what it points at: <code>docs/01_*</code>, <code>docs/02_*</code> and any name in <code>components</code> → foundation blue · <code>docs/03_*</code> and <code>ISSUE/PROPOSAL/DECISION/BACKLOG-NNN</code> → change violet · everything else (git revs, timestamps, versions) stays graphite. Section tabs take the layer of the sheet they sit on; <code>Now</code> columns and live dots take redline. Authors never pick a color — there is no syntax for it</td></tr>
     <tr><th>invocation</th><td><code>/docs-kit:docs-render</code> · generated by docs-init · refreshed at the end of docs-sync</td></tr>
     <tr><th>ordering</th><td>files sorted by name; logs newest-first; byte-identical output for identical input (only the generated stamp moves)</td></tr>
   </table>
 
   <div class="tblock">
     <div class="tb"><div class="tl">Document</div><div class="tv">RENDER DESIGN SYSTEM</div></div>
-    <div class="tb"><div class="tl">Rev</div><div class="tv">v2 — change-control print</div></div>
+    <div class="tb"><div class="tl">Rev</div><div class="tv">v3 — hue is derived</div></div>
     <div class="tb"><div class="tl">Status</div><div class="tv">AWAITING APPROVAL</div></div>
     <div class="tb"><div class="tl">By</div><div class="tv">docs-kit</div></div>
   </div>
