@@ -319,11 +319,21 @@ Rules:
 - **Roadmap headings are labels, so they stay English**, but `roadmap_kind()`
   also accepts the obvious Vietnamese equivalents. The failure it guards against
   is silent: an unrecognised heading loses its column colour without any error.
-- **A document's title may be Vietnamese; its file name may not.** `name:` is
-  explanation and gets translated — `name: "Đối soát giao dịch"`. The file it
-  lives in stays ASCII — `reconciliation.md`. File names are keys, not prose:
-  they appear in shell commands, git output, and URLs, and §3 already makes them
-  non-referential, so there is nothing to gain by translating them.
+- **`name:` is a proper noun, not prose — it is not translated in either
+  direction.** A Vietnamese-speaking team whose product is called *Đối soát giao
+  dịch* keeps that name; one whose product is called *Reconciliation* keeps that
+  one. The field is a nav target and a thing people say out loud, which puts it
+  with the domain terms above, not with `problem:` and `users:`.
+- **Names within one set stay in one register.** If `01_products/` already holds
+  `OrderHub API` and `Merchant Dashboard`, the next product is named the same
+  way. The generated sidebar lists them as siblings under §1, so a lone
+  odd-register name reads there as a leak rather than as a choice — whichever
+  register is already established is the one that is right. Nothing enforces
+  this; it is a review question, not a validator check.
+- **A title may be Vietnamese; the file name may not.** Whatever `name:` says,
+  the file it lives in stays ASCII — `reconciliation.md`. File names are keys,
+  not prose: they appear in shell commands, git output, and URLs, and §3 already
+  makes them non-referential, so there is nothing to gain by translating them.
 - **Anchor slugs fold diacritics anyway** (`slugify()`), and dedupe within a
   page. Nothing enforces the rule above, and the failure it prevents is quiet:
   a plain `[^a-z0-9]` filter would collapse both `phân-quyền` and `phần-quyền`

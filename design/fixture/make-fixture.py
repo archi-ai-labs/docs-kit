@@ -5,8 +5,7 @@ Usage: make-fixture.py <dir>   — writes <dir>/docs/... and nothing else.
 
 The fixture deliberately exercises every branch of the renderer: both lanes,
 an amended architecture (two revisions), all board columns including archived
-and not-doing, a recorded deviation, an empty Layer-3 folder, and a product
-whose title is Vietnamese while its file name is not. Driven by
+and not-doing, a recorded deviation, and an empty Layer-3 folder. Driven by
 ../make-samples.sh, which renders it and writes design/sample-*.html.
 
 Language follows STANDARD §11: structure and terms in English, explanation in
@@ -78,10 +77,10 @@ Một console chủ yếu để đọc, đặt trên cùng API đó, tập trung
 gian tới thao tác đầu tiên khi một đơn có vấn đề.
 """
 
-# Vietnamese title, English file name — the split STANDARD §11 asks for. The name:
-# field is explanation and gets translated; the file name is structure and does not.
+# Named in the same register as its two siblings, per STANDARD §11: product names
+# are proper nouns, and one odd name out reads as a leak in the §1 sidebar list.
 FILES["01_products/reconciliation.md"] = """---
-name: "Đối soát giao dịch"
+name: "Reconciliation"
 users: "Kế toán merchant — làm việc theo ngày, đối chiếu số liệu cuối phiên"
 problem: "Số liệu giữa OrderHub và sao kê PSP lệch nhau mà không biết lệch ở đâu"
 scope_in: [Đối chiếu theo ngày, Xuất báo cáo lệch]
@@ -89,7 +88,7 @@ scope_out: [Hạch toán kế toán, Xuất hoá đơn]
 success_metric: "Mọi khoản lệch trong ngày được quy về một giao dịch cụ thể trong < 1 giờ"
 ---
 
-# Đối soát giao dịch
+# Reconciliation
 
 ## What it is
 
