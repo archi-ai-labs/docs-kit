@@ -152,9 +152,11 @@ The split against Architecture is by the question answered, not by subject:
 | What exists, and what calls what | `02_architecture/` |
 | Doing X — what happens, in what order | `02_architecture/` (```` ```flow ````) |
 | **Hitting condition Y — which way does it branch, by what rule** | **`03_business-logic/`** |
+| **Where can this entity be, and what moves it** | **`03_business-logic/`** |
 
-The body carries ```` ```flowchart ```` blocks (see §10) and, for rules that read
-better as a table than as a picture, plain markdown tables — a decision table
+The body carries ```` ```flowchart ```` blocks for branching rules and
+```` ```state ```` blocks for entity lifecycles (both in §10) and, for rules that
+read better as a table than as a picture, plain markdown tables — a decision table
 needs no grammar of its own.
 
 `amended_by` entries follow the Architecture rule above: each must contain a
@@ -365,6 +367,8 @@ Rules:
   | nodes stacked in one column | 10 |
   | participants in a sequence | 8 |
   | steps in a sequence | 16 |
+  | states in a state machine | 12 |
+  | transitions in a state machine | 24 |
 
   Past any of these the flow is still drawn as a graph, at natural size,
   scrolling inside its own frame; a note suggests splitting it across
@@ -399,6 +403,36 @@ Rules:
 
   Rules that read better as a table than as a picture stay markdown tables — a
   decision table needs no grammar of its own.
+- **State machines** (```` ```state ```` fenced block, read from the same three
+  doc kinds as ```` ```flowchart ````) render as an entity lifecycle. A flowchart
+  answers *which way does this branch go*; a state machine answers *where can this
+  thing be, and what moves it*:
+
+  | line | meaning |
+  |---|---|
+  | `title:` `entity:` `code:` | optional headers; `entity:` names what carries the lifecycle |
+  | `initial: <state>` | the one start state — drawn with a blue (L1) 2px stroke |
+  | `final: a, b, c` | the end states — drawn with a second border **inside** the box |
+  | `state: <name> — <meaning>` | optional declaration; declaring one opts the file into a warning listing the rest |
+  | `a -> b : event` · `a ~> b : event` | a transition · a transition made by a background actor |
+
+  `initial:` and `final:` mark **real states** rather than adding `start` / `end`
+  pseudo-nodes: a six-state machine has to show six boxes, and an `end` sink would
+  need a fabricated edge out of every terminal state, inflating the figure and the
+  transition table alike. The start state is marked by its stroke and not by a dot
+  beside the box, because that dot would sit in the label gap where edge chips are
+  placed; the final border is drawn inward and not as an outer ring, because column
+  widths come from the node width and a ring would push a box into its neighbour.
+
+  There is no guard syntax. A condition worth drawing deserves a
+  ```` ```flowchart ```` beside it, which is exactly what the section above is for.
+  A lifecycle loops by nature — a retry, a return to the warehouse, a refund after
+  delivery — and every one of those is an ordinary back-edge on a return lane,
+  inherited from the graph engine rather than reimplemented.
+
+  Budget, warn-only as everywhere else: **12 states · 24 transitions**. The
+  transition table prints under every machine, and the state-meaning table too when
+  any `state:` line carried a meaning.
 - **Business flows** (```` ```flow ```` fenced block in the *body* of any
   `01_products/`, `02_architecture/` or `03_business-logic/` doc) render as a
   sequence figure —

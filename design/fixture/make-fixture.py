@@ -323,6 +323,44 @@ outcome: đơn ở trạng thái refunded, hoặc bị từ chối kèm lý do
 - `orders.status` chỉ đổi sang `refunded` sau khi PSP xác nhận — không đoán trước.
 """
 
+FILES["03_business-logic/order-lifecycle.md"] = """---
+domain: "Vòng đời đơn hàng — orders.status đi qua những trạng thái nào"
+amended_by: []
+---
+
+# Order lifecycle
+
+> Layer 1 — Foundation. Chỉ Decision workflow mới sửa được.
+
+```state
+title: Vòng đời đơn hàng
+entity: orders.status
+code: internal/order/state.go
+initial: pending
+final: delivered, refunded, cancelled
+state: pending — đơn đã tạo, chưa capture được tiền
+state: paid — đã capture, chờ kho đóng gói
+state: shipped — đã bàn giao cho đơn vị vận chuyển
+state: delivered — khách đã nhận hàng
+state: refunded — đã hoàn tiền, PSP xác nhận
+state: cancelled — huỷ khi chưa thu được tiền
+pending -> paid : payment.succeeded
+pending -> pending : retry capture, backoff luỹ thừa
+pending -> cancelled : khách huỷ hoặc quá hạn giữ chỗ
+paid ~> shipped : job đóng gói chạy nền
+shipped -> delivered : carrier webhook giao thành công
+shipped -> paid : vận chuyển trả hàng về kho
+paid -> refunded : hoàn tiền được duyệt
+delivered -> refunded : hoàn sau khi giao
+```
+
+## Invariants
+
+- Ra khỏi `pending` là một chiều: đã capture thì không quay lại chưa capture.
+- `cancelled` chỉ đến từ `pending` — sau khi thu tiền thì đường ra là `refunded`.
+- Mỗi lần đổi trạng thái ghi một dòng vào bảng `order_events`, kể cả retry.
+"""
+
 FILES["30_conventions/coding-style.md"] = "# Coding style\n\nGo fmt, test dạng bảng.\n"
 FILES["30_conventions/review-rules.md"] = "# Review rules\n\nĐổi schema cần hai lượt duyệt.\n"
 FILES["40_services/order-service.md"] = "# order-service\n\nSở hữu trạng thái đơn.\n"

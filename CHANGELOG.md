@@ -7,6 +7,44 @@ for the plugin version — the renderer stamps it into every generated page).
 
 ## [Unreleased]
 
+## [0.11.0] — 2026-07-31
+
+### Added — ```` ```state ````, the entity lifecycle
+
+0.10.0 gave branching rules a home. A rule tells you which way an order goes at a
+decision; it does not tell you **where an order can be**. That list — `pending`,
+`paid`, `shipped`, `refunded` — usually lives spread across an enum, a migration
+and a handful of guard clauses, and nowhere written down whole.
+
+- **```` ```state ````** in the body of any `03_business-logic/`, `01_products/`
+  or `02_architecture/` doc. `initial:` and `final:` mark **real states** rather
+  than adding `start` / `end` pseudo-nodes: a six-state machine has to show six
+  boxes, and an `end` sink would need a fabricated edge out of every terminal
+  state, inflating the figure and the transition table alike. States are rounded
+  boxes; the start state takes a blue stroke; a final state takes a second border
+  drawn **inside** the box, because an outer ring would push it past the column
+  width every layout measurement is built on.
+- **`state: <name> — <meaning>`, optional.** Declaring one state opts the file
+  into a warning listing the ones still undeclared. It earns its place because a
+  mistyped state reads as plausible — a stray box in a flowchart catches the eye,
+  `shiped` sitting in a lifecycle does not.
+- **§6 State machines on `current.html`**, its own rail station, and the
+  transition table plus the state-meaning table under every machine.
+- **No guard syntax.** A condition worth drawing deserves a ```` ```flowchart ````
+  beside it, which is what §5 already is.
+
+### Changed
+
+- `svg_dag()` learned two shapes (`state`, `final`) and an `initial` argument.
+  Loops came free: a retry, a return to the warehouse, a refund after delivery are
+  ordinary back-edges on the return lanes built in 0.9.1 — a lifecycle is the
+  cyclic case that machinery was written for.
+- `seq_steps_table()` takes a `last_col` label instead of growing a second table
+  function with identical columns. The `kind` column stays for state machines too:
+  `~>` there means the move is made by a background job, not by the user.
+- `decide:` and `state:` share one `split_decl()`, so the two cannot drift into
+  two ideas of what separates a node name from the sentence explaining it.
+
 ## [0.10.0] — 2026-07-31
 
 ### Added — `03_business-logic/`, the fourth layer-1 folder

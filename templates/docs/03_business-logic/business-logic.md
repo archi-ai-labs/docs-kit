@@ -70,6 +70,48 @@ render markdown table sẵn. Một decision table đọc nhanh hơn mọi hình:
 | ≤ 2.000.000đ | có | `manual_review` |
 | ≤ 2.000.000đ | chưa | `auto_approve` |
 
+## Lifecycle
+
+Một entity đi qua nhiều trạng thái thì viết một khối ```` ```state ````. Flowchart
+ở trên trả lời "gặp điều kiện này thì rẽ đường nào"; chỗ này trả lời "nó đang ở
+đâu, và sự kiện nào đẩy nó đi tiếp".
+
+Khối dưới đây cũng là **ví dụ chạy được** — xoá hoặc sửa đè khi viết máy trạng
+thái thật.
+
+```state
+title: Vòng đời đơn hàng
+entity: orders.status
+code: src/order/state.go
+initial: pending
+final: delivered, refunded, cancelled
+state: pending — đơn đã tạo, chưa thu được tiền
+state: paid — đã capture, chờ đóng gói
+state: shipped — đã bàn giao cho đơn vị vận chuyển
+pending -> paid : payment.succeeded
+pending -> cancelled : khách huỷ trước khi trả
+paid ~> shipped : job đóng gói chạy nền
+shipped -> delivered : carrier webhook
+paid -> refunded : hoàn tiền được duyệt
+delivered -> refunded : hoàn sau khi giao
+paid -> paid : retry capture
+```
+
+| Dòng | Nghĩa |
+|---|---|
+| `title:` `entity:` `code:` | Header, đều không bắt buộc. `entity:` là thứ mang vòng đời này |
+| `initial: <state>` | Trạng thái bắt đầu — **một** cái, vẽ viền xanh |
+| `final: a, b, c` | Các trạng thái kết thúc, vẽ viền đôi |
+| `state: <tên> — <nghĩa>` | Khai báo tuỳ chọn. Khai báo một cái là bật luôn cảnh báo cho những cái còn thiếu |
+| `a -> b : sự kiện` · `a ~> b : sự kiện` | Transition · transition do job nền thực hiện |
+
+`initial:` và `final:` đánh dấu **trạng thái thật**, không đẻ ra node `start`/`end`
+giả — máy sáu trạng thái phải hiện đúng sáu ô. Không có cú pháp guard: điều kiện
+đáng vẽ thì đáng có một ```` ```flowchart ```` riêng ở phần Flows bên trên.
+
+Vòng lặp (`paid -> paid`, `delivered -> refunded`) viết như transition thường —
+renderer nhận ra nó quay ngược và vẽ xuống làn dưới các hàng.
+
 ## Invariants
 
 _Những điều luôn đúng bất kể đi nhánh nào. Đây là thứ đáng viết ra nhất, vì nó

@@ -644,12 +644,14 @@ def chip_box(lines):
 
 
 def svg_dag(edges, comps, fig_no="1", shapes=None, aria="data flow graph",
-            caption=None, wrap=True):
+            caption=None, wrap=True, initial=None):
     """The one layered-graph engine. `shapes` switches it from data-flow nodes
-    (icon badge, kind tint) to flowchart nodes (step / decide / terminal); a
-    flowchart is the same layering problem with different boxes, and giving it
-    its own engine would mean maintaining the back-edge routing twice.
-    `wrap=False` returns the bare <svg> so a caller can compose its own frame."""
+    (icon badge, kind tint) to flowchart nodes (step / decide / terminal) or state
+    machine nodes (state / final); each of those is the same layering problem with
+    different boxes, and giving any of them its own engine would mean maintaining
+    the back-edge routing more than once. `initial` names the one node drawn with
+    the start stroke. `wrap=False` returns the bare <svg> so a caller can compose
+    its own frame."""
     # Cycles do not change the style — they lose their back-edges for the
     # purpose of layering, then get them drawn back in below the rows.
     back_idx = feedback_arcs(edges)
@@ -834,6 +836,22 @@ def svg_dag(edges, comps, fig_no="1", shapes=None, aria="data flow graph",
                 s.append('<rect x="%g" y="%g" width="%d" height="%d" rx="%g" fill="%s" '
                          'stroke="%s" stroke-width="1.5"/>'
                          % (x, y, w, NODE_H, NODE_H / 2.0, "#f4f6f8", INK2))
+            elif shape in ("state", "final"):
+                # The start state is marked by its stroke — no dot beside the box and
+                # no pseudo-node. A dot would sit in the label gap, which is exactly
+                # where edge chips get placed; a pseudo-node would put a box on the
+                # figure that is not a state and inflate the count.
+                stroke, sw = (L1, 2) if nd == initial else (INK, 1.5)
+                s.append('<rect x="%g" y="%g" width="%d" height="%d" rx="8" fill="#ffffff" '
+                         'stroke="%s" stroke-width="%g"/>' % (x, y, w, NODE_H, stroke, sw))
+                if shape == "final":
+                    # Drawn INWARD, never as an outer ring: column widths come from
+                    # node_w(), so a ring would push the box past its own column and
+                    # either overlap the next one or force a shrink — and figures here
+                    # never shrink to fit.
+                    s.append('<rect x="%g" y="%g" width="%g" height="%g" rx="5" fill="none" '
+                             'stroke="%s" stroke-width="1"/>'
+                             % (x + 3.5, y + 3.5, w - 7, NODE_H - 7, INK))
             else:
                 s.append('<rect x="%g" y="%g" width="%d" height="%d" rx="2" fill="#ffffff" '
                          'stroke="%s" stroke-width="1.5"/>' % (x, y, w, NODE_H, INK))
@@ -1039,7 +1057,12 @@ def svg_sequence(steps, comps):
     return "".join(s)
 
 
-def seq_steps_table(steps, here):
+def seq_steps_table(steps, here, last_col="step"):
+    """The exact words behind a figure. `last_col` is the only thing a state machine
+    needs to change — its rows are transitions and its labels are events — so it
+    reuses this rather than growing a second table function with identical columns.
+    The kind column stays for it too: `~>` in a lifecycle means the move is made by
+    a background job, not by the user."""
     rows = []
     for k, (a, b, asyn, lbl) in enumerate(steps):
         rows.append('<tr><td class="mono">%d</td><td class="mono">%s</td><td>%s</td>'
@@ -1049,8 +1072,8 @@ def seq_steps_table(steps, here):
                         else '<span class="dim">sync</span>'), esc(b),
                        inline_md(lbl.strip(), here) if lbl and lbl.strip() else '<span class="dim">—</span>'))
     return ('<table class="data"><tr><th style="width:40px">#</th><th style="width:150px">from</th>'
-            '<th style="width:90px">kind</th><th style="width:150px">to</th><th>step</th></tr>%s</table>'
-            % "".join(rows))
+            '<th style="width:90px">kind</th><th style="width:150px">to</th><th>%s</th></tr>%s</table>'
+            % (esc(last_col), "".join(rows)))
 
 
 FENCE_OPEN_RE = re.compile(r"^(\s{0,3})(`{3,})(.*)$")
@@ -1072,7 +1095,7 @@ def scan_fence(lines, i):
 
 # Every fence that renders as a figure. Adding a figure type is adding a name
 # here plus its parser — the scan below never changes shape again.
-FIGURE_FENCES = ("flow", "flowchart")
+FIGURE_FENCES = ("flow", "flowchart", "state")
 
 
 def extract_figures(md, names=FIGURE_FENCES):
@@ -1136,6 +1159,21 @@ def seq_figure(src, comps, figs, here):
 
 DECIDE_RE = re.compile(r"^decide\s*:\s*(.+)$", re.I)
 TERMINAL_NAMES = ("start", "end")
+DECL_SEPS = (" — ", " – ", " -- ")
+
+
+def split_decl(body):
+    """`<name> — <gloss>` → (name, gloss), gloss possibly empty. One helper, so
+    `decide:` and `state:` cannot drift into two ideas of what separates a node
+    name from the sentence explaining it."""
+    for sep in DECL_SEPS:
+        if sep in body:
+            name, gloss = body.split(sep, 1)
+            return name.strip(), gloss.strip()
+    return body.strip(), ""
+
+
+
 CHART_MAX_NODES = 20
 CHART_MAX_EDGES = 28
 CHART_MAX_DECIDES = 8
@@ -1161,13 +1199,9 @@ def parse_flowchart(src):
             continue
         m = DECIDE_RE.match(line)
         if m:
-            body, question = m.group(1).strip(), ""
-            for sep in (" — ", " – ", " -- "):
-                if sep in body:
-                    body, question = body.split(sep, 1)
-                    break
-            if body.strip():
-                questions[body.strip()] = question.strip()
+            name, question = split_decl(m.group(1).strip())
+            if name:
+                questions[name] = question
             continue
         edges.extend(parse_edge_line(line))
     if not edges:
@@ -1233,6 +1267,138 @@ def flowchart_figure(src, comps, figs, here):
     tables += seq_steps_table(edges, here)
     return (note + '<div class="plot flowfig">%s%s%s<p class="figcap">%s</p></div>'
             % ("".join(head), svg, foot, caption) + tables)
+
+
+# ---------------------------------------------------------------- state machines
+
+STATE_HEAD_RE = re.compile(r"^(title|entity|code|initial|final)\s*:\s*(.*)$", re.I)
+STATE_DECL_RE = re.compile(r"^state\s*:\s*(.+)$", re.I)
+# Lower than the flowchart's 20 · 28 on purpose: a flowchart legitimately runs to
+# many steps, but a lifecycle with a dozen states is nearly always two machines
+# composed, and splitting them reads better than drawing them at once.
+STATE_MAX_STATES = 12
+STATE_MAX_TRANSITIONS = 24
+
+
+def parse_state_machine(src):
+    """A ```state fence: `initial:` / `final:` naming REAL states, optional `state:`
+    declarations, and transitions in the shared edge grammar. Returns
+    (meta, marks, meanings, shapes, edges) or None when no transition parsed.
+
+    initial/final mark real states instead of adding start/end pseudo-nodes: a
+    six-state machine has to show six boxes, and an `end` sink would need a
+    fabricated edge out of every terminal state, inflating the figure and the
+    transition table alike. There is no guard syntax either — a condition worth
+    drawing deserves a ```flowchart next to it, which is what §5 is for."""
+    meta, meanings, edges = {}, {}, []
+    for raw in src.split("\n"):
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        m = STATE_DECL_RE.match(line)
+        if m:
+            name, meaning = split_decl(m.group(1).strip())
+            if name:
+                meanings[name] = meaning
+            continue
+        m = STATE_HEAD_RE.match(line)
+        if m:  # before the arrow test: a title may itself contain '->'
+            meta[m.group(1).lower()] = m.group(2).strip()
+            continue
+        edges.extend(parse_edge_line(line))
+    if not edges:
+        return None
+    names = lambda key: [s.strip() for s in meta.get(key, "").split(",") if s.strip()]
+    inits, finals = names("initial"), names("final")
+    # A machine has one start. Naming more is a mistake worth showing rather than
+    # guessing at, so the extras travel to the caller and end up in a note.
+    marks = {"initial": inits[0] if inits else "",
+             "extra_initial": inits[1:], "final": finals}
+    shapes = {}
+    for a, b, _asyn, _lbl in edges:
+        for nd in (a, b):
+            shapes[nd] = "final" if nd in finals else "state"
+    return meta, marks, meanings, shapes, edges
+
+
+def state_table(meanings, here):
+    rows = "".join('<tr><td class="mono">%s</td><td>%s</td></tr>'
+                   % (esc(nd), inline_md(m, here) if m else '<span class="dim">—</span>')
+                   for nd, m in sorted(meanings.items(), key=lambda kv: kv[0].lower()))
+    return ('<table class="data"><tr><th style="width:200px">trạng thái</th>'
+            "<th>nghĩa</th></tr>%s</table>" % rows)
+
+
+def code_list(items):
+    return ", ".join("<code>%s</code>" % esc(s) for s in items)
+
+
+def state_figure(src, comps, figs, here):
+    parsed = parse_state_machine(src)
+    if parsed is None:
+        return None
+    meta, marks, meanings, shapes, edges = parsed
+    states = {nd for e in edges for nd in e[:2]}
+    fig_no = figs.next() if figs is not None else "—"
+    title = meta.get("title", "")
+
+    head = []
+    if meta.get("entity"):
+        head.append('<div class="seqline"><span class="lbl">Entity</span><code>%s</code></div>'
+                    % esc(meta["entity"]))
+    if meta.get("code"):
+        head.append('<div class="seqline"><span class="lbl">Code</span><code>%s</code></div>'
+                    % esc(meta["code"]))
+
+    svg = svg_dag(edges, comps, fig_no, shapes=shapes, aria="entity state machine",
+                  wrap=False, initial=marks["initial"])
+    if svg is None:
+        return None
+    caption = ('FIG %s · state · %s'
+               '<span style="color:%s;font-weight:700">▢ viền xanh = bắt đầu</span> · '
+               '▣ viền đôi = kết thúc · nhãn cạnh là sự kiện'
+               % (fig_no, (esc(title) + " — ") if title else "", L1))
+    # A lifecycle loops by nature — a refund goes back, a retry comes round again.
+    # The lanes under the rows come from the graph engine, not from anything here.
+    loops = len(feedback_arcs(edges))
+    if loops:
+        caption += ' · %d transition quay ngược chạy dưới các hàng' % loops
+
+    notes = []
+    if len(states) > STATE_MAX_STATES or len(edges) > STATE_MAX_TRANSITIONS:
+        notes.append('<div class="note"><span class="lbl">Dense</span>%d trạng thái · %d transition '
+                     "— quá ngưỡng đọc thoải mái (%d · %d). Hình vẫn vẽ đủ và cuộn ngang; "
+                     "nếu khó theo dõi thì tách thành nhiều máy trạng thái nhỏ hơn.</div>"
+                     % (len(states), len(edges), STATE_MAX_STATES, STATE_MAX_TRANSITIONS))
+    # Declaring one state opts the file into the typo check. It is worth having at
+    # all because a mistyped state reads as plausible: a stray box in a flowchart
+    # catches the eye, `shiped` sitting in a lifecycle does not.
+    if meanings:
+        missing = sorted(states - set(meanings), key=lambda s: s.lower())
+        if missing:
+            notes.append('<div class="note"><span class="lbl">Undeclared</span>%d trạng thái xuất '
+                         "hiện trong transition nhưng chưa khai báo: %s. Thêm dòng "
+                         "<code>state: &lt;tên&gt; — &lt;nghĩa&gt;</code>, hoặc kiểm tra lại "
+                         "chính tả.</div>" % (len(missing), code_list(missing)))
+    msgs = []
+    if marks["extra_initial"]:
+        msgs.append("<code>initial:</code> chỉ nhận một trạng thái — đang bỏ qua %s."
+                    % code_list(marks["extra_initial"]))
+    named = ([marks["initial"]] if marks["initial"] else []) + marks["final"]
+    unknown = sorted({s for s in named if s not in states}, key=lambda s: s.lower())
+    if unknown:
+        # Not drawn as a lone box: svg_dag lays out edges, so an unreachable state
+        # would need a fabricated transition, and a box nothing points at says
+        # nothing about how you reach it. Naming it in a note is the honest fix.
+        msgs.append("%s khai báo ở <code>initial:</code>/<code>final:</code> nhưng không xuất "
+                    "hiện trong transition nào — kiểm tra lại chính tả." % code_list(unknown))
+    if msgs:
+        notes.append('<div class="note"><span class="lbl">Marks</span>%s</div>' % " ".join(msgs))
+
+    tables = state_table(meanings, here) if any(meanings.values()) else ""
+    tables += seq_steps_table(edges, here, last_col="event")
+    return ("".join(notes) + '<div class="plot flowfig">%s%s<p class="figcap">%s</p></div>'
+            % ("".join(head), svg, caption) + tables)
 
 
 # ---------------------------------------------------------------- shared page shell
@@ -1714,11 +1880,12 @@ def build_current(ctx, docs, data):
     arch_flows, arch_charts = arch_figs["flow"], arch_figs["flowchart"]
     # (source label, anchor, blocks) — business flows collected from every Layer-1
     # doc and shown together, so they read as a set instead of one per card.
-    flow_src, chart_src = [], []
+    flow_src, chart_src, state_src = [], [], []
     # Parsed once: the rail needs the count before the section needs the blocks.
     logic_figs = [(fm_str(d, "domain") or doc_title(d), extract_figures(d["body"])[0])
                   for d in data["logic"]]
     logic_charts = sum(len(f["flowchart"]) for _label, f in logic_figs)
+    logic_states = sum(len(f["state"]) for _label, f in logic_figs)
     amends = []
     for entry in as_list(arch_fm.get("amended_by", [])):
         m = AMEND_RE.match(str(entry).strip())
@@ -1746,10 +1913,13 @@ def build_current(ctx, docs, data):
             '<div class="st"><span class="c"></span><a href="#architecture">Architecture</a><small>%s</small></div>'
             '<div class="trk"></div>'
             '<div class="st"><span class="c"></span><a href="#logic">Business logic</a><small>%s</small></div>'
+            '<div class="trk"></div>'
+            '<div class="st"><span class="c"></span><a href="#states">State machines</a><small>%s</small></div>'
             "</div>"
             % ("%d documented" % len(products),
                "%d now · %d next" % (now_count, next_count), arch_sub,
-               "%d rule%s" % (logic_charts, "" if logic_charts == 1 else "s")))
+               "%d rule%s" % (logic_charts, "" if logic_charts == 1 else "s"),
+               "%d machine%s" % (logic_states, "" if logic_states == 1 else "s")))
 
     parts = ['<p class="kicker">Layer 1 · Foundation — state</p>',
              "<h1>Foundation — current state</h1>",
@@ -1783,6 +1953,8 @@ def build_current(ctx, docs, data):
             flow_src.append((name, "#p-" + slug, prod_figs["flow"]))
         if prod_figs["flowchart"]:
             chart_src.append((name, "#p-" + slug, prod_figs["flowchart"]))
+        if prod_figs["state"]:
+            state_src.append((name, "#p-" + slug, prod_figs["state"]))
         body_html = md_to_html(prod_body, here, comps, figs)
         details = ('<details class="more"><summary>Full document</summary><div class="md">%s</div></details>'
                    % body_html) if body_html.strip() else ""
@@ -1956,13 +2128,17 @@ def build_current(ctx, docs, data):
         flow_src.append(("Architecture", "#architecture", arch_flows))
     if arch_charts:
         chart_src.append(("Architecture", "#architecture", arch_charts))
-    # 03_business-logic is where branching rules live, so its charts come last —
-    # after any chart a product or the architecture doc happened to carry.
+    if arch_figs["state"]:
+        state_src.append(("Architecture", "#architecture", arch_figs["state"]))
+    # 03_business-logic is where branching rules and lifecycles live, so its figures
+    # come last — after any a product or the architecture doc happened to carry.
     for label, d_figs in logic_figs:
         if d_figs["flow"]:
             flow_src.append((label, "#logic", d_figs["flow"]))
         if d_figs["flowchart"]:
             chart_src.append((label, "#logic", d_figs["flowchart"]))
+        if d_figs["state"]:
+            state_src.append((label, "#states", d_figs["state"]))
     parts.append('<h2 id="flows" class="s-l1"><span class="idx">§4</span>Business flows '
                  '<span class="src tag">```flow trong docs/01_products/ · 02_architecture/ · '
                  "03_business-logic/</span></h2>")
@@ -2013,6 +2189,31 @@ def build_current(ctx, docs, data):
             "<code>decide: check — câu hỏi?</code>, rồi nối các bước: "
             "<code>check -&gt; approve : yes</code>"))
 
+    parts.append('<h2 id="states" class="s-l1"><span class="idx">§6</span>State machines '
+                 '<span class="src tag">```state trong docs/03_business-logic/</span></h2>')
+    parts.append(section_sub("Vòng đời của một entity — nó ở được những trạng thái nào, sự kiện "
+                             "nào chuyển nó đi. §5 kể lựa chọn; chỗ này kể trạng thái"))
+    if state_src:
+        for label, anchor, blocks in state_src:
+            parts.append('<h3>%s <a class="tag" href="%s">nguồn</a></h3>' % (esc(label), anchor))
+            for block in blocks:
+                fig = state_figure(block, comps, figs, here)
+                if fig:
+                    parts.append(fig)
+                else:
+                    parts.append('<div class="note"><span class="lbl">Note</span>Một khối '
+                                 "<code>```state</code> không đọc được transition nào — mỗi chuyển "
+                                 "trạng thái là <code>a -&gt; b : sự kiện</code>; trạng thái đầu và "
+                                 "cuối khai báo bằng <code>initial:</code> và "
+                                 "<code>final:</code>.</div>")
+                    parts.append("<pre><code>%s</code></pre>" % esc(block.strip()))
+    else:
+        parts.append(empty_state(
+            "NO STATE MACHINES — thêm một khối <code>```state</code> vào "
+            "<code>docs/03_business-logic/</code>. Khai báo trạng thái đầu bằng "
+            "<code>initial: pending</code>, rồi nối: "
+            "<code>pending -&gt; paid : payment.succeeded</code>"))
+
     sidebar = ['<li><a href="#products">§1 Products</a></li>']
     for d in products:
         slug = slugs[d["path"]]
@@ -2026,6 +2227,7 @@ def build_current(ctx, docs, data):
         sidebar.append('<li class="sub"><a href="#%s">%s</a></li>' % (anchor, label))
     sidebar.append('<li><a href="#flows">§4 Business flows</a></li>')
     sidebar.append('<li><a href="#logic">§5 Business logic</a></li>')
+    sidebar.append('<li><a href="#states">§6 State machines</a></li>')
 
     return page_html(ctx, "%s · Foundation — current state" % ctx["project"],
                      "Foundation", "".join(sidebar), "".join(parts), "FOUNDATION — CURRENT"), latest_rev
