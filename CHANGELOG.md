@@ -7,6 +7,71 @@ for the plugin version — the renderer stamps it into every generated page).
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-07-31
+
+### ⚠️ Breaking — this plugin now installs switched off
+
+`docs-kit` registers two hooks, `PostToolUse` and `Stop`. Hooks run without you
+asking on that particular occasion, so the plugin ships `defaultEnabled: false`:
+**a fresh `/plugin install` leaves it disabled** until you turn it on.
+
+```
+/plugin enable docs-kit@archi-ai-labs
+```
+
+Three things that are *not* affected:
+
+- **Anyone already running `docs-kit`.** A choice recorded in `enabledPlugins`
+  outranks this default, at every settings scope. Nothing flips.
+- **The installer route.** `install.sh --plugins docs-kit` writes an explicit
+  `true`, and naming the plugin is the decision this default was waiting for.
+- **Claude Code before v2.1.154.** Those versions ignore the field and install
+  the plugin enabled either way.
+
+This is the judgement the marketplace installer has always made — with no
+arguments it enables `trim-kit` only — moved into the plugin, where it also
+covers people who never touch the installer.
+
+### ⚠️ Changed — Claude reaches for one skill here, not four
+
+Only `brief` stays model-invocable. `docs-init`, `docs-check`, `docs-sync` and
+`docs-render` carry `disable-model-invocation: true`, which takes their
+descriptions **out of context entirely** rather than merely locking the trigger.
+
+What that costs: *"help me set up project docs"* no longer reaches `docs-init` on
+its own. You type `/docs-kit:docs-init`. What it buys: the plugin's always-on
+context cost is now **about 77 tokens**, one description, and the README states
+that as a measured number.
+
+`brief` was the one worth keeping open — someone assembling instructions for
+another agent will not remember that a command exists for exactly that — and its
+description is rewritten to name the situation rather than the feature, which is
+what a description has to do to fire at all.
+
+### Changed
+
+- **`commands/` is gone; every command is a skill.** Three of its five files were
+  six-line wrappers whose entire body said *"invoke the same-named skill"* — and a
+  skill outranks a command of the same name, so **those three never ran**. They
+  were dead files shaped like implementations. `brief` and `docs-render` held real
+  content and moved to `skills/` with their history. The set of commands is
+  unchanged: `brief`, `docs-check`, `docs-init`, `docs-render`, `docs-sync`.
+- **Three descriptions stopped enforcing in prose what a flag enforces for free.**
+  `docs-check`, `docs-init` and `docs-sync` each carried *"Use only when the user
+  runs /docs-kit:…"* inside `description` — a sentence that rode in context on
+  every turn to ask for the behaviour `disable-model-invocation` guarantees.
+- **`plugin.json` carries the metadata a reviewer reads first** — `$schema`,
+  `displayName`, `homepage`, `repository`, `license`, `author.url` — and CI runs
+  `claude plugin validate --strict`.
+
+### Fixed
+
+- **`docs-sync`'s frontmatter would have shipped unparseable.** An unquoted
+  `description` containing `: ` is a YAML mapping, not a string; the skill loads
+  at runtime with **every frontmatter field silently dropped**. Caught by
+  `claude plugin validate` before release, which is the argument for running it as
+  a gate rather than a courtesy.
+
 ## [0.8.0] — 2026-07-31
 
 ### ⚠️ Breaking — the marketplace id changed
