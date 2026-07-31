@@ -135,6 +135,11 @@ component **is** — written after reading that code, not guessed from its name.
 Longer explanation goes in a `### <name>` section in the body, which the
 rendered card picks up as expandable detail.
 
+The body carries ```` ```flow ```` blocks for scenarios and an ```` ```erd ````
+block for the data model (both in §10). Components answer *what exists* for
+services; the ERD answers the same question for data, which is why it lives here
+and not in a folder of its own.
+
 ### `03_business-logic/*.md` — Business logic
 ```yaml
 ---
@@ -150,6 +155,7 @@ The split against Architecture is by the question answered, not by subject:
 | Question | Folder |
 |---|---|
 | What exists, and what calls what | `02_architecture/` |
+| What the data looks like, and what links to what | `02_architecture/` (```` ```erd ````) |
 | Doing X — what happens, in what order | `02_architecture/` (```` ```flow ````) |
 | **Hitting condition Y — which way does it branch, by what rule** | **`03_business-logic/`** |
 | **Where can this entity be, and what moves it** | **`03_business-logic/`** |
@@ -369,6 +375,8 @@ Rules:
   | steps in a sequence | 16 |
   | states in a state machine | 12 |
   | transitions in a state machine | 24 |
+  | tables in an ERD | 10 |
+  | columns in one table | 15 |
 
   Past any of these the flow is still drawn as a graph, at natural size,
   scrolling inside its own frame; a note suggests splitting it across
@@ -433,6 +441,42 @@ Rules:
   Budget, warn-only as everywhere else: **12 states · 24 transitions**. The
   transition table prints under every machine, and the state-meaning table too when
   any `state:` line carried a meaning.
+- **Data model** (```` ```erd ```` fenced block in the *body* of the
+  `02_architecture/` doc, and only there — a data model filed under a product or
+  a business rule is misfiled, and rendering it anyway would hide that) renders as
+  an entity-relationship diagram, in the **Data model** sub-section of §3 right
+  after Components:
+
+  | line | meaning |
+  |---|---|
+  | `title:` `code:` | optional headers |
+  | `table: <name>` | opens an entity; every following line is one of its columns |
+  | `<name> <type> <flags…>` | one column, flags in any order |
+  | flag `pk` | primary key |
+  | flag `fk -> <table>.<column>` | foreign key — **this is what draws a relationship** |
+  | flag `unique` | on an `fk`, makes the relationship 1:1 |
+  | flag `null` | nullable — the relationship is optional |
+  | trailing ` — <gloss>` | optional explanation, the same separator `decide:` and `state:` use |
+
+  **There is no relationship syntax, and cardinality is never written by hand.** A
+  foreign key *is* the relationship, and what it means is not a matter of opinion:
+  many child rows point at one parent row. So the child end takes a crow's foot,
+  the parent end a single bar, `unique` turns the child end into a bar as well, and
+  `null` adds the empty ring for zero-or-one. Writing those by hand would create a
+  second source for one fact, and the picture would eventually disagree with the
+  column list printed beneath it.
+
+  Entity boxes are the first nodes in the engine whose height is not fixed — an
+  entity is as tall as its table is long. That is a change to the shared layout,
+  not a second layout: columns measure summed heights instead of multiplying by a
+  row pitch, and everything else — layering, label gaps, return lanes — is
+  untouched. A self-referencing FK is an ordinary back-edge on an ordinary return
+  lane. `pk` and `fk` tags stay graphite: they name no layer, so they buy no hue.
+
+  Budget, warn-only: **10 tables · 15 columns in one table**. The column table —
+  table · column · type · keys · relationship · note — prints under every ERD, and
+  a schema with no foreign key at all prints only that table, because a picture of
+  unconnected boxes says nothing the table does not.
 - **Business flows** (```` ```flow ```` fenced block in the *body* of any
   `01_products/`, `02_architecture/` or `03_business-logic/` doc) render as a
   sequence figure —

@@ -49,6 +49,53 @@ kèm `b -> a` là callback, là đọc cache ngược, là retry — nên cạnh
 cuộn ngang, kèm gợi ý tách bớt sang doc khác. Không bao giờ thu nhỏ hình cho
 vừa cột.
 
+## Data model
+
+Components ở trên trả lời "có những gì" cho service. Khối ```` ```erd ```` dưới đây
+trả lời đúng câu đó cho dữ liệu. Đây là **ví dụ chạy được** — nó biến thành hình
+trên `current.html`. Xoá đi khi viết lược đồ thật, hoặc sửa đè lên.
+
+```erd
+title: Lược đồ <hệ thống>
+code: <file schema/migration để đọc>
+
+table: accounts
+id           uuid   pk
+email        text   unique
+created_at   timestamptz
+
+table: orders
+id           uuid    pk
+account_id   uuid    fk -> accounts.id — ai đặt đơn này
+status       text
+total_cents  bigint
+
+table: order_items
+id         uuid   pk
+order_id   uuid   fk -> orders.id
+sku        text
+qty        int
+```
+
+| Dòng | Nghĩa |
+|---|---|
+| `title:` `code:` | Header, đều không bắt buộc |
+| `table: <tên>` | Mở một bảng. Mọi dòng sau nó là cột, cho tới `table:` tiếp theo |
+| `<tên> <kiểu> <cờ…>` | Một cột. Các cờ viết thứ tự nào cũng được |
+| `pk` | Khoá chính |
+| `fk -> <bảng>.<cột>` | Khoá ngoại — **đây chính là thứ vẽ ra quan hệ** |
+| `unique` | Trên cột fk thì quan hệ thành 1:1 |
+| `null` | Cột cho phép rỗng — quan hệ không bắt buộc |
+
+**Không có cú ph��p quan hệ, và không ai gõ cardinality bằng tay.** Khoá ngoại
+*chính là* quan hệ, và ý nghĩa của nó không phải chuyện quan điểm: nhiều dòng con
+trỏ về một dòng cha. Nên đầu con vẽ chân quạ, đầu cha vẽ gạch đơn, `unique` biến
+đầu con thành gạch đơn, `null` thêm vòng tròn rỗng. N:M là bảng trung gian hai fk
+— đúng như schema thật vẫn có.
+
+Quan hệ tự trỏ (`parent_id fk -> orders.id`) viết như mọi cột khác; renderer nhận
+ra nó quay ngược và vẽ xuống làn dưới các hàng.
+
 ## Business flows
 
 Mỗi kịch bản nghiệp vụ một khối ```` ```flow ````. Đây là chỗ trả lời "làm việc X

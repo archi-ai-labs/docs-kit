@@ -170,6 +170,47 @@ bị từ chối ở tầng domain, không phải ở tầng HTTP.
 Không giữ state. Mỗi lần capture mang theo idempotency key sinh từ order id, nên
 PSP nhận lại cùng một key sẽ trả về kết quả cũ thay vì thu tiền hai lần.
 
+## Data model
+
+```erd
+title: Lược đồ orderhub
+code: internal/store/schema.sql
+
+table: merchants
+id           uuid         pk
+name         text
+hmac_key     text — khoá ký request, xoay vòng 90 ngày
+created_at   timestamptz
+
+table: orders
+id                uuid    pk
+merchant_id       uuid    fk -> merchants.id — merchant sở hữu đơn này
+parent_order_id   uuid    fk -> orders.id null — đơn gốc khi tách kiện
+status            text
+total_cents       bigint
+created_at        timestamptz
+
+table: order_items
+id         uuid     pk
+order_id   uuid     fk -> orders.id
+sku        text
+qty        int
+unit_cents bigint
+
+table: refunds
+id           uuid     pk
+order_id     uuid     fk -> orders.id unique — mỗi đơn hoàn nhiều nhất một lần
+amount_cents bigint
+psp_ref      text
+
+table: outbox
+id          uuid          pk
+order_id    uuid          fk -> orders.id
+topic       text
+payload     jsonb
+sent_at     timestamptz null
+```
+
 ## Data flow
 
 Các cạnh khai trong frontmatter mới là mô tả luồng có thẩm quyền.

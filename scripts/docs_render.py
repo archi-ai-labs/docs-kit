@@ -643,25 +643,47 @@ def chip_box(lines):
     return max(chip_w_for(x) for x in lines), 16 if len(lines) == 1 else 27
 
 
+# An entity box is a header band plus one line per column — the only node in the
+# engine whose height is not NODE_H, and the reason the layout measures heights
+# instead of multiplying by a row pitch.
+ENTITY_HEAD_H = 26
+ENTITY_COL_H = 20
+
+
 def svg_dag(edges, comps, fig_no="1", shapes=None, aria="data flow graph",
-            caption=None, wrap=True, initial=None):
+            caption=None, wrap=True, initial=None, entity_rows=None,
+            marks=None, defs=""):
     """The one layered-graph engine. `shapes` switches it from data-flow nodes
-    (icon badge, kind tint) to flowchart nodes (step / decide / terminal) or state
-    machine nodes (state / final); each of those is the same layering problem with
-    different boxes, and giving any of them its own engine would mean maintaining
-    the back-edge routing more than once. `initial` names the one node drawn with
-    the start stroke. `wrap=False` returns the bare <svg> so a caller can compose
-    its own frame."""
+    (icon badge, kind tint) to flowchart nodes (step / decide / terminal), state
+    machine nodes (state / final) or ERD entities; each of those is the same
+    layering problem with different boxes, and giving any of them its own engine
+    would mean maintaining the back-edge routing more than once. `initial` names
+    the one node drawn with the start stroke.
+
+    `entity_rows` maps a node to its column lines and makes that node an entity —
+    a box as tall as the table is long. It is deliberately NOT called `rows`: the
+    label loops below bind a local `rows`, and a closure over a shadowed name
+    would silently measure a wrapped label instead of a table.
+
+    `marks` maps an edge index to (start marker id, end marker id), either of
+    which may be None for a bare end; absent index keeps the default arrowhead.
+    `defs` is extra <defs> content from the caller. Between them this function
+    stays ignorant of what a crow's foot is — it places markers by id, and the
+    figure that needs them defines them.
+
+    `wrap=False` returns the bare <svg> so a caller can compose its own frame."""
     # Cycles do not change the style — they lose their back-edges for the
     # purpose of layering, then get them drawn back in below the rows.
     back_idx = feedback_arcs(edges)
-    fwd = [e for i, e in enumerate(edges) if i not in back_idx]
-    back = [e for i, e in enumerate(edges) if i in back_idx]
-    layer = layer_nodes(fwd)
+    # Both lists carry the edge's index in `edges`, because `marks` is keyed by it
+    # and the back list gets re-sorted into lanes further down.
+    fwd = [(i, e) for i, e in enumerate(edges) if i not in back_idx]
+    back = [(i, e) for i, e in enumerate(edges) if i in back_idx]
+    layer = layer_nodes([e for _i, e in fwd])
     if layer is None:
         return None
     # A node reachable only over a back-edge still needs a column of its own.
-    for a, b, _asyn, _lbl in back:
+    for a, b, _asyn, _lbl in [e for _i, e in back]:
         for nd in (a, b):
             if nd not in layer:
                 layer[nd] = 0
@@ -671,20 +693,34 @@ def svg_dag(edges, comps, fig_no="1", shapes=None, aria="data flow graph",
     ncols = max(cols) + 1
 
     def node_w(nd):
+        if entity_rows is not None and nd in entity_rows:
+            # An entity is as wide as its widest column line, not as its name.
+            # +8 leaves room for the PK / FK tag between the name and the type.
+            widest = max([len(nd) + 2] + [len(r[0]) + len(r[1]) + 8
+                                          for r in entity_rows[nd]])
+            return int(30 + CHAR_W * widest)
         if shapes is None:
             return int(48 + CHAR_W * len(nd))   # room for the 22px icon badge
         # A diamond wastes its corners, so the same text needs a wider box.
         return int((64 if shapes.get(nd) == "decide" else 30) + CHAR_W * len(nd))
 
+    def node_h(nd):
+        if entity_rows is not None and nd in entity_rows:
+            return ENTITY_HEAD_H + ENTITY_COL_H * len(entity_rows[nd])
+        return NODE_H
+
     col_w = {c: max(node_w(nd) for nd in cols[c]) for c in cols}
-    GAP_MIN, ROW_H, NODE_H, TOP = 46, 60, 34, 16
+    # ROW_GAP, not a row pitch: with every node one height the two are the same
+    # arithmetic, but only the gap survives boxes of different heights.
+    GAP_MIN, ROW_GAP, NODE_H, TOP = 46, 26, 34, 16
 
     # Every label lives in the gap right after its source column, and each gap is
     # widened to hold its widest label. Labels therefore never reach into a column,
     # which is what used to put chips on top of node boxes.
     # Only forward labels live in a gap; a back-edge label rides its own return
     # lane below the rows, so it must not widen a column gap it never enters.
-    labelled = [(a, b, asyn, lbl.strip()) for a, b, asyn, lbl in fwd if lbl and lbl.strip()]
+    labelled = [(a, b, asyn, lbl.strip()) for _i, (a, b, asyn, lbl) in fwd
+                if lbl and lbl.strip()]
     gap_w = {}
     for c in range(ncols):
         gap_w[c] = GAP_MIN
@@ -697,22 +733,27 @@ def svg_dag(edges, comps, fig_no="1", shapes=None, aria="data flow graph",
         col_x[c] = x0
         x0 += col_w.get(c, 0) + gap_w[c]
     width = x0 - gap_w[ncols - 1] + 16
-    max_rows = max(len(v) for v in cols.values())
+    col_h = {c: sum(node_h(nd) for nd in cols[c]) + ROW_GAP * (len(cols[c]) - 1)
+             for c in cols}
+    tallest = max(col_h.values())
     # A wrapped back-edge label is two rows tall, so the lanes have to spread far
     # enough that one lane's chip cannot land on the next lane's line.
-    back_rows = [wrap_label(e[3].strip()) if e[3] and e[3].strip() else [] for e in back]
+    back_rows = [wrap_label(e[3].strip()) if e[3] and e[3].strip() else []
+                 for _i, e in back]
     LANE_H = 28 if any(len(r) > 1 for r in back_rows) else 15
-    rows_bottom = TOP + max_rows * ROW_H
+    # One gap below the deepest box, so a return lane never starts against it.
+    rows_bottom = TOP + tallest + ROW_GAP
     height = rows_bottom + (10 + len(back) * LANE_H + 16 if back else 26)
 
     pos = {}
     for c, members in cols.items():
-        pad = (max_rows - len(members)) * ROW_H / 2.0
-        for r, nd in enumerate(members):
-            pos[nd] = (col_x[c], TOP + pad + r * ROW_H)
+        y = TOP + (tallest - col_h[c]) / 2.0   # short columns ride the middle
+        for nd in members:
+            pos[nd] = (col_x[c], y)
+            y += node_h(nd) + ROW_GAP
 
     s = [svg_size(width, height, aria),
-         "<defs>", marker_def("dag-a", INK), marker_def("dag-t", FAST),
+         "<defs>", marker_def("dag-a", INK), marker_def("dag-t", FAST), defs,
          "" if shapes is not None
          else symbol_defs(sorted({NODE_STYLE[kind_of(nd, comps)][4] for nd in layer}))]
     s.append("</defs>")
@@ -744,13 +785,20 @@ def svg_dag(edges, comps, fig_no="1", shapes=None, aria="data flow graph",
         placed.append((cx - cw / 2, y - 12, cw, ch))
         return y
 
-    for a, b, asyn, lbl in fwd:
+    def marker_attrs(ei, default_end):
+        """(start, end) marker ids for one edge. A relationship carries its
+        cardinality at both ends and no arrowhead, so either end may be bare."""
+        mstart, mend = (marks or {}).get(ei, (None, default_end))
+        return (('' if not mstart else ' marker-start="url(#%s)"' % mstart)
+                + ('' if not mend else ' marker-end="url(#%s)"' % mend))
+
+    for ei, (a, b, asyn, lbl) in fwd:
         ax, ay = pos[a]
         bx, by = pos[b]
         x1 = ax + node_w(a)
-        y1 = ay + NODE_H / 2
+        y1 = ay + node_h(a) / 2.0
         x2 = bx - 6
-        y2 = by + NODE_H / 2
+        y2 = by + node_h(b) / 2.0
         color, mid = (FAST, "dag-t") if asyn else (INK, "dag-a")
         dash = ' stroke-dasharray="5 4" class="dashrun"' if asyn else ""
         if abs(y1 - y2) < 1:
@@ -759,9 +807,11 @@ def svg_dag(edges, comps, fig_no="1", shapes=None, aria="data flow graph",
             cx1 = x1 + (x2 - x1) * 0.45
             cx2 = x1 + (x2 - x1) * 0.55
             d = "M%g %g C %g %g, %g %g, %g %g" % (x1, y1, cx1, y1, cx2, y2, x2, y2)
-        s.append('<path d="%s" fill="none" stroke="%s" stroke-width="1.6"%s marker-end="url(#%s)"/>'
-                 % (d, color, dash, mid))
-        if not asyn:
+        s.append('<path d="%s" fill="none" stroke="%s" stroke-width="1.6"%s%s/>'
+                 % (d, color, dash, marker_attrs(ei, mid)))
+        # The packet means data moving along the edge. A foreign key is a shape of
+        # the schema, not a flow, so an edge with its own endpoint markers gets none.
+        if not asyn and ei not in (marks or {}):
             s.append('<path d="%s" class="pkt"/>' % d)
         text = lbl.strip() if lbl else ""
         if text:
@@ -791,22 +841,22 @@ def svg_dag(edges, comps, fig_no="1", shapes=None, aria="data flow graph",
     # Narrowest span takes the shallowest lane. The other way round, a short
     # return nested inside a long one has to cross the long one's horizontal run
     # on its way down; this way each drop stops short of every deeper lane.
-    for k, (a, b, asyn, lbl) in enumerate(
-            sorted(back, key=lambda e: (span_of(e), e[0].lower(), e[1].lower()))):
+    for k, (ei, (a, b, asyn, lbl)) in enumerate(
+            sorted(back, key=lambda p: (span_of(p[1]), p[1][0].lower(), p[1][1].lower()))):
         ly = rows_bottom + 10 + k * LANE_H
         ax, ay = pos[a]
         bx, by = pos[b]
-        sx, sy = ax + node_w(a) / 2.0, ay + NODE_H
-        tx, ty = bx + node_w(b) / 2.0, by + NODE_H
+        sx, sy = ax + node_w(a) / 2.0, ay + node_h(a)
+        tx, ty = bx + node_w(b) / 2.0, by + node_h(b)
         color, mid = (FAST, "dag-t") if asyn else (INK, "dag-a")
         dash = ' stroke-dasharray="5 4" class="dashrun"' if asyn else ""
         if a == b:  # feeds itself: a retry, or its own queue
             d = "M%g %g C %g %g, %g %g, %g %g" % (sx - 9, sy, sx - 34, ly, sx + 34, ly, sx + 9, sy)
         else:
             d = "M%g %g C %g %g, %g %g, %g %g" % (sx, sy, sx, ly, tx, ly, tx, ty)
-        s.append('<path d="%s" fill="none" stroke="%s" stroke-width="1.6"%s marker-end="url(#%s)"/>'
-                 % (d, color, dash, mid))
-        if not asyn:
+        s.append('<path d="%s" fill="none" stroke="%s" stroke-width="1.6"%s%s/>'
+                 % (d, color, dash, marker_attrs(ei, mid)))
+        if not asyn and ei not in (marks or {}):
             s.append('<path d="%s" class="pkt"/>' % d)
         text = lbl.strip() if lbl else ""
         if text:
@@ -824,18 +874,36 @@ def svg_dag(edges, comps, fig_no="1", shapes=None, aria="data flow graph",
 
     for nd in sorted(layer, key=lambda x: (layer[x], x.lower())):
         x, y = pos[nd]
-        w = node_w(nd)
+        w, h = node_w(nd), node_h(nd)
+        if entity_rows is not None and nd in entity_rows:
+            s.append('<rect x="%g" y="%g" width="%d" height="%d" rx="3" fill="#ffffff" '
+                     'stroke="%s" stroke-width="1.5"/>' % (x, y, w, h, INK))
+            s.append('<path d="M%g %g H%g" stroke="%s" stroke-width="1"/>'
+                     % (x, y + ENTITY_HEAD_H, x + w, INK))
+            s.append(svg_text(x + 10, y + 17.5, nd, 11.5, "700", INK))
+            for r, row in enumerate(entity_rows[nd]):
+                cname, ctype, tags = row[0], row[1], row[2]
+                cy = y + ENTITY_HEAD_H + ENTITY_COL_H * r + 14
+                key = "pk" in tags
+                s.append(svg_text(x + 10, cy, cname, 10.5, "700" if key else "500",
+                                  INK if key else INK2))
+                s.append(svg_text(x + w - 10, cy, ctype, 10.5, "500", INK3, anchor="end"))
+                # pk/fk stay graphite: they name no layer, so they buy no hue.
+                if key or "fk" in tags:
+                    s.append(svg_text(x + w - 10 - CHAR_W * (len(ctype) + 1), cy,
+                                      "PK" if key else "FK", 8.5, "700", INK3, anchor="end"))
+            continue
         if shapes is not None:
             shape = shapes.get(nd, "step")
             if shape == "decide":
                 s.append('<path d="M%g %g L%g %g L%g %g L%g %g Z" fill="#ffffff" stroke="%s" '
                          'stroke-width="1.5"/>'
-                         % (x, y + NODE_H / 2.0, x + w / 2.0, y, x + w, y + NODE_H / 2.0,
-                            x + w / 2.0, y + NODE_H, L1))
+                         % (x, y + h / 2.0, x + w / 2.0, y, x + w, y + h / 2.0,
+                            x + w / 2.0, y + h, L1))
             elif shape == "terminal":
                 s.append('<rect x="%g" y="%g" width="%d" height="%d" rx="%g" fill="%s" '
                          'stroke="%s" stroke-width="1.5"/>'
-                         % (x, y, w, NODE_H, NODE_H / 2.0, "#f4f6f8", INK2))
+                         % (x, y, w, h, h / 2.0, "#f4f6f8", INK2))
             elif shape in ("state", "final"):
                 # The start state is marked by its stroke — no dot beside the box and
                 # no pseudo-node. A dot would sit in the label gap, which is exactly
@@ -843,7 +911,7 @@ def svg_dag(edges, comps, fig_no="1", shapes=None, aria="data flow graph",
                 # figure that is not a state and inflate the count.
                 stroke, sw = (L1, 2) if nd == initial else (INK, 1.5)
                 s.append('<rect x="%g" y="%g" width="%d" height="%d" rx="8" fill="#ffffff" '
-                         'stroke="%s" stroke-width="%g"/>' % (x, y, w, NODE_H, stroke, sw))
+                         'stroke="%s" stroke-width="%g"/>' % (x, y, w, h, stroke, sw))
                 if shape == "final":
                     # Drawn INWARD, never as an outer ring: column widths come from
                     # node_w(), so a ring would push the box past its own column and
@@ -851,17 +919,17 @@ def svg_dag(edges, comps, fig_no="1", shapes=None, aria="data flow graph",
                     # never shrink to fit.
                     s.append('<rect x="%g" y="%g" width="%g" height="%g" rx="5" fill="none" '
                              'stroke="%s" stroke-width="1"/>'
-                             % (x + 3.5, y + 3.5, w - 7, NODE_H - 7, INK))
+                             % (x + 3.5, y + 3.5, w - 7, h - 7, INK))
             else:
                 s.append('<rect x="%g" y="%g" width="%d" height="%d" rx="2" fill="#ffffff" '
-                         'stroke="%s" stroke-width="1.5"/>' % (x, y, w, NODE_H, INK))
-            s.append(svg_text(x + w / 2.0, y + 21.5, nd, 11.5, "650",
+                         'stroke="%s" stroke-width="1.5"/>' % (x, y, w, h, INK))
+            s.append(svg_text(x + w / 2.0, y + h / 2.0 + 4.5, nd, 11.5, "650",
                               L1 if shape == "decide" else INK, anchor="middle"))
             continue
         border, dashed, badge_bg, icon_color, icon, label_fill = NODE_STYLE[kind_of(nd, comps)]
         dash = ' stroke-dasharray="5 4"' if dashed else ""
         s.append('<rect x="%g" y="%g" width="%d" height="%d" rx="2" fill="#ffffff" stroke="%s" stroke-width="1.5"%s/>'
-                 % (x, y, w, NODE_H, border, dash))
+                 % (x, y, w, h, border, dash))
         s.append('<rect x="%g" y="%g" width="22" height="22" rx="4" fill="%s"/>' % (x + 6, y + 6, badge_bg))
         s.append(use_icon(icon, x + 10, y + 10, icon_color, 14))
         s.append(svg_text(x + 36, y + 21.5, nd, 11.5, "650", label_fill))
@@ -1095,7 +1163,7 @@ def scan_fence(lines, i):
 
 # Every fence that renders as a figure. Adding a figure type is adding a name
 # here plus its parser — the scan below never changes shape again.
-FIGURE_FENCES = ("flow", "flowchart", "state")
+FIGURE_FENCES = ("flow", "flowchart", "state", "erd")
 
 
 def extract_figures(md, names=FIGURE_FENCES):
@@ -1399,6 +1467,178 @@ def state_figure(src, comps, figs, here):
     tables += seq_steps_table(edges, here, last_col="event")
     return ("".join(notes) + '<div class="plot flowfig">%s%s<p class="figcap">%s</p></div>'
             % ("".join(head), svg, caption) + tables)
+
+
+# ---------------------------------------------------------------- data model (ERD)
+
+ERD_HEAD_RE = re.compile(r"^(title|code)\s*:\s*(.*)$", re.I)
+ERD_TABLE_RE = re.compile(r"^table\s*:\s*(.+)$", re.I)
+ERD_FK_RE = re.compile(r"\bfk\s*->\s*([A-Za-z0-9_]+)\.([A-Za-z0-9_]+)", re.I)
+ERD_FLAGS = ("pk", "unique", "null")
+ERD_MAX_TABLES = 10
+ERD_MAX_COLUMNS = 15   # in any one table
+
+
+def erd_marker_defs():
+    """Crow's-foot notation, in four variants because a marker at the start of a
+    path and a marker at its end need different refX. `svg_dag` does not know any
+    of this exists — it places markers by id, and this is where they are defined."""
+    return (
+        # child end: three toes at the box, converging into the line
+        '<marker id="erd-many" viewBox="0 0 12 12" refX="0" refY="6" markerWidth="12" '
+        'markerHeight="12" orient="auto"><path d="M0 6 H11 M0 1 L11 6 M0 11 L11 6" '
+        'fill="none" stroke="%s" stroke-width="1.3"/></marker>'
+        # child end, 1:1: one bar instead of the toes
+        '<marker id="erd-one-s" viewBox="0 0 12 12" refX="0" refY="6" markerWidth="12" '
+        'markerHeight="12" orient="auto"><path d="M0 6 H12 M4 1 V11" fill="none" '
+        'stroke="%s" stroke-width="1.3"/></marker>'
+        # parent end: exactly one
+        '<marker id="erd-one-e" viewBox="0 0 12 12" refX="12" refY="6" markerWidth="12" '
+        'markerHeight="12" orient="auto"><path d="M0 6 H12 M8 1 V11" fill="none" '
+        'stroke="%s" stroke-width="1.3"/></marker>'
+        # parent end, nullable: zero or one — the ring sits outside the bar
+        '<marker id="erd-zero-one" viewBox="0 0 18 12" refX="18" refY="6" markerWidth="18" '
+        'markerHeight="12" orient="auto"><path d="M0 6 H18 M14 1 V11" fill="none" '
+        'stroke="%s" stroke-width="1.3"/><circle cx="7" cy="6" r="2.6" fill="#ffffff" '
+        'stroke="%s" stroke-width="1.3"/></marker>' % (INK, INK, INK, INK, INK))
+
+
+def parse_erd(src):
+    """An ```erd fence: `table:` opens an entity and every following line is one of
+    its columns. Returns (meta, order, tables, edges, marks) or None when no table
+    parsed.
+
+    There is no relationship syntax, deliberately. An `fk -> t.c` flag IS the
+    relationship, and its cardinality follows from what a foreign key means — many
+    child rows point at one parent row — so nothing is written twice and the
+    picture cannot disagree with the column list beside it."""
+    meta, tables, order, cur = {}, {}, [], None
+    for raw in src.split("\n"):
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        m = ERD_TABLE_RE.match(line)
+        if m:
+            cur = m.group(1).strip()
+            if cur and cur not in tables:
+                tables[cur] = []
+                order.append(cur)
+            continue
+        m = ERD_HEAD_RE.match(line)
+        if m:
+            meta[m.group(1).lower()] = m.group(2).strip()
+            continue
+        if cur is None:
+            continue          # a column before any table: has nowhere to live
+        body, gloss = split_decl(line)
+        ref = None
+        m = ERD_FK_RE.search(body)
+        if m:
+            # Lift the fk clause out first — what is left is name, type and flags,
+            # none of which can then be confused with the target it points at.
+            ref = (m.group(1), m.group(2))
+            body = body[:m.start()] + body[m.end():]
+        parts = body.split()
+        if not parts:
+            continue
+        cname, tags, ctype = parts[0], (["fk"] if ref else []), ""
+        for tok in parts[1:]:
+            if tok.lower() in ERD_FLAGS:
+                tags.append(tok.lower())
+            elif not ctype:
+                ctype = tok
+        tables[cur].append((cname, ctype, tuple(sorted(set(tags))), gloss, ref))
+    if not order:
+        return None
+    # Table order, then column order — deterministic without a sort, and it keeps
+    # the edge list reading the way the schema was written.
+    edges, marks = [], {}
+    for t in order:
+        for row in tables[t]:
+            if row[4] is None:
+                continue
+            marks[len(edges)] = ("erd-one-s" if "unique" in row[2] else "erd-many",
+                                 "erd-zero-one" if "null" in row[2] else "erd-one-e")
+            edges.append((t, row[4][0], False, ""))
+    return meta, order, tables, edges, marks
+
+
+def erd_columns_table(order, tables, here):
+    rows = []
+    for t in order:
+        for cname, ctype, tags, gloss, ref in tables[t]:
+            keys = " ".join('<span class="tag">%s</span>' % k
+                            for k in tags if k != "fk") or '<span class="dim">—</span>'
+            rel = ('→ <code>%s.%s</code>' % (esc(ref[0]), esc(ref[1]))) if ref \
+                else '<span class="dim">—</span>'
+            rows.append('<tr><td class="mono">%s</td><td class="mono">%s</td>'
+                        '<td class="mono">%s</td><td>%s</td><td>%s</td><td>%s</td></tr>'
+                        % (esc(t), esc(cname),
+                           esc(ctype) if ctype else '<span class="dim">—</span>',
+                           keys, rel,
+                           inline_md(gloss, here) if gloss else '<span class="dim">—</span>'))
+    return ('<table class="data"><tr><th style="width:130px">bảng</th>'
+            '<th style="width:150px">cột</th><th style="width:110px">kiểu</th>'
+            '<th style="width:110px">khoá</th><th style="width:170px">quan hệ</th>'
+            "<th>ghi chú</th></tr>%s</table>" % "".join(rows))
+
+
+def erd_figure(src, comps, figs, here):
+    parsed = parse_erd(src)
+    if parsed is None:
+        return None
+    meta, order, tables, edges, marks = parsed
+    # Only a drawn figure spends a figure number, so a schema with no foreign key
+    # does not leave a gap in the numbering of the sheet.
+    fig_no = figs.next() if (edges and figs is not None) else "—"
+    title = meta.get("title", "")
+
+    head = []
+    if meta.get("code"):
+        head.append('<div class="seqline"><span class="lbl">Code</span><code>%s</code></div>'
+                    % esc(meta["code"]))
+
+    # An fk may point at a table this block never declared. Draw it anyway — the
+    # relationship is real — as an empty box, and say so in a note.
+    unknown = sorted({p for _c, p, _a, _l in edges if p not in tables},
+                     key=lambda s: s.lower())
+    rows_map = dict((t, tables[t]) for t in order)
+    for t in unknown:
+        rows_map[t] = []
+
+    # No foreign key means no graph to lay out — svg_dag places boxes by their
+    # edges, and a picture of unconnected boxes says nothing the table does not.
+    svg = svg_dag(edges, comps, fig_no, aria="entity relationship diagram",
+                  wrap=False, entity_rows=rows_map, marks=marks,
+                  defs=erd_marker_defs()) if edges else None
+    if edges and svg is None:
+        return None
+
+    caption = ('FIG %s · erd · %s%d bảng · %d quan hệ — '
+               '<span style="color:%s;font-weight:700">▮ pk</span> · '
+               'chân quạ = nhiều · gạch đơn = đúng một · ○ = không bắt buộc'
+               % (fig_no, (esc(title) + " — ") if title else "",
+                  len(order), len(edges), L1))
+    loops = len(feedback_arcs(edges)) if edges else 0
+    if loops:
+        caption += ' · %d quan hệ tự trỏ chạy dưới các hàng' % loops
+
+    notes = []
+    widest = max([len(v) for v in tables.values()] or [0])
+    if len(order) > ERD_MAX_TABLES or widest > ERD_MAX_COLUMNS:
+        notes.append('<div class="note"><span class="lbl">Dense</span>%d bảng · bảng rộng nhất '
+                     "%d cột — quá ngưỡng đọc thoải mái (%d · %d). Hình vẫn vẽ đủ và cuộn "
+                     "ngang; nếu khó theo dõi thì tách lược đồ này theo bounded context.</div>"
+                     % (len(order), widest, ERD_MAX_TABLES, ERD_MAX_COLUMNS))
+    if unknown:
+        notes.append('<div class="note"><span class="lbl">Unknown</span>%d bảng được fk trỏ tới '
+                     "nhưng không khai báo trong khối này: %s. Vẽ thành hộp rỗng — thêm "
+                     "<code>table:</code> cho nó, hoặc kiểm tra lại chính tả.</div>"
+                     % (len(unknown), code_list(unknown)))
+
+    body = ('<div class="plot flowfig">%s%s<p class="figcap">%s</p></div>'
+            % ("".join(head), svg, caption)) if svg else ""
+    return "".join(notes) + body + erd_columns_table(order, tables, here)
 
 
 # ---------------------------------------------------------------- shared page shell
@@ -2059,6 +2299,27 @@ def build_current(ctx, docs, data):
         parts.append(empty_state("NO COMPONENTS — điền danh sách <code>components</code> trong "
                                  "<code>docs/02_architecture/architecture.md</code>"))
 
+    parts.append('<h3 id="a-data">Data model</h3>')
+    parts.append(section_sub("Lược đồ dữ liệu — bảng nào có cột gì, và cột nào trỏ sang bảng "
+                             "nào. Components ở trên trả lời “có những gì” cho service; chỗ "
+                             "này trả lời đúng câu đó cho dữ liệu"))
+    if arch_figs["erd"]:
+        for block in arch_figs["erd"]:
+            fig = erd_figure(block, comps, figs, here)
+            if fig:
+                parts.append(fig)
+            else:
+                parts.append('<div class="note"><span class="lbl">Note</span>Một khối '
+                             "<code>```erd</code> không đọc được bảng nào — mỗi bảng mở bằng "
+                             "<code>table: &lt;tên&gt;</code>, rồi mỗi cột một dòng "
+                             "<code>&lt;tên&gt; &lt;kiểu&gt; &lt;cờ&gt;</code>.</div>")
+                parts.append("<pre><code>%s</code></pre>" % esc(block.strip()))
+    else:
+        parts.append(empty_state(
+            "NO DATA MODEL — thêm một khối <code>```erd</code> vào "
+            "<code>docs/02_architecture/</code>. Mở bằng <code>table: orders</code>, rồi "
+            "mỗi cột một dòng: <code>merchant_id uuid fk -&gt; merchants.id</code>"))
+
     parts.append('<h3 id="a-flow">Data flow</h3>')
     if edges and flow_ok:
         # STANDARD §10: there is one style, the graph. Over budget it is still a
@@ -2221,7 +2482,8 @@ def build_current(ctx, docs, data):
                        % (slug, esc(trim(fm_str(d, "name") or doc_title(d), 26))))
     sidebar.append('<li><a href="#roadmap">§2 Roadmap</a></li>')
     sidebar.append('<li><a href="#architecture">§3 Architecture</a></li>')
-    for anchor, label in [("a-components", "Components"), ("a-flow", "Data flow"),
+    for anchor, label in [("a-components", "Components"), ("a-data", "Data model"),
+                          ("a-flow", "Data flow"),
                           ("a-stack", "Tech stack"), ("a-constraints", "Constraints"),
                           ("a-rev", "Revision block")]:
         sidebar.append('<li class="sub"><a href="#%s">%s</a></li>' % (anchor, label))

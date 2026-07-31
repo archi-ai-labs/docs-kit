@@ -63,6 +63,49 @@ digits live only under `docs/`.
   usage table was not. Two descriptions of the same skill disagreed for a whole
   minor version.
 
+## [0.12.0] — 2026-07-31
+
+### Added — ```` ```erd ````, the data model
+
+Architecture said what exists for services and what calls what. It said nothing
+about the tables underneath, so the schema lived in a migration folder and in
+whoever last read it.
+
+- **```` ```erd ```` in the body of the `02_architecture/` doc**, rendered in a new
+  **Data model** sub-section of §3 right after Components — because an ERD answers
+  the question Components answers, one level down, for data instead of services.
+  Read from that doc and no other: a data model filed under a product or a
+  business rule is misfiled, and rendering it anyway would hide that.
+- **`table:` opens an entity, one column per line**, flags in any order:
+  `pk` · `fk -> t.c` · `unique` · `null`, plus the ` — gloss` every other fence
+  already takes.
+- **No relationship syntax, and no hand-written cardinality.** A foreign key *is*
+  the relationship, and what it means is not a matter of opinion: many child rows
+  point at one parent row. The child end takes a crow's foot, the parent end a
+  single bar, `unique` makes the child end a bar too, `null` adds the empty ring.
+  Writing that by hand would be a second source for one fact, and the picture
+  would drift from the column list printed beneath it.
+- A **self-referencing FK is an ordinary back-edge** on the return lanes from
+  0.9.1. Nothing in this release routes an edge.
+- `pk` / `fk` tags are graphite. They name no layer, so they buy no hue.
+
+### Changed
+
+- **`svg_dag()` now measures heights instead of multiplying by a row pitch.** An
+  entity box is as tall as its table is long — the first node in the engine whose
+  height is not `NODE_H`. Columns sum their members' heights plus a fixed
+  `ROW_GAP`, vertical centring compares totals, and edge endpoints ask each node
+  how tall it is. With every node one height the two forms are the same
+  arithmetic, which is how the change was shipped as a proven no-op before any ERD
+  code existed: the three existing figures re-rendered byte for byte.
+- `svg_dag()` also gained `marks` (per-edge endpoint markers, either end allowed
+  to be bare) and `defs` (raw `<defs>` from the caller). **It still does not know
+  what a crow's foot is** — it places markers by id and `erd_figure` defines them.
+  An edge with its own markers gets no gliding packet either: the packet means
+  data moving, and a foreign key is a shape of the schema, not a flow.
+- Figures on `current.html` renumber: the ERD is FIG 1, so the data-flow graph is
+  now FIG 2. A consequence of where the section sits, not of anything else.
+
 ## [0.11.0] — 2026-07-31
 
 ### Added — ```` ```state ````, the entity lifecycle
