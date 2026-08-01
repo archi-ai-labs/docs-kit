@@ -163,6 +163,25 @@ shape: the band is the state and its meaning, the rows under it are the
 transitions out of it, and a final state keeps its meaning with an explicit note
 that it has none.
 
+### Changed — the design contract caught up with the renderer
+
+`design/design-system.html` stopped at v0.7.0, so the document that contracts
+how figures look described none of the four figure types that arrived after it,
+and two of its sentences had gone from stale to false — a scale rule splitting
+graphs into `FIG 2a` / `2b` (deleted in 0.9.1, nothing replaced it) and column
+order described as alphabetical. §6 now carries the four fences and what each
+answers, the geometry a relation is drawn with, and what the table under a
+figure is for. Its five figures are spliced from `design/sample-current.html`
+rather than frozen in place, which is the actual fix for the drift: `FIG 2` had
+been showing arrowheads standing 6px off their boxes underneath prose claiming
+they land on the border.
+
+Two mirror divergences surfaced while checking, both predating this work.
+`.plot` had no `overflow-x`, so a figure wider than the column pushed the whole
+page sideways instead of scrolling inside its own frame — the exact rule the
+document states. `.lede` was 20px narrower there than in the renderer. A
+scripted diff of the 157 shared selectors now reports no other difference.
+
 ### Fixed
 
 - `README.md` described `/docs-kit:brief` as "Manual invocation only" and as
