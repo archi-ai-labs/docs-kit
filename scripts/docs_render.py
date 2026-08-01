@@ -12,6 +12,7 @@ output bytes; only the generated-at stamp moves (override with DOCS_KIT_NOW,
 ISO format, for reproducible builds/tests).
 """
 import html
+import itertools
 import json
 import os
 import re
@@ -29,6 +30,7 @@ INK3 = "#7d8794"
 LINE2 = "#c8d2dc"
 MARK = "#c2410c"
 L1 = "#1d4ed8"
+L1_WASH = "#eef3ff"   # --l1-wash, so a figure can fill with a hue it already spends
 L2 = "#7c3aed"
 FAST = "#0d9488"
 TINT_DB = "#e8f0fe"
@@ -59,6 +61,17 @@ CHAR_W = 6.95  # approx mono advance at 11.5px, used to size SVG nodes
 # − 2×1 border. A figure wider than this is drawn at natural size and scrolls;
 # anything at or under it may stretch to fill, but is never scaled down.
 CONTENT_W = 838
+
+# `markerUnits` defaults to `strokeWidth`, so a marker's real size is
+# `markerWidth ÷ viewBox × stroke-width` — not `markerWidth`. `marker_def()`, the
+# arrowhead of every flow figure, is 7 ÷ 10 × 1.6 = 11.2 user units of box holding
+# 7.8 of ink. The crow's foot and the UML triangle were written at 12 ÷ 12 × 1.6
+# = 19.2, which is 70% larger than everything else in the system on a 20px row
+# pitch — nobody chose that number, it just never got compared. MARKER_W matches
+# them to the others by INK rather than by box, because the foot's toes span 11 of
+# its 12 viewBox units while the chevron spans 7 of 10: equal boxes would still
+# draw unequal line.
+MARKER_W = 5.5    # 5.5 ÷ 12 × 1.6 = 8.8 box · 8.1 ink
 
 # The density budget for the graph. It no longer picks a presentation — there is
 # only one, the graph — it decides when to WARN. Past any of these the flow is
@@ -650,9 +663,56 @@ ENTITY_HEAD_H = 26
 ENTITY_COL_H = 20
 
 
+# Struct routing, the geometry of a relation that is not a flow. One lane per
+# relation in the column gap: MIN_RUN of visible line at each end so an arrowhead
+# never eats its own segment, PITCH between neighbouring lanes, and SLOT_MIN as
+# the point below which two arrowheads landing on one band stop reading as two.
+STRUCT_PITCH, STRUCT_MIN_RUN, STRUCT_SLOT_MIN = 12.0, 24.0, 12.0
+
+
+def assign_lanes(shapes, lanes):
+    """Put each bundle on one of `lanes` (x positions, left to right) so that as
+    few lines cross as possible. Returns lane index per bundle.
+
+    A bundle is `(feeders, head_y, target_x)` where feeders are the `(x, y)` it
+    collects from. Exhaustive up to 7 bundles — a gap busier than that is already
+    past the reading budget the figures are drawn to — and a deterministic sort
+    above that, so the picture never depends on how long a search was allowed to
+    run. Ties break on the permutation itself, which keeps the result stable."""
+    n = len(shapes)
+    if n <= 1:
+        return list(range(n))
+
+    def drawn(shape, lx):
+        feeds, hy, tx = shape
+        hs = [(min(fx, lx), max(fx, lx), fy) for fx, fy in feeds]
+        hs.append((min(lx, tx), max(lx, tx), hy))
+        ys = [fy for _fx, fy in feeds] + [hy]
+        return hs, ([(lx, min(ys), max(ys))] if max(ys) - min(ys) > .01 else [])
+
+    def crossings(perm):
+        laid = [drawn(sh, lanes[p]) for sh, p in zip(shapes, perm)]
+        return sum(1
+                   for i, (hs, _) in enumerate(laid)
+                   for j, (_, vs) in enumerate(laid) if i != j
+                   for (ha, hb, hy) in hs
+                   for (vx, va, vb) in vs
+                   if ha < vx < hb and va < hy < vb)
+
+    if n <= 7:
+        return list(min(itertools.permutations(range(n)),
+                        key=lambda p: (crossings(p), p)))
+    ranked = sorted(range(n), key=lambda i: (shapes[i][1], shapes[i][0][0][1], i))
+    lane_of = [0] * n
+    for k, i in enumerate(ranked):
+        lane_of[i] = k
+    return lane_of
+
+
 def svg_dag(edges, comps, fig_no="1", shapes=None, aria="data flow graph",
             caption=None, wrap=True, initial=None, entity_rows=None,
-            entity_tag=None, marks=None, dashed=None, defs=""):
+            entity_tag=None, marks=None, dashed=None, defs="",
+            route="flow", anchor=None):
     """The one layered-graph engine. `shapes` switches it from data-flow nodes
     (icon badge, kind tint) to flowchart nodes (step / decide / terminal), state
     machine nodes (state / final) or ERD entities; each of those is the same
@@ -677,6 +737,20 @@ def svg_dag(edges, comps, fig_no="1", shapes=None, aria="data flow graph",
     stays ignorant of what a crow's foot is — it places markers by id, and the
     figure that needs them defines them.
 
+    `route="struct"` is for figures whose edges are STRUCTURE rather than
+    movement. A foreign key and a UML generalization do not flow anywhere, so the
+    data-flow curve leaving the middle of a box says the wrong thing about them
+    twice over: it starts nowhere in particular, and the middle of a tall entity
+    box is a column that has nothing to do with the key being drawn. A struct edge
+    leaves the row it comes from, runs to a vertical lane of its own in the column
+    gap, and lands on the target's border. `anchor` maps an edge index to
+    `(source row, target row)`, either of which may be None for "the header band —
+    this relation belongs to the type, not to any one member".
+
+    It is paint, not layout. Layering, the feedback arc set and the return lanes
+    are the same code either way; only the path between two already-placed boxes
+    changes, so "one layered-graph engine" still holds.
+
     `wrap=False` returns the bare <svg> so a caller can compose its own frame."""
     # Cycles do not change the style — they lose their back-edges for the
     # purpose of layering, then get them drawn back in below the rows.
@@ -697,6 +771,27 @@ def svg_dag(edges, comps, fig_no="1", shapes=None, aria="data flow graph",
     for nd in sorted(layer, key=lambda x: (layer[x], x.lower())):
         cols.setdefault(layer[nd], []).append(nd)
     ncols = max(cols) + 1
+
+    # Sugiyama's ordering step, which this engine skipped. Alphabetical order is
+    # deterministic but blind: it can put a node above another whose edges all go
+    # the other way, and then nothing the router does can stop the two bundles
+    # crossing — the fix has to be the ORDER, not the drawing. So order each
+    # column by the mean index of the nodes it points at in the column to its
+    # right, sweeping right to left. A node with no successor keeps its place.
+    # Ties fall back to alphabetical, so the whole pass is still reproducible byte
+    # for byte and needs no iteration count to converge.
+    succ = {}
+    for _a, _b, _asyn, _lbl in [e for _i, e in fwd]:
+        succ.setdefault(_a, []).append(_b)
+    for c in range(ncols - 2, -1, -1):
+        right_idx = dict((nd, i) for i, nd in enumerate(cols.get(c + 1, [])))
+        here_idx = dict((nd, i) for i, nd in enumerate(cols[c]))
+
+        def bary(nd, _r=right_idx, _h=here_idx):
+            seen = [_r[t] for t in succ.get(nd, []) if t in _r]
+            return sum(seen) / float(len(seen)) if seen else float(_h[nd])
+
+        cols[c] = sorted(cols[c], key=lambda nd: (bary(nd), nd.lower()))
 
     def node_w(nd):
         if entity_rows is not None and nd in entity_rows:
@@ -723,6 +818,52 @@ def svg_dag(edges, comps, fig_no="1", shapes=None, aria="data flow graph",
     # arithmetic, but only the gap survives boxes of different heights.
     GAP_MIN, ROW_GAP, NODE_H, TOP = 46, 26, 34, 16
 
+    # ---- struct routing, part 1: which edges, and how many lanes each gap owes.
+    # Counted here because the gap widths below have to hold the lanes, and the
+    # count needs only the layering — no geometry yet.
+    def anchor_of(ei, end):
+        return (anchor or {}).get(ei, (None, None))[end]
+
+    def band_h(nd, row):
+        """The height a connection point has to live inside."""
+        if entity_rows is None or nd not in entity_rows:
+            return node_h(nd)
+        return ENTITY_HEAD_H if row is None or not 0 <= row < len(entity_rows[nd]) \
+            else ENTITY_COL_H
+
+    routed, buckets, converge, lane_n = {}, {}, {}, {}
+    if route == "struct":
+        for ei, (a, b, _asyn, _lbl) in fwd:
+            # Orthogonal routing needs neighbouring columns; in an ERD or a class
+            # diagram that is every edge. One that skips a column would have to run
+            # its horizontal straight through whatever sits between, so it keeps
+            # the curve rather than being drawn through a box.
+            if layer[b] == layer[a] + 1:
+                routed[ei] = (layer[a], "L", a, b)
+        for ei, (a, b, _asyn, _lbl) in back:
+            # A self-referencing key enters its own box from the side. As a return
+            # lane it costs a 126px lobe below the rows and 51px of canvas for one
+            # edge; entering from the gap beside it, it costs nothing.
+            if a == b and layer[a] >= 1:
+                routed[ei] = (layer[a] - 1, "R", a, b)
+        for ei in sorted(routed):
+            gap, _side, _a, b = routed[ei]
+            buckets.setdefault((gap, b, anchor_of(ei, 1)), []).append(ei)
+        for key, members in buckets.items():
+            gap, b, drow = key
+            # Several relations landing on one anchor each want their own
+            # arrowhead. Two fit in a 26px header band; three foreign keys into a
+            # 20px primary-key column do not, and pretending otherwise draws one
+            # thick smudge. Below the threshold they share a trunk instead — every
+            # tail still carries its own marker on its own row, so each relation is
+            # still traceable back to exactly one place.
+            room = (band_h(b, drow) - 10.0) / max(1, len(members) - 1)
+            converge[key] = len(members) > 1 and room < STRUCT_SLOT_MIN
+            lane_n[gap] = lane_n.get(gap, 0) + (1 if converge[key] else len(members))
+        # A self key that joined a trunk is no longer a back-edge, and must not
+        # reserve a return lane nor the canvas height that goes with one.
+        back = [(i, e) for i, e in back if i not in routed]
+
     # Every label lives in the gap right after its source column, and each gap is
     # widened to hold its widest label. Labels therefore never reach into a column,
     # which is what used to put chips on top of node boxes.
@@ -736,6 +877,11 @@ def svg_dag(edges, comps, fig_no="1", shapes=None, aria="data flow graph",
     for a, _b, _asyn, text in labelled:
         c = layer[a]
         gap_w[c] = max(gap_w[c], chip_box(wrap_label(text))[0] + 18)
+    # GAP_MIN exists to hold label chips, and a struct edge has no label — so the
+    # gap collapses to the minimum and the arrowhead ends up nearly touching the
+    # lane it came from. Widen only the gaps that actually carry lanes.
+    for c, n in lane_n.items():
+        gap_w[c] = max(gap_w[c], 2 * STRUCT_MIN_RUN + (n - 1) * STRUCT_PITCH)
 
     x0, col_x = 16, {}
     for c in range(ncols):
@@ -794,19 +940,162 @@ def svg_dag(edges, comps, fig_no="1", shapes=None, aria="data flow graph",
         placed.append((cx - cw / 2, y - 12, cw, ch))
         return y
 
-    def marker_attrs(ei, default_end):
+    def marker_attrs(ei, default_end, start=True, end=True):
         """(start, end) marker ids for one edge. A relationship carries its
-        cardinality at both ends and no arrowhead, so either end may be bare."""
+        cardinality at both ends and no arrowhead, so either end may be bare.
+
+        A struct edge that shares a trunk is drawn in pieces, so a piece asks only
+        for the end it owns: the feeder keeps its own tail marker on its own row,
+        the trunk's head keeps the arrival marker."""
         mstart, mend = (marks or {}).get(ei, (None, default_end))
-        return (('' if not mstart else ' marker-start="url(#%s)"' % mstart)
-                + ('' if not mend else ' marker-end="url(#%s)"' % mend))
+        return (('' if not (start and mstart) else ' marker-start="url(#%s)"' % mstart)
+                + ('' if not (end and mend) else ' marker-end="url(#%s)"' % mend))
+
+    def dash_attr(ei, static):
+        """A static dash — graphite, and without the marching animation, because
+        marching dashes already mean async and a UML realization is not a call."""
+        return ' stroke-dasharray="6 4"' if ei in static else ''
+
+    # ---- struct routing, part 2: the lines themselves. --------------------
+    # Struct edges are never async and never labelled — `parse_erd` and
+    # `parse_class` both emit `(src, dst, False, "")` — so none of the label,
+    # packet or teal machinery below applies to them, and none of it is repeated
+    # here. What is left is pure geometry.
+    joins, static_dash = [], frozenset(dashed or ())
+
+    def anchor_y(nd, row):
+        """Where a relation touches a box: the row it comes from, or the header
+        band when it belongs to the type rather than to any one member."""
+        y = pos[nd][1]
+        if entity_rows is None or nd not in entity_rows:
+            return y + node_h(nd) / 2.0
+        if row is None or not 0 <= row < len(entity_rows[nd]):
+            return y + ENTITY_HEAD_H / 2.0
+        return y + ENTITY_HEAD_H + ENTITY_COL_H * row + ENTITY_COL_H / 2.0
+
+    def slot_ys(base, height, k):
+        """k connection points centred in a band. Capped at 14 so two arrowheads
+        in a header band sit apart without drifting onto the border."""
+        if k <= 1:
+            return [base]
+        pitch = min(14.0, (height - 10.0) / (k - 1))
+        return [base + (i - (k - 1) / 2.0) * pitch for i in range(k)]
+
+    def side_x(ei):
+        gap, side, a, _b = routed[ei]
+        return pos[a][0] + node_w(a) if side == "L" else pos[a][0]
+
+    if routed:
+        # Departure. Two relations that both belong to the type — `extends` and
+        # `implements` — leave the same header band, and leaving it at the same y
+        # draws one on top of the other: the dashed line paints over the solid one
+        # and the shared run reads as a single line forking for no reason. Rank
+        # them by where they are going, so the two cannot cross on the way out.
+        src_y, dst_y = {}, {}
+        leaving = {}
+        for ei in sorted(routed):
+            _gap, _side, a, _b = routed[ei]
+            leaving.setdefault((a, anchor_of(ei, 0)), []).append(ei)
+        for (a, arow), members in sorted(leaving.items(), key=lambda kv: (kv[0][0], kv[1])):
+            members.sort(key=lambda e: (anchor_y(routed[e][3], anchor_of(e, 1)), e))
+            for e, yy in zip(members, slot_ys(anchor_y(a, arow), band_h(a, arow),
+                                              len(members))):
+                src_y[e] = yy
+        # Arrival. Same rule at the other end: the upper source takes the upper
+        # slot. A converged bucket has one arrival point, so its members share it.
+        for key in sorted(buckets, key=lambda k: (k[0], k[1], -1 if k[2] is None else k[2])):
+            _gap, b, drow = key
+            members = sorted(buckets[key], key=lambda e: (src_y[e], e))
+            ys = ([anchor_y(b, drow)] * len(members) if converge[key]
+                  else slot_ys(anchor_y(b, drow), band_h(b, drow), len(members)))
+            for e, yy in zip(members, ys):
+                dst_y[e] = yy
+
+        bundles = {}
+        for key in sorted(buckets, key=lambda k: (k[0], k[1], -1 if k[2] is None else k[2])):
+            gap, b, _drow = key
+            members = sorted(buckets[key], key=lambda e: (src_y[e], e))
+            for group in ([members] if converge[key] else [[e] for e in members]):
+                bundles.setdefault(gap, []).append((group, b))
+
+        for gap, group_list in sorted(bundles.items()):
+            n = len(group_list)
+            lo = col_x[gap] + col_w[gap] + STRUCT_MIN_RUN
+            hi = col_x[gap] + col_w[gap] + gap_w[gap] - STRUCT_MIN_RUN
+            lanes = ([(lo + hi) / 2.0] if n == 1
+                     else [lo + i * (hi - lo) / (n - 1.0) for i in range(n)])
+            lane_of = assign_lanes(
+                [([(side_x(e), src_y[e]) for e in g], dst_y[g[0]], pos[b][0])
+                 for g, b in group_list], lanes)
+            for (group, b), li in zip(group_list, lane_of):
+                lx, tx, hy = lanes[li], pos[b][0], dst_y[group[0]]
+                if len(group) == 1:
+                    e = group[0]
+                    fx, fy = side_x(e), src_y[e]
+                    d = ("M%g %g H%g" % (fx, fy, tx) if abs(fy - hy) < .01
+                         else "M%g %g H%g V%g H%g" % (fx, fy, lx, hy, tx))
+                    s.append('<path d="%s" fill="none" stroke="%s" stroke-width="1.6"%s%s/>'
+                             % (d, INK, dash_attr(e, static_dash),
+                                marker_attrs(e, "dag-a")))
+                    continue
+                # Two feeders reaching the trunk from opposite sides at the same y
+                # draw one unbroken line straight through the junction, and the eye
+                # reads it as "these two connect to each other" — which is never
+                # what either of them means. Row anchoring makes that collision a
+                # coincidence away: a child's key and the parent's own key can
+                # easily sit at the same height. The one arriving from the far side
+                # steps aside, since it is already the odd one out.
+                taken, step = [hy], {}
+                for e in sorted(group, key=lambda x: (src_y[x], routed[x][1] == "R", x)):
+                    fy = src_y[e]
+                    for cand in [fy] + [fy + d for d in (14, -14, 28, -28, 42, -42)]:
+                        if all(abs(cand - t) > 9.99 for t in taken):
+                            step[e] = cand
+                            taken.append(cand)
+                            break
+                    else:
+                        step[e] = fy
+                for e in group:
+                    fx, fy, jy = side_x(e), src_y[e], step[e]
+                    d = ("M%g %g H%g" % (fx, fy, lx) if abs(jy - fy) < .01 else
+                         "M%g %g H%g V%g H%g"
+                         % (fx, fy, fx + (12 if lx > fx else -12), jy, lx))
+                    s.append('<path d="%s" fill="none" stroke="%s" stroke-width="1.6"%s%s/>'
+                             % (d, INK, dash_attr(e, static_dash),
+                                marker_attrs(e, None, end=False)))
+                ys = [step[e] for e in group] + [hy]
+                # A trunk can only wear one arrival symbol, so it wears the one most
+                # of its members carry — pure counting, so this function still does
+                # not know what any of those symbols mean. Where a minority
+                # disagrees, say one nullable key among several mandatory ones, the
+                # ○ for "zero or one" drops out of the picture and the `null` flag
+                # in the table beside it is what carries that fact.
+                ends = [(marks or {}).get(e, (None, "dag-a"))[1] for e in group]
+                lead = min(group, key=lambda e: (
+                    -ends.count((marks or {}).get(e, (None, "dag-a"))[1]), e))
+                s.append('<path d="M%g %g V%g" fill="none" stroke="%s" stroke-width="1.6"%s/>'
+                         % (lx, min(ys), max(ys), INK, dash_attr(lead, static_dash)))
+                s.append('<path d="M%g %g H%g" fill="none" stroke="%s" stroke-width="1.6"%s%s/>'
+                         % (lx, hy, tx, INK, dash_attr(lead, static_dash),
+                            marker_attrs(lead, "dag-a", start=False)))
+                joins.extend((lx, yy) for yy in sorted(set(ys)))
 
     for ei, (a, b, asyn, lbl) in fwd:
+        if ei in routed:
+            continue
         ax, ay = pos[a]
         bx, by = pos[b]
         x1 = ax + node_w(a)
         y1 = ay + node_h(a) / 2.0
-        x2 = bx - 6
+        # An arrowhead's TIP lands on the target's border. Every marker here puts
+        # its tip on the path's own end point — the chevron's point is at viewBox
+        # x=8, which is its refX; the triangle's apex at 12, which is its refX — so
+        # the end point is the tip, and it belongs on the box. This used to be
+        # `bx - 6`, which stood every arrowhead in every figure 6px short of what it
+        # pointed at. With a 19.2-unit crow's foot the gap read as part of the
+        # symbol; at 8.8 it read as a line that stopped early. Back-edges below the
+        # rows already landed on the box bottom — this makes the two agree.
+        x2 = bx
         y2 = by + node_h(b) / 2.0
         color, mid = (FAST, "dag-t") if asyn else (INK, "dag-a")
         dash = ' stroke-dasharray="5 4" class="dashrun"' if asyn else ""
@@ -883,6 +1172,11 @@ def svg_dag(edges, comps, fig_no="1", shapes=None, aria="data flow graph",
             base = [ly + 3.5] if len(rows) == 1 else [ly - 1.5, ly + 9.5]
             for row, ry in zip(rows, base):
                 labels.append(svg_text(mx, ry, row, 9, wt, ink, anchor="middle", ls=".6"))
+    # Junction dots go on last of the lines, so a dot always sits on top of the
+    # trunk it marks. A dot is what separates "joins here" from "crosses here",
+    # and it is the only notation a shared trunk needs to stay readable.
+    s.extend('<circle cx="%g" cy="%g" r="2.4" fill="%s"/>' % (jx, jy, INK)
+             for jx, jy in joins)
     s.extend(labels)
 
     for nd in sorted(layer, key=lambda x: (layer[x], x.lower())):
@@ -914,7 +1208,9 @@ def svg_dag(edges, comps, fig_no="1", shapes=None, aria="data flow graph",
                     s.append(svg_text(x + 9, cy, vis, 10.5, "700", INK3))
                 s.append(svg_text(x + (20 if vis else 10), cy, cname, 10.5,
                                   "700" if key else "500", INK if key else INK2))
-                s.append(svg_text(x + w - 10, cy, ctype, 10.5, "500", INK3, anchor="end"))
+                if ctype:   # a collapsed method signature leaves this side empty
+                    s.append(svg_text(x + w - 10, cy, ctype, 10.5, "500", INK3,
+                                      anchor="end"))
                 # pk/fk stay graphite: they name no layer, so they buy no hue.
                 if key or "fk" in tags:
                     s.append(svg_text(x + w - 10 - CHAR_W * (len(ctype) + 1), cy,
@@ -923,14 +1219,25 @@ def svg_dag(edges, comps, fig_no="1", shapes=None, aria="data flow graph",
         if shapes is not None:
             shape = shapes.get(nd, "step")
             if shape == "decide":
-                s.append('<path d="M%g %g L%g %g L%g %g L%g %g Z" fill="#ffffff" stroke="%s" '
-                         'stroke-width="1.5"/>'
+                # Deliberately the heaviest object on the page. A flowchart exists
+                # to answer one question — where does this branch — and all three
+                # shapes used to carry the same 1.5px stroke on the same white, so
+                # a reader had no way in. Wash fill and a 2px stroke make the branch
+                # points what you see first. No new hue is spent: L1 is already the
+                # diamond's colour and this only fills it with its own wash.
+                s.append('<path d="M%g %g L%g %g L%g %g L%g %g Z" fill="%s" stroke="%s" '
+                         'stroke-width="2"/>'
                          % (x, y + h / 2.0, x + w / 2.0, y, x + w, y + h / 2.0,
-                            x + w / 2.0, y + h, L1))
-            elif shape == "terminal":
+                            x + w / 2.0, y + h, L1_WASH, L1))
+            elif shape in ("start", "end"):
+                # The entry keeps the filled pill and full-weight ink; the exit is
+                # drawn light. Scanning for "where does this begin" should land on
+                # one answer, not on two identical capsules at opposite ends.
+                fill, stroke, sw = (("#f4f6f8", INK, 1.5) if shape == "start"
+                                    else ("#ffffff", INK3, 1.25))
                 s.append('<rect x="%g" y="%g" width="%d" height="%d" rx="%g" fill="%s" '
-                         'stroke="%s" stroke-width="1.5"/>'
-                         % (x, y, w, h, h / 2.0, "#f4f6f8", INK2))
+                         'stroke="%s" stroke-width="%g"/>'
+                         % (x, y, w, h, h / 2.0, fill, stroke, sw))
             elif shape in ("state", "final"):
                 # The start state is marked by its stroke — no dot beside the box and
                 # no pseudo-node. A dot would sit in the label gap, which is exactly
@@ -948,10 +1255,14 @@ def svg_dag(edges, comps, fig_no="1", shapes=None, aria="data flow graph",
                              'stroke="%s" stroke-width="1"/>'
                              % (x + 3.5, y + 3.5, w - 7, h - 7, INK))
             else:
+                # A step is what happens between branch points. At 1.25px graphite
+                # it reads as ground rather than figure, which is the whole point of
+                # giving the diamond somewhere to stand out from.
                 s.append('<rect x="%g" y="%g" width="%d" height="%d" rx="2" fill="#ffffff" '
-                         'stroke="%s" stroke-width="1.5"/>' % (x, y, w, h, INK))
+                         'stroke="%s" stroke-width="1.25"/>' % (x, y, w, h, INK2))
             s.append(svg_text(x + w / 2.0, y + h / 2.0 + 4.5, nd, 11.5, "650",
-                              L1 if shape == "decide" else INK, anchor="middle"))
+                              L1 if shape == "decide" else INK2 if shape == "end"
+                              else INK, anchor="middle"))
             continue
         border, dashed, badge_bg, icon_color, icon, label_fill = NODE_STYLE[kind_of(nd, comps)]
         dash = ' stroke-dasharray="5 4"' if dashed else ""
@@ -1152,6 +1463,61 @@ def svg_sequence(steps, comps):
     return "".join(s)
 
 
+NIL = '<span class="nil">·</span>'
+
+
+def band_row(name, gloss, cols, here):
+    """The leading column of a table under a figure, printed once as a band instead
+    of repeated on every row it owns. What was a column of the same word four to
+    six times over becomes one heading with rows hanging off it."""
+    return ('<tr class="band"><td colspan="%d"><code>%s</code>%s</td></tr>'
+            % (cols, esc(name),
+               ('<span class="gloss">%s</span>' % inline_md(gloss, here)) if gloss else ""))
+
+
+def branch_table(edges, gloss, here, out_head, dead="không có cạnh đi ra"):
+    """One table where a flowchart used to ship two.
+
+    Under a chart there was a two-column list of branch points and a five-column
+    list of edges, and between them they never answered the question a reader
+    actually arrives with: at THIS branch point, how many ways out are there and
+    where does each one go. Banding the edges by their source answers it — and
+    answers it without dropping a row, so the table is still the figure's exact
+    wording and its full accessible reading.
+
+    A state machine is the same table with the same shape: the band is the source
+    state and what it means, the rows under it are the transitions out of it. The
+    `~>` kind stays, because in a lifecycle it says the move is made by a
+    background job rather than by the user. `gloss` is what a source means — the
+    question at a branch point, the meaning of a state."""
+    order, groups = [], {}
+    for k, (a, b, asyn, lbl) in enumerate(edges):
+        if a not in groups:
+            order.append(a)
+            groups[a] = []
+        groups[a].append((k + 1, b, asyn, lbl))
+    rows = []
+    for a in order + sorted(set(gloss) - set(groups), key=lambda s: s.lower()):
+        rows.append(band_row(a, gloss.get(a, ""), 4, here))
+        if a not in groups:
+            # A final state has a meaning and no way out. Its meaning is worth a
+            # line; inventing an edge for it is not.
+            rows.append('<tr><td class="mono nil">·</td><td colspan="3">'
+                        '<span class="dim">%s</span></td></tr>' % dead)
+            continue
+        for n, b, asyn, lbl in groups[a]:
+            rows.append('<tr><td class="mono">%d</td><td class="zone">%s</td>'
+                        '<td class="mono zone">→ %s</td><td>%s</td></tr>'
+                        % (n, inline_md(lbl.strip(), here) if lbl and lbl.strip() else NIL,
+                           esc(b),
+                           '<span class="tag lane-fast">async</span>' if asyn
+                           else '<span class="dim">sync</span>'))
+    return ('<table class="data"><tr><th style="width:40px">#</th>'
+            '<th class="zone" style="width:260px">%s</th>'
+            '<th class="zone" style="width:200px">đi tới</th>'
+            "<th>kiểu</th></tr>%s</table>" % (esc(out_head), "".join(rows)))
+
+
 def seq_steps_table(steps, here, last_col="step"):
     """The exact words behind a figure. `last_col` is the only thing a state machine
     needs to change — its rows are transitions and its labels are events — so it
@@ -1304,17 +1670,11 @@ def parse_flowchart(src):
     shapes = {}
     for a, b, _asyn, _lbl in edges:
         for nd in (a, b):
+            # A terminal's own name says which end it is, and the two ends are not
+            # the same thing — one is where you come in — so they are not one shape.
             shapes[nd] = ("decide" if nd in questions
-                          else "terminal" if nd.lower() in TERMINAL_NAMES else "step")
+                          else nd.lower() if nd.lower() in TERMINAL_NAMES else "step")
     return meta, questions, shapes, edges
-
-
-def decide_table(questions, here):
-    rows = "".join('<tr><td class="mono">%s</td><td>%s</td></tr>'
-                   % (esc(nd), inline_md(q, here) if q else '<span class="dim">—</span>')
-                   for nd, q in sorted(questions.items(), key=lambda kv: kv[0].lower()))
-    return ('<table class="data"><tr><th style="width:200px">điểm rẽ</th>'
-            "<th>hỏi gì</th></tr>%s</table>" % rows)
 
 
 def flowchart_figure(src, comps, figs, here):
@@ -1356,10 +1716,10 @@ def flowchart_figure(src, comps, figs, here):
                 "nếu khó theo dõi thì tách quy tắc này thành nhiều flowchart nhỏ.</div>"
                 % (len(nodes), len(edges), len(questions),
                    CHART_MAX_NODES, CHART_MAX_EDGES, CHART_MAX_DECIDES))
-    tables = decide_table(questions, here) if questions else ""
-    # The numbered steps ship with every chart, not as a rescue: they are the
-    # exact wording, the copyable record, and the figure's accessible reading.
-    tables += seq_steps_table(edges, here)
+    # One decision table, banded by source. It ships with every chart, not as a
+    # rescue: it is the exact wording, the copyable record, and the figure's
+    # accessible reading — and now also the answer to "how many ways out of here".
+    tables = branch_table(edges, questions, here, "nhánh / bước")
     return (note + '<div class="plot flowfig">%s%s%s<p class="figcap">%s</p></div>'
             % ("".join(head), svg, foot, caption) + tables)
 
@@ -1414,14 +1774,6 @@ def parse_state_machine(src):
         for nd in (a, b):
             shapes[nd] = "final" if nd in finals else "state"
     return meta, marks, meanings, shapes, edges
-
-
-def state_table(meanings, here):
-    rows = "".join('<tr><td class="mono">%s</td><td>%s</td></tr>'
-                   % (esc(nd), inline_md(m, here) if m else '<span class="dim">—</span>')
-                   for nd, m in sorted(meanings.items(), key=lambda kv: kv[0].lower()))
-    return ('<table class="data"><tr><th style="width:200px">trạng thái</th>'
-            "<th>nghĩa</th></tr>%s</table>" % rows)
 
 
 def code_list(items):
@@ -1490,8 +1842,8 @@ def state_figure(src, comps, figs, here):
     if msgs:
         notes.append('<div class="note"><span class="lbl">Marks</span>%s</div>' % " ".join(msgs))
 
-    tables = state_table(meanings, here) if any(meanings.values()) else ""
-    tables += seq_steps_table(edges, here, last_col="event")
+    tables = branch_table(edges, meanings, here, "sự kiện",
+                          dead="trạng thái kết thúc — không có transition đi ra")
     return ("".join(notes) + '<div class="plot flowfig">%s%s<p class="figcap">%s</p></div>'
             % ("".join(head), svg, caption) + tables)
 
@@ -1510,24 +1862,28 @@ def erd_marker_defs():
     """Crow's-foot notation, in four variants because a marker at the start of a
     path and a marker at its end need different refX. `svg_dag` does not know any
     of this exists — it places markers by id, and this is where they are defined."""
+    w, w15 = MARKER_W, MARKER_W * 1.5
     return (
         # child end: three toes at the box, converging into the line
-        '<marker id="erd-many" viewBox="0 0 12 12" refX="0" refY="6" markerWidth="12" '
-        'markerHeight="12" orient="auto"><path d="M0 6 H11 M0 1 L11 6 M0 11 L11 6" '
+        '<marker id="erd-many" viewBox="0 0 12 12" refX="0" refY="6" markerWidth="%g" '
+        'markerHeight="%g" orient="auto"><path d="M0 6 H11 M0 1 L11 6 M0 11 L11 6" '
         'fill="none" stroke="%s" stroke-width="1.3"/></marker>'
         # child end, 1:1: one bar instead of the toes
-        '<marker id="erd-one-s" viewBox="0 0 12 12" refX="0" refY="6" markerWidth="12" '
-        'markerHeight="12" orient="auto"><path d="M0 6 H12 M4 1 V11" fill="none" '
+        '<marker id="erd-one-s" viewBox="0 0 12 12" refX="0" refY="6" markerWidth="%g" '
+        'markerHeight="%g" orient="auto"><path d="M0 6 H12 M4 1 V11" fill="none" '
         'stroke="%s" stroke-width="1.3"/></marker>'
         # parent end: exactly one
-        '<marker id="erd-one-e" viewBox="0 0 12 12" refX="12" refY="6" markerWidth="12" '
-        'markerHeight="12" orient="auto"><path d="M0 6 H12 M8 1 V11" fill="none" '
+        '<marker id="erd-one-e" viewBox="0 0 12 12" refX="12" refY="6" markerWidth="%g" '
+        'markerHeight="%g" orient="auto"><path d="M0 6 H12 M8 1 V11" fill="none" '
         'stroke="%s" stroke-width="1.3"/></marker>'
-        # parent end, nullable: zero or one — the ring sits outside the bar
-        '<marker id="erd-zero-one" viewBox="0 0 18 12" refX="18" refY="6" markerWidth="18" '
-        'markerHeight="12" orient="auto"><path d="M0 6 H18 M14 1 V11" fill="none" '
+        # parent end, nullable: zero or one — the ring sits outside the bar. Its
+        # viewBox is 18 wide against the others' 12, so it takes 1.5x the width to
+        # come out at the same scale — the ring is extra length, not extra size.
+        '<marker id="erd-zero-one" viewBox="0 0 18 12" refX="18" refY="6" markerWidth="%g" '
+        'markerHeight="%g" orient="auto"><path d="M0 6 H18 M14 1 V11" fill="none" '
         'stroke="%s" stroke-width="1.3"/><circle cx="7" cy="6" r="2.6" fill="#ffffff" '
-        'stroke="%s" stroke-width="1.3"/></marker>' % (INK, INK, INK, INK, INK))
+        'stroke="%s" stroke-width="1.3"/></marker>'
+        % (w, w, INK, w, w, INK, w, w, INK, w15, w, INK, INK))
 
 
 def parse_erd(src):
@@ -1579,34 +1935,45 @@ def parse_erd(src):
         return None
     # Table order, then column order — deterministic without a sort, and it keeps
     # the edge list reading the way the schema was written.
-    edges, marks = [], {}
+    edges, marks, anchor = [], {}, {}
     for t in order:
-        for row in tables[t]:
+        for ri, row in enumerate(tables[t]):
             if row[4] is None:
                 continue
             marks[len(edges)] = ("erd-one-s" if "unique" in row[2] else "erd-many",
                                  "erd-zero-one" if "null" in row[2] else "erd-one-e")
+            # The relation leaves the foreign key's OWN column and lands on the
+            # column it names. Both ends are rows the reader can see, which is the
+            # whole difference between a picture of some boxes and a picture of a
+            # schema: you can follow a key with your eye. A parent this block never
+            # declared has no rows, so that end falls back to the header band.
+            pt, pc = row[4]
+            trow = next((j for j, prow in enumerate(tables.get(pt, []))
+                         if prow[0] == pc), None)
+            anchor[len(edges)] = (ri, trow)
             edges.append((t, row[4][0], False, ""))
-    return meta, order, tables, edges, marks
+    return meta, order, tables, edges, marks, anchor
 
 
 def erd_columns_table(order, tables, here):
     rows = []
     for t in order:
+        rows.append(band_row(t, "", 5, here))
         for cname, ctype, tags, gloss, ref in tables[t]:
-            keys = " ".join('<span class="tag">%s</span>' % k
-                            for k in tags if k != "fk") or '<span class="dim">—</span>'
-            rel = ('→ <code>%s.%s</code>' % (esc(ref[0]), esc(ref[1]))) if ref \
-                else '<span class="dim">—</span>'
-            rows.append('<tr><td class="mono">%s</td><td class="mono">%s</td>'
-                        '<td class="mono">%s</td><td>%s</td><td>%s</td><td>%s</td></tr>'
-                        % (esc(t), esc(cname),
-                           esc(ctype) if ctype else '<span class="dim">—</span>',
-                           keys, rel,
-                           inline_md(gloss, here) if gloss else '<span class="dim">—</span>'))
-    return ('<table class="data"><tr><th style="width:130px">bảng</th>'
-            '<th style="width:150px">cột</th><th style="width:110px">kiểu</th>'
-            '<th style="width:110px">khoá</th><th style="width:170px">quan hệ</th>'
+            # `fk` belongs in the key column with the other key facts. It used to be
+            # filtered out here and left implied by an arrow two columns further
+            # right, which meant the column headed "khoá" was not the answer to
+            # "what kind of key is this".
+            keys = " ".join('<span class="tag">%s</span>' % k for k in tags) or NIL
+            rel = ('→ <code>%s.%s</code>' % (esc(ref[0]), esc(ref[1]))) if ref else NIL
+            rows.append('<tr><td class="mono zone">%s</td>'
+                        '<td class="mono">%s</td><td>%s</td><td class="zone">%s</td>'
+                        '<td>%s</td></tr>'
+                        % (esc(cname), esc(ctype) if ctype else NIL, keys, rel,
+                           inline_md(gloss, here) if gloss else NIL))
+    return ('<table class="data"><tr><th class="zone" style="width:170px">cột</th>'
+            '<th style="width:120px">kiểu</th><th style="width:130px">khoá</th>'
+            '<th class="zone" style="width:180px">quan hệ</th>'
             "<th>ghi chú</th></tr>%s</table>" % "".join(rows))
 
 
@@ -1614,7 +1981,7 @@ def erd_figure(src, comps, figs, here):
     parsed = parse_erd(src)
     if parsed is None:
         return None
-    meta, order, tables, edges, marks = parsed
+    meta, order, tables, edges, marks, anchor = parsed
     # Only a drawn figure spends a figure number, so a schema with no foreign key
     # does not leave a gap in the numbering of the sheet.
     fig_no = figs.next() if (edges and figs is not None) else "—"
@@ -1637,6 +2004,7 @@ def erd_figure(src, comps, figs, here):
     # edges, and a picture of unconnected boxes says nothing the table does not.
     svg = svg_dag(edges, comps, fig_no, aria="entity relationship diagram",
                   wrap=False, entity_rows=rows_map, marks=marks,
+                  route="struct", anchor=anchor,
                   defs=erd_marker_defs()) if edges else None
     if edges and svg is None:
         return None
@@ -1682,9 +2050,23 @@ def class_marker_defs():
     is what tells them apart, exactly as UML has it. `svg_dag` never learns what
     this shape means; it places it by id."""
     return ('<marker id="cls-tri" viewBox="0 0 12 12" refX="12" refY="6" '
-            'markerWidth="12" markerHeight="12" orient="auto">'
+            'markerWidth="%g" markerHeight="%g" orient="auto">'
             '<path d="M0 1 L12 6 L0 11 Z" fill="#ffffff" stroke="%s" '
-            'stroke-width="1.3"/></marker>' % INK)
+            'stroke-width="1.3"/></marker>' % (MARKER_W, MARKER_W, INK))
+
+
+def short_sig(sig):
+    """`(orderID string, cents int64) (Receipt, error)` → `(…)`.
+
+    In the figure a method is a NAME. The full signature already has a column of
+    its own in the table underneath, and printing it in the box made the same 46
+    characters appear six times — once in the interface and once in each
+    implementer, because an implementer repeats the contract verbatim. That is
+    what drove every box to 467px and the canvas to 1012, past CONTENT_W, so the
+    right-hand column came out clipped. A method that genuinely takes nothing
+    keeps its empty parens rather than claiming arguments it does not have.
+    Fields are untouched: a field's type is short, and it is the whole point."""
+    return "()" if sig.replace(" ", "").startswith("()") else "(…)"
 
 
 def bare_type(sig):
@@ -1752,13 +2134,18 @@ def parse_class(src):
     if not order:
         return None
 
-    edges, marks, dashed, seen = [], {}, set(), set()
+    edges, marks, dashed, anchor, seen = [], {}, set(), {}, set()
 
-    def add(src_t, dst_t, kind):
+    def add(src_t, dst_t, kind, srow=None):
         if (src_t, dst_t, kind) in seen:
             return
         seen.add((src_t, dst_t, kind))
         marks[len(edges)] = (None, "cls-tri" if kind != "assoc" else "dag-a")
+        # `extends` and `implements` belong to the TYPE, so they leave the header
+        # band; an association exists because one field holds that type, so it
+        # leaves that field's own row. Both land on the target's header band — a
+        # relation points at a type, never at one of its members.
+        anchor[len(edges)] = (srow, None)
         if kind == "implements":
             dashed.add(len(edges))
         edges.append((src_t, dst_t, False, ""))
@@ -1766,31 +2153,35 @@ def parse_class(src):
     for t in order:
         for kind, target in types[t]["rel"]:
             add(t, target, kind)
-        for _vis, _name, sig, _gloss in types[t]["fields"]:
+        for fi, (_vis, _name, sig, _gloss) in enumerate(types[t]["fields"]):
             target = bare_type(sig)
             # An association is emitted once per pair: three fields of one type
-            # would otherwise draw three parallel edges saying the same thing.
+            # would otherwise draw three parallel edges saying the same thing. The
+            # first such field is the one the line comes out of.
             if target and target != t and target in types:
-                add(t, target, "assoc")
-    return meta, order, types, edges, marks, dashed
+                add(t, target, "assoc", fi)
+    return meta, order, types, edges, marks, dashed, anchor
 
 
 def class_members_table(order, types, here):
     rows = []
     for t in order:
+        spec = types[t]
+        rows.append(band_row(t, "«interface»" if spec["kind"] == "interface" else "",
+                             5, here))
         for bucket, label in (("fields", "field"), ("methods", "method")):
-            for vis, name, sig, gloss in types[t][bucket]:
+            for vis, name, sig, gloss in spec[bucket]:
                 shown = {"+": "public", "-": "private"}.get(vis, "")
-                rows.append('<tr><td class="mono">%s</td><td class="mono">%s</td>'
-                            '<td>%s</td><td>%s</td><td class="mono">%s</td><td>%s</td></tr>'
-                            % (esc(t), esc(name), label,
-                               shown or '<span class="dim">—</span>',
-                               esc(sig) if sig else '<span class="dim">—</span>',
-                               inline_md(gloss, here) if gloss
-                               else '<span class="dim">—</span>'))
-    return ('<table class="data"><tr><th style="width:150px">type</th>'
-            '<th style="width:170px">thành viên</th><th style="width:80px">loại</th>'
-            '<th style="width:90px">hiển thị</th><th style="width:220px">kiểu / chữ ký</th>'
+                # This is where the full signature lives, and why the figure is free
+                # to draw a method as `name(…)` — nothing is lost from the page.
+                rows.append('<tr><td class="mono zone">%s</td><td>%s</td>'
+                            '<td>%s</td><td class="mono zone">%s</td><td>%s</td></tr>'
+                            % (esc(name), label, shown or NIL,
+                               esc(sig) if sig else NIL,
+                               inline_md(gloss, here) if gloss else NIL))
+    return ('<table class="data"><tr><th class="zone" style="width:190px">thành viên</th>'
+            '<th style="width:80px">loại</th><th style="width:90px">hiển thị</th>'
+            '<th class="zone" style="width:250px">kiểu / chữ ký</th>'
             "<th>ghi chú</th></tr>%s</table>" % "".join(rows))
 
 
@@ -1798,7 +2189,7 @@ def class_figure(src, comps, figs, here):
     parsed = parse_class(src)
     if parsed is None:
         return None
-    meta, order, types, edges, marks, dashed = parsed
+    meta, order, types, edges, marks, dashed, anchor = parsed
     fig_no = figs.next() if (edges and figs is not None) else "—"
     title = meta.get("title", "")
 
@@ -1822,7 +2213,8 @@ def class_figure(src, comps, figs, here):
                 tags = ("private",) if v == "-" else ("public",) if v == "+" else ()
                 # The first method carries the separator, so the two compartments
                 # cost one tag rather than a second kind of node.
-                rows.append((n, sig, (tags + ("sep",)) if (k == 0 and spec["fields"])
+                rows.append((n + short_sig(sig), "",
+                             (tags + ("sep",)) if (k == 0 and spec["fields"])
                              else tags))
         rows_map[t] = rows
         if spec and spec["kind"] == "interface":
@@ -1830,7 +2222,8 @@ def class_figure(src, comps, figs, here):
 
     svg = svg_dag(edges, comps, fig_no, aria="class diagram", wrap=False,
                   entity_rows=rows_map, entity_tag=tag_map, marks=marks,
-                  dashed=dashed, defs=class_marker_defs()) if edges else None
+                  dashed=dashed, route="struct", anchor=anchor,
+                  defs=class_marker_defs()) if edges else None
     if edges and svg is None:
         return None
 
@@ -2001,6 +2394,21 @@ table.data th { text-align: left; font: 700 10px var(--mono); text-transform: up
 table.data td { padding: 9px 12px 9px 0; border-bottom: 1px solid var(--line); color: var(--ink-2); vertical-align: top; }
 table.data tr:hover td { background: var(--mark-film); }
 table.data td.rev { font-weight: 700; color: var(--mark); }
+/* A table under a figure had six columns, horizontal rules only, and the leading
+   name repeated four to six times down the page. Nothing held a column together
+   for the eye. Three devices fix it without dropping a row — the table is still
+   the figure's full reading. (1) The repeated name becomes a band, printed once.
+   (2) Two vertical hairlines cut the row into what it IS, what it is SPECIFIED as,
+   and what it MEANS. (3) An empty cell becomes a faint dot instead of an em-dash,
+   so it stops competing with real text — about 40% of the cells were dashes. */
+table.data td.zone, table.data th.zone { border-right: 1px solid var(--line); padding-right: 14px; }
+table.data tr.band td { padding: 17px 12px 5px 0; border-bottom: 1.5px solid var(--line-2); color: var(--ink); }
+table.data tr:first-child + tr.band td { padding-top: 6px; }  /* the band right under the header needs no air above it */
+table.data tr.band:hover td { background: none; }
+table.data tr.band code { font-size: 12.5px; font-weight: 700; background: none; border: 0; padding: 0; color: var(--ink); }
+table.data tr.band .gloss { margin-left: 12px; font: 400 12.5px var(--sans); color: var(--ink-3); }
+table.data .nil { color: var(--line-2); }
+table.data tr.band + tr td { padding-top: 8px; }
 .mono { font-family: var(--mono); font-size: 12.5px; white-space: nowrap; }
 .dim { color: var(--ink-3); }
 .devtag { font: 700 10.5px var(--mono); letter-spacing: .09em; text-transform: uppercase; color: var(--mark); white-space: nowrap; }

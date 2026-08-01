@@ -136,6 +136,21 @@ table.data th { text-align: left; font: 700 10px var(--mono); text-transform: up
 table.data td { padding: 9px 12px 9px 0; border-bottom: 1px solid var(--line); color: var(--ink-2); vertical-align: top; }
 table.data tr:hover td { background: var(--mark-film); }
 table.data td.rev { font-weight: 700; color: var(--mark); }
+/* A table under a figure had six columns, horizontal rules only, and the leading
+   name repeated four to six times down the page. Nothing held a column together
+   for the eye. Three devices fix it without dropping a row — the table is still
+   the figure's full reading. (1) The repeated name becomes a band, printed once.
+   (2) Two vertical hairlines cut the row into what it IS, what it is SPECIFIED as,
+   and what it MEANS. (3) An empty cell becomes a faint dot instead of an em-dash,
+   so it stops competing with real text — about 40% of the cells were dashes. */
+table.data td.zone, table.data th.zone { border-right: 1px solid var(--line); padding-right: 14px; }
+table.data tr.band td { padding: 17px 12px 5px 0; border-bottom: 1.5px solid var(--line-2); color: var(--ink); }
+table.data tr:first-child + tr.band td { padding-top: 6px; }  /* the band right under the header needs no air above it */
+table.data tr.band:hover td { background: none; }
+table.data tr.band code { font-size: 12.5px; font-weight: 700; background: none; border: 0; padding: 0; color: var(--ink); }
+table.data tr.band .gloss { margin-left: 12px; font: 400 12.5px var(--sans); color: var(--ink-3); }
+table.data .nil { color: var(--line-2); }
+table.data tr.band + tr td { padding-top: 8px; }
 .mono { font-family: var(--mono); font-size: 12.5px; white-space: nowrap; }
 .dim { color: var(--ink-3); }
 .devtag { font: 700 10.5px var(--mono); letter-spacing: .09em; text-transform: uppercase; color: var(--mark); white-space: nowrap; }

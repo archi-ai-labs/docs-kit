@@ -57,6 +57,112 @@ session engaged with the docs workflow. A literal id with digits sitting in a
 skill file silences it in every session, permanently. Prose says `ISSUE-NNN`;
 digits live only under `docs/`.
 
+### Changed — a relation is not a flow, and gets drawn like one now
+
+`svg_dag` was built for ```` ```flow ````, where an edge means data moving. Four
+figure types later it was still drawing every edge that way, including the two
+where an edge means nothing of the sort. A foreign key does not travel and a UML
+generalization does not travel, so a curve out of the middle of a box said the
+wrong thing about them twice over: it started nowhere in particular, and the
+middle of a tall entity box is a column that has nothing to do with the key being
+drawn. Three foreign keys into `orders` all ended at `y=221`; the column they
+actually name sat 33px away.
+
+`route="struct"` swaps the curve for orthogonal lines with real anchors. It is
+paint, not layout — layering, the feedback arc set and the return lanes are the
+same code either way, so *one layered-graph engine* still holds.
+
+| Relation | Leaves from | Lands on |
+|---|---|---|
+| `erd` foreign key | the fk column's own row | the row it names |
+| `class` field of a declared type | that field's own row | the target's header band |
+| `class` extends / implements | the header band — it belongs to the type, not to a member | the target's header band |
+
+One relation is one line, from its own row to its own arrowhead, with a vertical
+lane of its own in the column gap. Nothing is shared, so tracing a line backwards
+can only end in one box. The one exception is measured rather than chosen: two
+arrowheads fit in a 26px header band, three foreign keys into a 20px primary-key
+column do not, so below that threshold they converge on a trunk with junction
+dots — every tail still carrying its own marker on its own row. Where a converged
+trunk's members disagree on a symbol, it wears the one most of them carry, and
+the minority fact — a nullable key's `○` — is left to the `null` flag in the
+table beside it.
+
+Two coincidences that geometry alone would have shipped are now assertions. Two
+relations leaving one header band no longer leave it at the same `y`, which used
+to paint the dashed line over the solid one. And two feeders reaching a trunk
+from opposite sides at the same `y` — a child's key and the parent's own key are
+one coincidence apart — no longer draw a single unbroken line through the
+junction that reads as "these two connect to each other".
+
+A self-referencing key stops being a back-edge and enters its own box from the
+side, which retires a 126px lobe below the rows and 15px of canvas.
+
+### Changed — the ordering step Sugiyama has and this engine skipped
+
+A column was ordered alphabetically: deterministic, and blind. It put
+`SandboxAdapter` above `StripeAdapter`, so `extends BaseAdapter` had to climb
+past everything the other one emitted, and no router could have helped — the fix
+had to be the order. Each column is now ordered by the mean index of the nodes it
+points at in the column to its right, sweeping right to left, ties keeping
+alphabetical. Still reproducible byte for byte, still no iteration count to
+converge. On the class figure it takes the best achievable crossings from 5 to 1.
+
+This changes box order in existing figures, so it is the one change here that
+`design/sample-*.html` could not absorb silently.
+
+### Changed — arrowheads, and the constant that kept them off the box
+
+Every marker in the renderer puts its tip on the path's own end point — the
+chevron's point is at `viewBox x=8`, which is its `refX`; the triangle's apex at
+12, which is its `refX`. `svg_dag` then ended every edge at `bx - 6`. So every
+arrowhead in every figure stood 6px short of the thing it pointed at, while
+back-edges below the rows already landed on the box. The rule that replaces the
+constant: **an arrowhead's tip lands on the target's border.**
+
+`markerUnits` defaults to `strokeWidth`, so a marker's real size is
+`markerWidth ÷ viewBox × stroke-width`. Every flow arrowhead is `7 ÷ 10 × 1.6`;
+the crow's foot and the UML triangle were written `12 ÷ 12 × 1.6`, 70% larger
+than everything else on a 20px row pitch. Nobody chose that — it never got
+compared. `MARKER_W` matches them by *ink* rather than by box, because the foot's
+toes span 11 of its 12 viewBox units while the chevron spans 7 of 10. With a
+19.2-unit foot the 6px gap read as part of the symbol; at 8.8 it read as a line
+that stopped early. Shrinking the marker did not cause that defect, it exposed it.
+
+### Changed — a flowchart says where it branches
+
+Three shapes shared one 1.5px stroke on one white fill, so a chart that exists to
+answer *where does this branch* gave the reader no way in. The diamond takes a
+2px stroke and an `--l1-wash` fill and becomes the heaviest object on the page; a
+step drops to 1.25px graphite and reads as ground; and the two ends stop being
+identical capsules — the entry keeps full-weight ink, the exit is drawn light. No
+new hue is spent: L1 was already the diamond's colour.
+
+In the figure a class method is now `name(…)`. The full signature had been
+printed once in the interface and once in every implementer — the same 46
+characters six times — which drove each box to 467px and the canvas to 1012,
+past `CONTENT_W`, so the right-hand column came out clipped. Fields keep their
+types, and the signature keeps its own column in the table below.
+
+### Changed — the tables under a figure
+
+Six columns, horizontal rules only, the leading name repeated four to six times,
+and about 40% of the cells an em-dash. Nothing held a column together for the
+eye. Three devices, no row dropped — the table is still the figure's full
+accessible reading: the repeated name becomes a band printed once; two vertical
+hairlines cut each row into what it **is**, what it is **specified** as, and what
+it **means**; an empty cell becomes a faint dot so it stops competing with real
+text. `fk` moves back into the key column, where "what kind of key is this" is
+actually answered.
+
+A flowchart shipped two tables — a list of branch points and a list of edges —
+and between them they never answered the question a reader arrives with: *at this
+branch point, how many ways out, and where does each go.* They are now one
+decision table, banded by source. A state machine is the same table with the same
+shape: the band is the state and its meaning, the rows under it are the
+transitions out of it, and a final state keeps its meaning with an explicit note
+that it has none.
+
 ### Fixed
 
 - `README.md` described `/docs-kit:brief` as "Manual invocation only" and as
