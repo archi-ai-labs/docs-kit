@@ -5,7 +5,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
-## [Unreleased]
+## [0.14.0] — 2026-08-01
 
 ### Added — `brief` became the forward path into Layer 2
 
