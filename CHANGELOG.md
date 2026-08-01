@@ -5,7 +5,40 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
-## [Unreleased]
+## [0.14.1] — 2026-08-01
+
+### Fixed — clicking `brief` in the menu no longer runs it with nothing to work on
+
+`skills/brief/SKILL.md` now declares `argument-hint: "[what the work is about]"`
+and `arguments: subject`. Both are needed, and they repair two different hosts.
+
+In the terminal CLI, picking a command from the `/` menu writes `/name ` into the
+input and then submits it, in the same breath — the only thing that holds the
+submit back is the command declaring at least one named argument. `argument-hint`
+does not qualify; it is display text. So a user who picked `brief` from the menu
+intending to type a subject watched the turn start without one, and the skill fell
+back to reading the subject out of whatever the conversation happened to contain.
+
+The desktop app has no such brake. It runs the skill and injects an elicitation
+block instead — `[Skill "brief" was invoked. It expects: …]` when the skill
+declared a hint, and *"It did not declare an argument-hint, so infer what context
+to collect from the SKILL.md instructions"* when it did not. The hint is the whole
+difference between a turn that opens by asking and a turn that opens by guessing.
+
+The other four skills are deliberately left alone. `docs-init`, `docs-check`,
+`docs-render` and `docs-sync` genuinely take no arguments, so click-and-run is the
+behaviour they want; giving them `arguments` would buy an extra keystroke and
+nothing else.
+
+### Changed — Phase 1's AskUserQuestion rule now says what it outranks
+
+That same desktop elicitation block forbids AskUserQuestion and routes to the
+`visualize` elicitation widget, which reads as a direct contradiction of Phase 1's
+*"Resolve the gate with AskUserQuestion. Always."* The two govern different acts —
+the host is collecting the **subject** before Phase 1 has anything to scan, while
+the gate resolves **decisions** the conversation left open — and Phase 1 now says
+so, along with why the obvious reconciliation is wrong: the widget is desktop-only,
+and a gate that silently does nothing under the terminal CLI is worse than no gate.
 
 ### Removed — a helper pair that was never once called
 

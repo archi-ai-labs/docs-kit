@@ -1,6 +1,16 @@
 ---
 name: brief
 description: Turn settled decisions into a delegation prompt for a coding agent, gating on a decision-freeze check first. In a repo that uses the docs-kit three-layer model it also records the work as an Issue and routes it through Layer 2 before the prompt is written. Use whenever the user is about to hand work to another agent or a teammate — a prompt, a spec, a work brief, a handover — and especially when they ask for one while key decisions are still open.
+# Both fields are load-bearing, and they fix two DIFFERENT surfaces — never drop
+# one as redundant. In the terminal CLI, picking a command from the / menu submits
+# it immediately unless the skill declares `arguments` with at least one name; only
+# then does the menu leave `/docs-kit:brief ` sitting in the input, waiting. In the
+# desktop app nothing suppresses the run — instead the app injects an elicitation
+# instruction built from `argument-hint`, so with the hint the turn opens by asking
+# for the subject and without it the model has to guess one from this file.
+# The quotes around the hint are required: bare [brackets] parse as a YAML list.
+argument-hint: "[what the work is about]"
+arguments: subject
 ---
 
 # Brief — from settled decisions to a delegation prompt
@@ -73,6 +83,19 @@ gate asked in prose scrolls off the terminal and gets answered with "ok, go
 ahead"; that is exactly how an unsettled decision ends up frozen into the
 brief. The tool renders a dialog the user has to answer — that is the whole
 reason it is mandatory here.
+
+**This survives the desktop app's elicitation instruction, which says the
+opposite.** When this skill is invoked with no arguments, the Claude Code
+desktop app injects a block starting `[Skill "brief" was invoked. It expects:
+…]` that forbids AskUserQuestion and routes to the `visualize` elicitation
+widget instead. That instruction governs **argument collection** — finding out
+what the work is about, before Phase 1 has anything to scan. The gate is a
+different act: it resolves decisions the conversation left open, mid-task,
+after that subject is already known. Collect the subject however the host
+asks; resolve the gate with AskUserQuestion regardless. **Do not "reconcile"
+the two by moving the gate onto the elicitation widget** — the widget is a
+desktop-only tool, and a gate that silently does nothing in the terminal CLI
+is worse than no gate at all.
 
 1. Print the open decisions as a short table first — decision · why it
    changes what gets built · your default — so the user sees the whole gate
