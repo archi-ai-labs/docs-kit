@@ -2533,15 +2533,6 @@ def id_tag(ident, here, cls="tag id"):
     return tag(m.group(0), "%s %s" % (cls, layer) if layer else cls, href)
 
 
-def status_dot(kind):
-    return '<span class="dot d-%s"></span>' % kind if kind else '<span class="dot"></span>'
-
-
-def status_badge(label, dot, live=False):
-    return ('<span class="status%s">%s%s</span>'
-            % (" live" if live else "", status_dot(dot) if dot != "open" else '<span class="dot"></span>', esc(label)))
-
-
 def lane_tag(lane):
     if lane == "fast":
         return '<span class="tag lane-fast">fast</span>'

@@ -5,6 +5,33 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
+## [Unreleased]
+
+### Removed — a helper pair that was never once called
+
+`status_badge()` and `status_dot()` are gone from `scripts/docs_render.py`.
+`git log -S'status_badge('` returns exactly one commit — 3550deb, the commit
+that introduced `docs-render` — so the count went 0 → 1 and stopped there. The
+one occurrence was the `def` line. It was never called, not even by the commit
+that wrote it.
+
+`status_dot()` did have a caller once, and lost it in 0.7.0. From then on the
+two were a closed loop: `status_badge` was the only thing that called
+`status_dot`, and nothing called `status_badge`.
+
+The output was never wrong — `status_badge("docs-check clean", "live")` returns
+byte-for-byte what the live code hand-writes. What replaced the pair is
+`dot_html()`, and the reason is one line of vocabulary. `status_dot`'s sentinel
+for *no modifier* is the empty string, so `status_dot("open")` emits a `d-open`
+class that no rule styles — and `"open"` is a real state name in `ISSUE_DOTS`
+and `BACKLOG_DOTS`. `status_badge` patched around that at the call boundary
+(`if dot != "open"`), which is the special case leaking out of the function.
+`dot_html` moved it inside. Every call site followed the one that spoke the
+domain's own words.
+
+`design/sample-*.html` are byte-identical after the deletion, which is the
+proof the code was dead rather than merely unreachable-looking.
+
 ## [0.14.0] — 2026-08-01
 
 ### Added — `brief` became the forward path into Layer 2
