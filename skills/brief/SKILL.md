@@ -252,15 +252,36 @@ Re-read the finished brief pretending you have zero conversation context:
 - Is any user-config-touching action (CLAUDE.md, settings) gated behind an
   ask-first rule? If not, add one.
 
-Deliver the brief as a Markdown file the user can hand to the agent.
+### Delivering it — where the file goes, and what happens to it after
+
+Write the brief to **`<repo-root>/briefs/`**, creating that directory if it is
+not there. Name it `brief-<slug>.md`, lowercase ASCII with hyphens — the same
+rule STANDARD §11 puts on document file names, for the same reason. When a brief
+is one of an ordered series, a two-digit prefix is fine: `brief-03-<slug>.md`.
+
+**Print the full absolute path when you hand it over.** A brief the user cannot
+find is a brief that was not delivered.
+
+| Rule | Why it is this way |
+|---|---|
+| `briefs/` belongs in that repo's `.gitignore` | A brief is the reasoning that led to a change, and `CHANGELOG.md` is where that reasoning belongs once the change lands. Commit both and the repo holds two copies of the same decisions — and the brief, frozen at hand-over, is the copy that goes stale. |
+| Adding that line is a write to a file the user owns, so **ask first** | AskUserQuestion; if it is unavailable, ask in plain text and end the turn. Never edit a `.gitignore` silently. If the repo has none at all, that is a bigger act than appending — stop and ask before creating one. |
+| **Nothing ever deletes a brief** — not this skill, not a hook, not `docs-sync` | The brief holds decisions that were already settled: it is the record of *why* shipped code looks the way it does. Deleting it on a timer, or on "the work is done", throws that away for a few kilobytes. The user deletes briefs when the user decides to. This is the same rule Phase 1 states for an abandoned Issue — do not add cleanup logic here later either. |
+
+**A session scratchpad is not a home.** A brief written to a temp directory is
+filed under an opaque session id, outside git and outside backup, and is never
+found again — which is exactly how seven of them silently accumulated before
+this rule existed.
 
 ## After delivery — one-line lesson log
 
 If the user reports the agent's result diverged from intent, do not just fix
 the result. Diagnose: was the divergence caused by (a) a missing decision,
 (b) a missing constraint, or (c) missing edge handling? Offer to append one
-line to a `prompt-lessons.md` in the user's workspace. Patterns repeat —
-after ~10 entries the user's 2-3 habitual gaps become visible and fixable.
+line to `<repo-root>/briefs/prompt-lessons.md` — the same gitignored directory
+the brief itself went to, so one rule covers everything this skill writes.
+Patterns repeat — after ~10 entries the user's 2-3 habitual gaps become
+visible and fixable.
 
 ## Anti-patterns to refuse
 
@@ -268,6 +289,8 @@ after ~10 entries the user's 2-3 habitual gaps become visible and fixable.
   not "it is decided") — run Phase 1 instead
 - Running the Phase 1 gate in prose while AskUserQuestion is available — the
   questions scroll past, "go ahead" comes back, and nothing was decided
+- Leaving the brief somewhere the user was never told about — a scratchpad, a
+  temp path, or a `briefs/` whose location you did not print
 - Burying MUST/MUST-NOT rules inside descriptive paragraphs
 - Omitting the WHY on deliberately unusual choices
 - Prompts that give the agent no stop-and-ask escape hatch for edge cases

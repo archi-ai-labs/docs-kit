@@ -349,6 +349,9 @@ docs-kit/
 │   ├── sample-*.html            #   real renderer output — regenerate, never hand-edit
 │   └── fixture/ + make-samples.sh
 ├── templates/                   # the 15-folder docs tree + CLAUDE.md snippet
+├── briefs/                      # gitignored — where `brief` writes its output, in
+│                                #   every repo. Never committed: CHANGELOG.md is
+│                                #   where reasoning lives once a change lands.
 ├── CHANGELOG.md
 ├── LICENSE
 └── README.md

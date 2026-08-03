@@ -5,6 +5,49 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
+## [0.15.0] — 2026-08-03
+
+### Added — a brief now has a home, and the skill says what happens to it
+
+`skills/brief/SKILL.md` used to end with one sentence about its own output:
+*"Deliver the brief as a Markdown file the user can hand to the agent."* No path,
+no owner, no lifecycle. In practice the file landed in whatever session scratchpad
+the run happened to have, and stayed there. Seven of them had accumulated on the
+author's machine — 136 KB filed across four different session ids under
+`/private/tmp`, the oldest four days old — and a `grep` for cleanup logic across
+`skills/`, `references/`, `hooks/`, `scripts/` and `STANDARD.md` returned exactly
+one hit, which governs an abandoned Issue and not the brief file at all.
+
+That is bad at both ends at once. The briefs accumulated, because nothing deletes
+them; and they sat somewhere volatile, outside git and outside backup, filed under
+an id nobody can read. The author had already worked around it by hand, keeping a
+private `~/Projects/briefs/` the skill knew nothing about.
+
+So the skill now states the contract it was missing. A brief goes to
+`<repo-root>/briefs/` as `brief-<slug>.md`, and the full absolute path is printed
+when the brief is handed over — a brief the user cannot find is a brief that was
+not delivered. `briefs/` belongs in that repo's `.gitignore`, which makes adding
+the line a write to a file the user owns, so it goes through AskUserQuestion like
+every other such write; a repo with no `.gitignore` at all is a bigger act than
+appending, and stops for a question of its own.
+
+**`briefs/` is gitignored on purpose, and the reason is written into the skill so
+nobody "fixes" it later.** A brief is the reasoning that led to a change, and this
+file is where that reasoning belongs once the change lands. Commit both and the
+repo carries two copies of the same decisions — and the brief, frozen at the
+moment it was handed over, is the copy that goes stale.
+
+**Nothing deletes a brief** — not the skill, not a hook, not `docs-sync`. The
+temptation to add a sweep is exactly why the rule is stated rather than implied:
+a brief records decisions that were already settled, so deleting it on a timer or
+on "the work is done" throws away the *why* behind shipped code to reclaim a few
+kilobytes. This is the same position Phase 1 already takes on an Issue left behind
+by an abandoned gate.
+
+`prompt-lessons.md` got the same treatment in passing. It was told to live *"in
+the user's workspace"*, which is the identical defect seven lines further down;
+it now sits in `briefs/` too, so one rule covers everything this skill writes.
+
 ## [0.14.1] — 2026-08-01
 
 ### Fixed — clicking `brief` in the menu no longer runs it with nothing to work on

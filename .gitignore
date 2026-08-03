@@ -20,3 +20,10 @@ __pycache__/
 # NOW board — local working state, per machine
 NOW.json
 NOW.md
+
+# Delegation prompts written by /docs-kit:brief. Deliberately NOT committed: a
+# brief is the reasoning that led to a change, and CHANGELOG.md is where that
+# reasoning belongs once the change lands. Committing both puts two copies of
+# the same decisions in the repo, and the brief — frozen at the moment it was
+# handed over — is the one that goes stale.
+briefs/
