@@ -370,23 +370,32 @@ never run a fan-out on assumed parameters.
    delivery rule below exists to prevent. Disjointness is what makes isolation unnecessary,
    and step 2 already proved it.
 
-#### Step 6 — run it
+#### Step 6 — run it as a dynamic workflow
 
-Call Claude Code's Workflow tool with the partition:
+Call Claude Code's Workflow tool with a script you compose **from this brief**, inline. This
+skill ships no orchestration script of its own, on purpose: the partition differs for every
+brief, and a fixed script would only be a worse version of what the brief already says. The
+brief *is* the input — sections 3, 4 and 6 carry scope, split strategy, shared files, the
+ceiling and the check, which is precisely what a workflow script needs to be written from.
 
-```
-Workflow({ name: "docs-kit:brief-fanout",
-           args: { briefPath: <absolute path to the delivered brief>,
-                   repoRoot: <absolute repo root>,
-                   deliverables: [ { id, ask, paths: [...], readOnly: <true in inspect mode> } ],
-                   sharedFiles: [ "docs", "CHANGELOG.md", ".gitignore", … ],
-                   maxAgents: <the ceiling>, verify: <true|false>, effort: "medium" } })
-```
+The composed script must do these four things, and the user can watch it run with
+`/workflows`:
 
-The script re-checks the guards in code before spawning anything and refuses on overlapping
-paths, on a write into a shared file, and on a row with no enumerable paths. **That
-duplication is deliberate:** a prompt saying "do not collide" is a request, while a
-partition rejected before any agent starts is a fact.
+1. **Re-check the partition in code before spawning anything** — refuse on paths that
+   overlap between two deliverables, on any path under a shared file, and on a deliverable
+   whose paths could not be enumerated. **This duplication is deliberate:** a prompt saying
+   "do not collide" is a request, while a partition rejected before any agent starts is a
+   fact. Step 2 already established the facts; the script enforces them.
+2. **`pipeline()` the deliverables, one agent each**, passing each agent its own exhaustive
+   path list, the shared-file list it may never write, and — in inspect-first mode — the
+   instruction to report what it *would* change and write nothing.
+3. **Verify each finished deliverable with a second agent** that reads the files rather than
+   the builder's report, defaults to fail when it cannot confirm, and also reports any file
+   written outside the paths that agent owned.
+4. **Return structured results**: what each deliverable did, every blocker, every needed
+   change to a shared file, whatever the ceiling dropped, and whatever failed verification.
+
+`isolation: 'worktree'` appears nowhere in it — step 5 says why.
 
 #### Step 7 — when it returns, the caller finishes the job
 

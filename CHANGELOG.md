@@ -5,6 +5,25 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
+## [0.17.0] — 2026-08-06
+
+### Changed — the brief composes its own workflow instead of feeding a fixed one
+
+0.16.0 shipped `workflows/brief-fanout.js`, a static orchestration script the skill called by
+name. It is gone. The partition differs for every brief, so a fixed script could only ever be
+a worse restatement of what the brief already says — and the brief says it well: sections 3,
+4 and 6 carry scope, split strategy, shared files, the ceiling and the check, which is exactly
+what a workflow script has to be written from. The brief **is** the input.
+
+Step 6 now composes the script inline from the brief and runs it as a dynamic workflow, which
+the user can watch with `/workflows`. The four properties that made the static script worth
+having are stated as requirements on what gets composed: re-check the partition in code before
+spawning anything (a prompt saying "do not collide" is a request; a partition rejected before
+any agent starts is a fact), one agent per deliverable carrying its own exhaustive path list,
+an independent verifier that reads files rather than the builder's report and fails closed,
+and structured results naming every blocker, every shared-file need, and everything a cap
+dropped.
+
 ## [0.16.0] — 2026-08-05
 
 ### Added — a brief can now say how the work splits, and run it that way
