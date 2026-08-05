@@ -378,6 +378,13 @@ brief, and a fixed script would only be a worse version of what the brief alread
 brief *is* the input — sections 3, 4 and 6 carry scope, split strategy, shared files, the
 ceiling and the check, which is precisely what a workflow script needs to be written from.
 
+**The script derives its partition from section 3 — it never decides one.** Composing is
+translation, not a second design pass: if the script you are writing wants a different split
+than the ownership table, the table wins and the script is wrong. Any real disagreement means
+going back and re-asking, not quietly running the better-looking one. The reason is the rule
+this skill already applies to docs: a second copy of a decision is a copy that will be wrong
+within a month — and here the wrong copy would be the one actually executing.
+
 The composed script must do these four things, and the user can watch it run with
 `/workflows`:
 

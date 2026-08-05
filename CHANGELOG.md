@@ -5,6 +5,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
+## [0.17.1] — 2026-08-06
+
+### Fixed — two sources of truth for one partition, and the executing copy was the unguarded one
+
+0.17.0 told Step 6 to compose the workflow script "from this brief" — right in intent, too
+loose in wording. Nothing stopped the composed script from arriving at a different split than
+the ownership table in section 3, and when those disagree the copy that actually runs is the
+script, not the table the user approved. That is the same defect this skill already refuses
+elsewhere: a second copy of a decision is the copy that goes wrong, and the docs are the
+source of truth.
+
+Composing is now stated as translation, not a second design pass. The script derives its
+partition from section 3 and never decides one; a script that wants a different split is
+wrong, and a real disagreement is grounds to re-ask rather than to run the better-looking one.
+
 ## [0.17.0] — 2026-08-06
 
 ### Changed — the brief composes its own workflow instead of feeding a fixed one
