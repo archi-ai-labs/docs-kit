@@ -5,6 +5,113 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
+## [0.16.0] — 2026-08-05
+
+### Added — a brief can now say how the work splits, and run it that way
+
+`skills/brief/SKILL.md` described work for exactly one receiving agent. Held against the
+five things a usable orchestration input carries — scope, split strategy, verification,
+output format, budget — it scored one met, two partial, two absent. Output format was its
+strength. Scope bounded *authority* ("what may the agent not change") but never *paths*, and
+could not express a read-only pass. Verification was the agent checking its own work. Split
+strategy and budget were missing outright.
+
+Four of the five are properties of *coordinating* work rather than of the work itself, which
+is why a skill written for one agent never grew them — and why they now appear **only when
+the work is actually being split**. A serial brief pays for none of it: path ownership and an
+independent checker exist because two agents can collide, and one cannot. Phase 2 carries
+them in existing sections: scope and split strategy as the `agent → deliverable → exact
+writable paths` table in CONCRETE ASKS (with a read-only flag, so an inspect-first pass is
+expressible at all), shared files and the agent ceiling in HARD CONSTRAINTS, the independent
+checker in EXPECTED OUTPUT, and the blocked-agent rule in EDGE HANDLING.
+
+The fifth is not conditional. `how to verify it` was too weak standing alone, so **every**
+section 6 must now name what makes the result fail and must fail closed — a criterion nobody
+could confirm is a failure, never a pass. That is a writing rule costing no dialog, because
+acceptance criteria belong to the work; only *who runs the check* depends on how the work is
+staffed.
+
+The gate sits at the end of Phase 2, after CONCRETE ASKS is drafted — the first moment real
+deliverables exist, so options are concrete partitions instead of the bare Yes/No the gate
+rule forbids, and early enough that ownership boundaries still reach HARD CONSTRAINTS.
+**Both dialogs propose rather than ask.** The skill has just written the brief and run the
+disjointness test, so it already knows the paths and the counts; options lead with the
+derived answer carrying real numbers, and AskUserQuestion's own free-text entry is what lets
+the user override or extend it. Asking a user to *list* their write paths or acceptance
+criteria is homework handed back — the same failure this skill exists to prevent, one level
+up.
+
+The skeleton stays at six sections — every piece has a home. The ownership table goes in
+CONCRETE ASKS, the SHARED FILES list and the agent/spend ceiling in HARD CONSTRAINTS, the
+blocked-agent rule in EDGE HANDLING, the independent check in EXPECTED OUTPUT.
+
+Two rules exist because a split brief is read by a fleet rather than a reader. A ceiling is
+**mandatory** in a split brief: without one nothing the brief says bounds how far the work
+fans out. And section 5's escape hatch inverts — everywhere else it must name
+AskUserQuestion, but a fanned-out agent has no such tool, so "end the turn" inside one means
+it returns quietly while the others keep writing. In a split brief the agent records the
+blocker and stops work on that deliverable instead.
+
+**A size floor comes before the dialog.** Count the independent deliverables and the distinct
+paths they write; below three deliverables or three paths the question is never asked and the
+brief runs serially without comment. Fan-out costs a dialog, a partition to check, N agents
+each re-reading the brief, a merge to supervise and a verification pass — under a small brief
+that exceeds the wait it saves, and a dialog offered on a two-file change is how a user
+learns to dismiss the dialog on the change that mattered. When the question *is* asked, the
+counts go in the option labels, so the user answers from real numbers rather than a guess.
+
+**A parallel answer then collects three parameters in one dialog and executes.** Mode
+(inspect-first, where every agent reports what it *would* change and writes nothing — the
+cheapest way to find a bad partition, since a wrong split costs a report instead of a merge),
+ceiling, and whether each deliverable gets an independent verifier. A new workflow script
+`workflows/brief-fanout.js` runs it, invoked as `docs-kit:brief-fanout`.
+
+**The script re-checks the partition in code before spawning anything**, refusing on
+overlapping paths, on a write into a shared file, and on a deliverable whose paths cannot be
+enumerated. The duplication is the point: a prompt saying "do not collide" is a request, a
+partition rejected before any agent starts is a fact. Three findings, each verified against
+this repo rather than assumed, shaped the rest —
+
+- **No agent gets an isolated worktree.** `briefs/` is gitignored with no tracked files
+  (`git ls-files briefs/` returns 0), so a worktree starts without the directory and
+  silently destroys the brief, reintroducing the exact defect 0.15.0 shipped to fix. Proven
+  disjointness is what makes isolation unnecessary.
+- **The caller pre-allocates every id as a literal.** `grep -rh '^id:' docs/` + 1 is
+  read-then-write with no lock, and per-agent views of `docs/` make collision certain rather
+  than likely — with the repair path closed by `references/issue-capture.md`'s own "never
+  renumber an existing id".
+- **A blocked agent records the blocker and stops that deliverable.** Fan-out agents have no
+  AskUserQuestion, so "end the turn" inside one means it returns quietly while the others
+  keep writing. The caller surfaces every blocker before merging, applies `sharedFileNeeds`
+  serially itself, and runs the validator and renderer exactly once at the end.
+
+Caps are never silent: the run reports what the ceiling dropped, what the guards rejected,
+what failed verification, and any file written outside its ownership. Full analysis in
+`briefs/proposal-parallel-gate.md`.
+
+### Fixed — the gate with the most to settle was the one that broke
+
+`skills/brief/SKILL.md` told itself two things that could not both be true. Step 2 of the
+Phase 1 gate batches open decisions "up to 4 per call"; step 3 then said to *add one more
+question to that same batch* in a `docs-kit` repo, for recording the Issue. AskUserQuestion
+accepts at most 4 questions. So a gate that found 4 open decisions had 5 questions to ask,
+and the file never reconciled it.
+
+The consequence was not a dropped question. A 5th question makes the whole call invalid, and
+a failed AskUserQuestion falls to step 4 — ask in plain text and end the turn. That is the
+prose gate this skill spends five paragraphs forbidding, arriving precisely when the gate had
+the most to settle. The Record question is also how consent to write into `docs/` is
+collected, so losing the call loses the recording too.
+
+Step 2 now says 4 is the tool's hard ceiling rather than a house style, and step 3 reserves
+one of those slots instead of borrowing a fifth: at most 3 open decisions ride the first
+call, and the rest go to the follow-up call step 2 already provided for. The reason is
+written inline, per the skill's own technique (b) — without it, a future editor reads the
+reserved slot as timidity and takes it back.
+
+Found while analysing a proposed parallel-execution gate for the same skill; the analysis
+itself is in `briefs/proposal-parallel-gate.md` and shipped no behaviour change.
+
 ## [0.15.0] — 2026-08-03
 
 ### Added — a brief now has a home, and the skill says what happens to it
