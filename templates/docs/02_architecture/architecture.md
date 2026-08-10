@@ -4,6 +4,8 @@ data_flow: []       # "a -> b : nhãn" mỗi dòng một cạnh; "~>" cho async
 tech_stack: []
 constraints: []
 amended_by: []
+rejected: []        # tuỳ chọn. "- DECISION-NNN <đã loại cái gì>" — chỉ Decision workflow ghi
+verified_at: ""     # tuỳ chọn. git rev lúc đọc code lần cuối; validator so với HEAD
 ---
 
 # Architecture
@@ -173,3 +175,32 @@ _Ràng buộc cứng mà thiết kế phải tôn trọng: độ trễ, chi phí
 
 Danh sách có thẩm quyền là `amended_by` trong frontmatter. Mục này chỉ để ghi thêm
 bối cảnh cho những lần sửa đáng kể, khi một dòng tóm tắt là không đủ.
+
+## Rejected options
+
+Danh sách có thẩm quyền là `rejected` trong frontmatter — mỗi dòng một Decision đã
+**loại** một phương án:
+
+```yaml
+rejected:
+  - DECISION-004 bỏ Kafka, giữ outbox trên postgres — chi phí vận hành không đáng
+```
+
+Trường này tồn tại để câu hỏi *"cái gì đã cân nhắc rồi loại?"* trả lời được **chỉ bằng
+layer 1**. Không có nó, ai muốn biết cũng phải đọc hết `22_decisions/` — thứ chỉ dài ra
+theo thời gian trong khi câu trả lời thì không. Cũng chỉ Decision workflow được ghi vào
+đây, y như `amended_by`.
+
+## Verified at
+
+`verified_at` giữ git rev của lần cuối những đường dẫn trong tài liệu này thực sự được
+đọc. Validator lấy `git diff --name-only <rev> HEAD`, giao với tập đường dẫn tài liệu
+nhắc tới, và in `NOTE [stale]` nếu giao khác rỗng.
+
+Đây là **cảnh báo, không phải lỗi** — code đổi không đồng nghĩa tài liệu sai. Nhưng nó
+biến việc rà soát từ "nhớ thì làm" thành "có nguyên nhân mới làm". Đọc lại code xong thì
+đẩy `verified_at` lên rev hiện tại:
+
+```bash
+git rev-parse --short HEAD
+```

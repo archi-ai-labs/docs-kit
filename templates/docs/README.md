@@ -58,7 +58,34 @@ frontmatter; mọi `*_ref:` đều trỏ tới một id, **không bao giờ tr�
 Bốn file `*-000` đi kèm là một chuỗi ví dụ chạy được — xoá cả bốn cùng lúc, hoặc
 giữ lại làm mẫu định dạng. Id thật bắt đầu từ `001`.
 
-## 6 · Ngôn ngữ
+Tài liệu không còn đổi được nữa thì chuyển vào `_archive/` ngay trong thư mục của nó
+(Backlog `done` đã có dòng audit, Issue `archived`, chuỗi đã khép). Dùng `git mv`.
+Việc này **chỉ giảm chi phí đọc, không giảm chuẩn**: validator vẫn kiểm đủ, ref vẫn
+phân giải, `INDEX.md` vẫn liệt kê kèm tiền tố `_archive/`.
+
+## 6 · Đọc thế nào cho rẻ
+
+`INDEX.md` (sinh tự động) là **read model cho agent**: mỗi tài liệu một dòng — id,
+status, ref, file, mô tả. Đọc nó trước rồi chỉ mở đúng id cần. **Đừng bao giờ glob cả
+`22_decisions/` hay `23_backlog/`** — cách đó tốn nguyên một file cho mỗi tài liệu và
+chỉ đắt thêm theo thời gian, trong khi câu trả lời thì không dài ra.
+
+Ba file HTML (`index.html`, `current.html`, `changes.html`) là read model cho người.
+Cả bốn đều sinh lại bằng `/docs-kit:docs-render`; markdown vẫn là nguồn sự thật.
+
+## 7 · Đồng bộ với code
+
+Mọi fact quan trọng ở layer 1 đều mang một **neo** vào source: component có
+`` `path/in/repo` ``, mỗi khối hình có header `code:`. Validator kiểm hai thứ:
+
+- `FAIL [anchor]` — đường dẫn không còn tồn tại. Chắc chắn sai, phải sửa.
+- `NOTE [stale]` — `verified_at` là git rev của lần cuối thực sự đọc code đó; file đã
+  đổi kể từ rev ấy. **Cảnh báo, không phải lỗi** — đổi không đồng nghĩa sai.
+
+Đọc lại code xong thì đẩy `verified_at` lên `git rev-parse --short HEAD`. Đây là thứ
+biến việc rà soát từ "nhớ thì làm" thành "có nguyên nhân mới làm".
+
+## 8 · Ngôn ngữ
 
 Khung tiếng Anh, giải thích tiếng Việt. Tên thư mục, tên trường frontmatter, giá
 trị enum (`open`, `in-progress`, `done`, `approved`, `rejected`, `fast`, `full`),

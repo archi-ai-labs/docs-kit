@@ -27,8 +27,14 @@ each) · `2` setup error (usually: no `docs/` — suggest `/docs-kit:docs-init`)
 ## Step 2 — Report
 
 **Clean run:** say so in one or two sentences, quoting the script's OK line
-(file count). Relay any `NOTE [layout]` lines about missing standard folders as
-informational. Remind the user the script checks form, not content quality.
+(file count). Relay `NOTE` lines as informational — they never affect the exit code:
+- `NOTE [layout]` — a standard folder is missing.
+- `NOTE [stale]` — a layer 1 doc carries `verified_at: <rev>` and some of the paths
+  it names have changed since. Changed is not the same as wrong, which is why this
+  warns instead of failing; the fix is to re-read those files and move `verified_at`
+  forward, and `/docs-kit:docs-sync` is where that happens.
+
+Remind the user the script checks form, not content quality.
 
 **Violations:** for each FAIL line, produce:
 1. The raw line (so the user can grep for it).
@@ -41,8 +47,13 @@ informational. Remind the user the script checks form, not content quality.
      or a Proposal lacks its "Alternatives considered" section.
    - `[audit-append]` — someone edited or deleted existing audit-log lines;
      the log is append-only history.
-   - `[amended-by]` — an Architecture amendment entry doesn't cite an existing
+   - `[amended-by]` — an `amended_by` or `rejected` entry doesn't cite an existing
      Decision — exactly the "only Decisions amend Architecture" rule.
+   - `[anchor]` — a layer 1 doc names a path that no longer exists (a component's
+     backticked `path/in/repo`, or a figure fence's `code:` header). The doc cannot
+     be verified against anything until the path is corrected or the entry removed.
+     Correcting a path is a layer 1 edit, so it goes through the Decision workflow
+     like any other — the check tells you *that* it is wrong, never what it should say.
 3. A concrete suggested fix (which file, which field, what value).
 4. Who should do it: mechanical fixes → offer to run `/docs-kit:docs-sync`;
    judgment calls (e.g. which Decision an amendment belongs to, whether audit

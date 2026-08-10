@@ -1,6 +1,8 @@
 ---
 domain: ""          # nghiệp vụ này là gì, một dòng
 amended_by: []
+rejected: []        # tuỳ chọn. "- DECISION-NNN <đã loại cái gì>" — chỉ Decision workflow ghi
+verified_at: ""     # tuỳ chọn. git rev lúc đọc code lần cuối; validator so với HEAD
 ---
 
 # Business logic
@@ -30,7 +32,7 @@ Xoá nó đi khi viết quy tắc thật, hoặc sửa đè lên.
 ```flowchart
 title: Duyệt yêu cầu hoàn tiền
 trigger: user bấm "Yêu cầu hoàn tiền"
-code: src/refund/approve.go
+code: <file chứa quy tắc này>
 decide: check_amount — số tiền > 2.000.000đ?
 decide: has_history — khách từng bị từ chối chưa?
 start -> check_amount
@@ -82,7 +84,7 @@ thái thật.
 ```state
 title: Vòng đời đơn hàng
 entity: orders.status
-code: src/order/state.go
+code: <file quản lý vòng đời này>
 initial: pending
 final: delivered, refunded, cancelled
 state: pending — đơn đã tạo, chưa thu được tiền

@@ -5,6 +5,128 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
+## [0.18.0] — 2026-08-10
+
+### The model was optimising the cheap half of its own cost
+
+Four questions started this: Issues/Backlog/Decisions pile up and burn tokens; the content
+keeps getting longer; the things that actually matter (database, data paths, API, service
+relationships) are never addressed concretely; and the scaffold should adapt to what kind of
+product the repo holds. Splitting the lifetime cost of a docs set four ways — write, read,
+verify, repair — showed the first two were being paid at the read step and the larger two
+were not being addressed at all. This release lands the read-cost work and the first half of
+the verify work. The rest is written up in `briefs/proposal-scope-and-scale.md`, including a
+self-assessment of what these changes still do not fix.
+
+### Added — `docs/INDEX.md`, the read model for agents
+
+The three HTML pages are the read model for people. Nothing was the read model for the
+agent, so skills read whole folders: `brief` globbed all of `22_decisions/` to learn what was
+settled, `docs-sync` globbed all of `23_backlog/`. That is one entire file per document, for
+an answer whose size does not grow — while the folder's does, forever.
+
+`docs_render.py` already parsed every one of those documents to build `changes.html`, so the
+index costs nothing new to produce: one pipe-delimited line per document — id, status, refs,
+file, description — grouped by folder, sorted, deterministic. Skills now read it and open only
+the ids they need, and both skills say so as a rule rather than a suggestion.
+
+The header is a fixed cost, so the saving is unremarkable on a fresh scaffold and large on a
+real repo. That asymmetry is the point: the problem only exists at the second size.
+
+**A stale index is worse than no index, because the next agent trusts it.** Regenerating is
+therefore no longer optional in `docs-sync` — the step that used to say "skip silently if the
+HTML views don't exist" now states that a skipped render leaves `INDEX.md` behind the
+markdown, and says what skills must do until it is regenerated.
+
+### Added — `_archive/`, so terminal documents leave the hot set
+
+A Backlog item at `done` with its audit line written can never change again, but it kept
+costing exactly as much to read as an open one. Each layer 2 folder may now hold an
+`_archive/` subfolder for documents whose chain has completed.
+
+The design had already cleared the way and never used it: §3 has always guaranteed that file
+names are not reference keys, so moving a file breaks no reference. Use `git mv`.
+
+**Archiving lowers read cost. It never lowers the standard.** The validator walks `_archive/`
+exactly as it walks the folder above it, and CI proves it: a dangling ref inside `_archive/`
+is still reported. Without that, "archive it" would become a way to launder a broken document.
+Layer 1 is never archived — it is state, not history, and a component that no longer exists is
+removed by a Decision.
+
+### Added — `rejected:`, because layer 1 could not say what the system deliberately is not
+
+`brief` was not being lazy when it read every Decision. A Decision with `outcome: rejected`
+holds information that appears nowhere in layer 1: the architecture doc says what the system
+*is*, never what was considered and dropped. So "read the index instead" would have been a
+blind spot rather than a saving.
+
+Architecture and Business logic now take an optional `rejected: []`, written by the same
+Decision workflow that writes `amended_by`, and validated by the same rule — each entry must
+cite an existing `DECISION-NNN`. With it, reading layer 1 alone is *correct*.
+
+Both new fields are optional. A repo scaffolded before they existed stays valid; that is why
+they arrived optional rather than required.
+
+### Added — `[anchor]` and `NOTE [stale]`: the anchors that were already there
+
+Every load-bearing fact in layer 1 has always carried an anchor into the source — a component
+names its `` `path/in/repo` ``, every figure fence takes a `code:` header. **Nothing used
+them.** `docs_validate.sh` checked that `components:` was *present*, never that anything it
+named existed.
+
+Two checks now do, and the split between them is deliberate:
+
+- `FAIL [anchor]` — a named path no longer exists. Not a matter of opinion: the document
+  cannot be verified against anything.
+- `NOTE [stale]` — the doc carries `verified_at: <rev>` and some of the paths it names have
+  changed since. Changed is not the same as wrong, so this warns, on the same reasoning as
+  §8's warn-only hooks: blocking on a false positive teaches people to switch the check off.
+
+The comparison is against the **working tree**, not HEAD. `docs-sync` runs before the session
+is committed; comparing against HEAD would hide exactly the changes that session just made.
+
+This is the mechanism by which docs become synchronised to a specific version, and it costs
+zero tokens — a filesystem test and a `git diff`. It also bounds the expensive half:
+`docs-sync` step 5 used to re-read Architecture in full every session and now reads code only
+where these two lines point.
+
+`[anchor]` does not make the validator check truth. It verifies that a named path exists,
+never that the sentence about it is still correct — the most valuable sentence in layer 1
+remains the one nothing can check.
+
+### Fixed — the templates and the design fixture were both lying, and the new check said so
+
+Turning `[anchor]` on failed a fresh scaffold immediately, which was the check working:
+
+- `03_business-logic/business-logic.md` shipped `code: src/refund/approve.go` and
+  `code: src/order/state.go`, files no scaffold creates. They are now `<placeholder>` values,
+  consistent with the `erd` and `class` fences that always used them. Values containing `<` or
+  `>` are skipped, which is what lets a fresh tree pass clean.
+- `design/fixture/make-fixture.py` wrote `docs/` "and nothing else" while its architecture doc
+  named five components and six `code:` paths — so the committed samples rendered a
+  **`docs-check clean`** badge over a tree where ten anchors pointed at nothing. The fixture
+  now writes the stub source tree those docs name. A design contract that displays a green
+  badge for an unverifiable tree is worse than one that displays nothing.
+
+Also fixed in passing: `design/sample-*.html` were stamped `render v0.15.0` while
+`plugin.json` said `0.17.1`, so CI's "samples are reproducible" gate had been failing on main.
+Regenerating for this release clears it.
+
+### Changed
+
+- `md_files()` reads a folder's `_archive/` subfolder too, and every loaded document carries
+  an `archived` flag. Archived documents stay in the HTML and in `INDEX.md` (with an
+  `_archive/` prefix on the file column) — hiding them would end a trace chain in an id the
+  renderer cannot resolve.
+- `load_docs()` gained an `architecture` key; the index needs it and nothing else changed.
+- New `fm_list()` helper in the validator, shared by the amended-by and anchor checks, so the
+  two cannot disagree about what a list entry is.
+- `docs-init` step 3 now sets `verified_at` after reading the source, and `docs-sync` moves it
+  forward only for documents it actually re-read.
+- CI gained three mutation tests: a moved path must fail while placeholders stay silent, a
+  dangling ref inside `_archive/` must still be reported, and `INDEX.md` must be byte-stable
+  across two renders and contain every id in the tree.
+
 ## [0.17.1] — 2026-08-06
 
 ### Fixed — two sources of truth for one partition, and the executing copy was the unguarded one

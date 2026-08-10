@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Build the fictional 'orderhub' docs tree used for visual checks + design samples.
 
-Usage: make-fixture.py <dir>   — writes <dir>/docs/... and nothing else.
+Usage: make-fixture.py <dir>   — writes <dir>/docs/... plus the stub source tree
+those docs name (see SRC at the bottom), and nothing else.
 
 The fixture deliberately exercises every branch of the renderer: both lanes,
 an amended architecture (two revisions), all board columns including archived
@@ -452,6 +453,30 @@ for folder in ["60_fe-integration"]:
 
 for rel, content in FILES.items():
     p = docs / rel
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(content, encoding="utf-8")
+
+# A source tree, because the docs above name paths in it.
+#
+# The fixture used to write docs/ and nothing else, and the samples rendered
+# "docs-check clean" over an architecture doc pointing at five components that
+# did not exist. The [anchor] check makes that a FAIL — correctly: a fixture
+# whose own docs are unverifiable is the exact failure the check exists to catch,
+# and it would have shipped a misleading badge in the design contract.
+#
+# Contents are irrelevant to the render; only the paths are.
+SRC = {
+    "cmd/gateway/main.go": "package main // HMAC auth, rate limit, forward\n",
+    "cmd/worker/main.go": "package main // outbox consumer, webhook retry\n",
+    "internal/order/create.go": "package order // nhận đơn\n",
+    "internal/order/refund.go": "package order // hoàn tiền\n",
+    "internal/order/state.go": "package order // state machine của orders.status\n",
+    "internal/psp/client.go": "package psp // lối ra duy nhất tới PSP\n",
+    "internal/store/schema.sql": "-- orders, outbox\n",
+    "deploy/postgres/init.sql": "-- bootstrap\n",
+}
+for rel, content in SRC.items():
+    p = root / rel
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(content, encoding="utf-8")
 

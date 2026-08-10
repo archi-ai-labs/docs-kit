@@ -152,7 +152,18 @@ conventional layout.
    exactly what this folder is for — but only write the ones you read in the
    code.
 
-9. State your confidence in the report. Anything inferred rather than read —
+9. Set `verified_at:` in the Architecture (and Business logic) frontmatter to the
+   current rev — you just read that code, so record when:
+
+   ```bash
+   git rev-parse --short HEAD
+   ```
+
+   From then on the validator reports when those files move on (`NOTE [stale]`),
+   which is what turns re-verification from "whenever someone remembers" into
+   "when something actually changed". Leave it empty if the repo has no commit yet.
+
+10. State your confidence in the report. Anything inferred rather than read —
    say so, and leave it out rather than guess. An architecture doc that is
    confidently wrong is worse than an empty one.
 
@@ -175,8 +186,13 @@ bash "$PLUGIN_ROOT/scripts/docs_render.sh" "$(pwd)"
 ```
 
 This writes `docs/index.html` (menu, beside README.md), `docs/current.html`,
-and `docs/changes.html`. If the script exits 3 (`python3` missing), report that
-the HTML views were skipped and continue — it is not fatal.
+`docs/changes.html`, and `docs/INDEX.md`.
+
+`INDEX.md` is the read model **for agents** — one line per document, so a skill can
+find the ids it needs without globbing a folder (STANDARD §10). If the script exits 3
+(`python3` missing), report that both read models were skipped: the HTML is cosmetic,
+but a missing `INDEX.md` means `brief` and `docs-sync` fall back to reading whole
+folders. Not fatal, worth saying out loud.
 
 ## Step 5 — Wire the rules into CLAUDE.md (ASK FIRST — ALWAYS)
 

@@ -53,10 +53,25 @@ documented") would start writing Issues into projects that never opted in.
 ### In a `docs-kit` repo, read what is already settled first
 
 Some decisions are already on disk, and asking the user to re-make them is how
-a gate wastes its one dialog. Before anything else, read `docs/22_decisions/` —
-a decision recorded there is settled, and the brief cites its id
-(`DECISION-NNN`) rather than re-explaining it. Read `docs/02_architecture/` too,
-for constraints the brief must not violate.
+a gate wastes its one dialog. Read, in this order:
+
+1. **`docs/02_architecture/`** — `constraints` (what the brief must not violate),
+   `amended_by` (what was decided and applied), and `rejected` (what was already
+   considered and dropped). This is layer 1: it *is* the settled state.
+2. **`docs/INDEX.md`** — one line per document. Use it to find the two or three
+   ids that bear on this work, then open **only those files**.
+
+**Never glob `docs/22_decisions/`.** Reading every Decision to learn what is
+settled costs a whole file per decision and grows forever, to produce an answer
+layer 1 already holds. The index exists so that this step stays the same size in
+a repo with four decisions and a repo with four hundred (STANDARD §10).
+
+If `docs/INDEX.md` is absent, the repo has not been rendered since the index was
+introduced: say so, suggest `/docs-kit:docs-render`, and fall back to reading the
+folder for this one run.
+
+A decision recorded on disk is settled, and the brief cites its id
+(`DECISION-NNN`) rather than re-explaining it.
 
 A decision that was only ever made in chat is **not** settled just because the
 user sounded certain about it. That one goes through the gate, and then through

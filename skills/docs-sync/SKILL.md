@@ -31,8 +31,16 @@ session did nothing code-related, say so and stop after Step 4.
 
 ## Step 2 — Backlog statuses
 
-Read frontmatter of `docs/23_backlog/*.md`. For each item whose work happened
-this session:
+**Read `docs/INDEX.md`, not the folder.** It carries one line per Backlog item —
+id, status, source_ref, file, description — which is everything needed to decide
+*which* items this session touched. Open only those files. Globbing
+`docs/23_backlog/*.md` costs a whole file per item and only gets worse; the index
+costs a line (STANDARD §10).
+
+If `docs/INDEX.md` does not exist, the repo has not been rendered since the index
+was introduced — say so, and fall back to the folder for this one run.
+
+For each item whose work happened this session:
 - work finished → `status: done`
 - work started but unfinished → `status: in-progress`
 
@@ -82,9 +90,28 @@ Only when this session changed code. The Architecture doc describes the source;
 the source moves and the doc does not, so this step compares them and **reports**
 — it never edits `docs/02_architecture/` outside the Decision path in Step 4.
 
-Read `components` and `data_flow` from `docs/02_architecture/architecture.md`
-and the ```` ```flow ```` blocks in `docs/01_products/*.md`, then check them
-against what this session actually touched:
+**Let the validator scope this step first.** Run it (resolve the plugin root as in
+docs-init Step 0):
+
+```bash
+bash "$PLUGIN_ROOT/scripts/docs_validate.sh" docs
+```
+
+Two kinds of line tell you where to look, deterministically and for free:
+
+- `FAIL [anchor] <file>: names '<path>', which does not exist` — a documented path
+  moved or was deleted. This is certain, not a guess.
+- `NOTE [stale] <file>: verified_at <rev> — N of the paths this doc names changed`
+  — the code under this document has moved since anyone last read it.
+
+**Read code to check a document only where those lines point.** Re-reading every
+Architecture doc every session is the most expensive thing this skill can do, and
+it is what these anchors exist to make unnecessary. When the validator is silent
+and this session touched nothing under a documented path, say so and move on.
+
+Then, for the documents in scope, read `components` and `data_flow` from
+`docs/02_architecture/*.md` and the ```` ```flow ```` blocks in
+`docs/01_products/*.md`, and check them against what this session actually touched:
 
 - a component whose backticked path **no longer exists**, or moved;
 - a new component-sized thing added this session (a new service, datastore,
@@ -104,9 +131,46 @@ workflow decide the amendment. Do not quietly rewrite layer 1 to match the code
 
 Report every finding even when you create no Issue for it.
 
-## Step 6 — Validate and report
+**When you did re-read the code behind a document and it still describes it
+correctly, move `verified_at` forward** to the current rev:
 
-Run the validator (resolve the plugin root as in docs-init Step 0):
+```bash
+git rev-parse --short HEAD
+```
+
+That is a metadata field, not a change to layer 1's content — it records *when the
+document was last checked*, which is the only thing that stops the same document
+being re-read every session forever. Do not touch it for a document you did not
+actually read.
+
+## Step 6 — Archive what can no longer change
+
+Terminal documents leave the hot set (STANDARD §2). After the steps above, move to
+`_archive/` under their own folder:
+
+- a Backlog item at `status: done` **whose audit line is written**;
+- an Issue at `status: archived`;
+- a Proposal or Decision whose chain has completed and whose Backlog item is done.
+
+```bash
+git mv docs/23_backlog/BACKLOG-NNN-slug.md docs/23_backlog/_archive/
+```
+
+Use `git mv` so history follows. Nothing else changes: ids are unaffected because
+file names are not reference keys (STANDARD §3), the validator still checks these
+files in full, and they still appear in `INDEX.md` with an `_archive/` prefix.
+
+**Never archive anything in layer 1.** Layer 1 is state, not history — a component
+that no longer exists is removed by a Decision, not filed away. And never archive a
+Backlog item at `done` that has no audit line; write the line first, or the trace is
+lost in the folder that gets read least.
+
+If nothing qualifies, say so in one line and move on.
+
+## Step 7 — Validate and report
+
+Run the validator again — it is fast, read-only, and this run covers what the sync
+itself changed:
 
 ```bash
 bash "$PLUGIN_ROOT/scripts/docs_validate.sh" docs
@@ -115,19 +179,27 @@ bash "$PLUGIN_ROOT/scripts/docs_validate.sh" docs
 Fix only violations **introduced by this sync**; pre-existing ones belong to the
 report.
 
-Then refresh the generated HTML views so they reflect the reconciled state:
+Then regenerate the read models so they reflect the reconciled state:
 
 ```bash
 bash "$PLUGIN_ROOT/scripts/docs_render.sh" "$(pwd)"
 ```
 
-(Skip silently if `docs/index.html` does not exist and the user never asked for
-HTML views; if the script exits 3 — `python3` missing — mention it and move on.)
+**This is no longer optional, and it is not only about the HTML.** The same command
+writes `docs/INDEX.md`, which Step 2 and `brief` both read *instead of* the folders.
+A sync that creates an Issue without regenerating leaves an index that omits it —
+and a stale index is worse than no index, because the next agent trusts it. If the
+script exits 3 (`python3` missing), say plainly that `docs/INDEX.md` is now stale and
+that skills must fall back to reading the folders until it is regenerated.
 
 Then summarize:
 - **Updated**: backlog statuses changed, audit lines appended, amendments
-  applied, HTML views refreshed.
+  applied, `verified_at` moved forward, read models regenerated.
 - **Created**: retroactive Issues (+ fast-lane Backlog items).
-- **Architecture drift**: what Step 5 found, and the Issues opened for it.
+- **Archived**: what moved to `_archive/`, and how many documents that takes out of
+  the folders skills read.
+- **Architecture drift**: what Step 5 found — separating what the validator's
+  `[anchor]` / `[stale]` lines proved from what you concluded by reading code — and
+  the Issues opened for it.
 - **Needs your decision**: full-lane work without a Decision, ambiguous mappings
   between work and Backlog items, unresolved validator failures. Ask — never guess.

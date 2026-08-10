@@ -92,6 +92,73 @@ jobs:
           fi
           echo "OK — dangling ref rejected"
 
+      # [anchor] is the check that makes "synchronised to a specific version"
+      # possible, so both of its halves need proving: it must fail on a path that
+      # moved, and it must stay silent on the template's <placeholder> values —
+      # otherwise every fresh scaffold is red and users switch it off.
+      - name: Validator catches a moved path, ignores placeholders
+        run: |
+          work="$(mktemp -d)"
+          git -C "$work" init -q
+          git -C "$work" config user.email ci@example.invalid
+          git -C "$work" config user.name ci
+          bash scripts/docs_scaffold.sh "$work" >/dev/null
+          mkdir -p "$work/src/engine" && echo 'package main' > "$work/src/engine/match.go"
+          python3 - "$work" <<'PY'
+          import pathlib, sys
+          p = pathlib.Path(sys.argv[1]) / "docs/02_architecture/architecture.md"
+          p.write_text(p.read_text().replace(
+              "components: []",
+              "components:\n  - engine `src/engine/match.go` — khớp lệnh"))
+          PY
+          bash scripts/docs_validate.sh "$work/docs" \
+            || { echo "::error::anchor check failed on a path that exists."; exit 1; }
+          mv "$work/src/engine/match.go" "$work/src/engine/matcher.go"
+          if bash scripts/docs_validate.sh "$work/docs"; then
+            echo "::error::validator passed a components path that no longer exists."
+            exit 1
+          fi
+          echo "OK — moved path rejected, placeholders ignored"
+
+      # Archiving must lower read cost without lowering the standard: a document
+      # under _archive/ has to keep being validated, or "archive it" becomes a way
+      # to launder a broken one.
+      - name: Archived documents are still validated
+        run: |
+          work="$(mktemp -d)"
+          git -C "$work" init -q
+          bash scripts/docs_scaffold.sh "$work" >/dev/null
+          mkdir -p "$work/docs/23_backlog/_archive"
+          mv "$work/docs/23_backlog/BACKLOG-000-example.md" "$work/docs/23_backlog/_archive/"
+          bash scripts/docs_validate.sh "$work/docs" \
+            || { echo "::error::archiving a valid document made the tree invalid."; exit 1; }
+          sed -i 's/^source_ref: DECISION-000/source_ref: DECISION-888/' \
+            "$work/docs/23_backlog/_archive/BACKLOG-000-example.md"
+          if bash scripts/docs_validate.sh "$work/docs"; then
+            echo "::error::a dangling ref inside _archive/ was not reported."
+            exit 1
+          fi
+          echo "OK — _archive/ is read less, validated the same"
+
+      # INDEX.md is what skills read INSTEAD of globbing a folder, so a stale one
+      # is worse than none: the next agent trusts it. Rendering twice must produce
+      # the same bytes, and every id in the tree must appear in it.
+      - name: INDEX.md is generated, complete, and deterministic
+        run: |
+          work="$(mktemp -d)"
+          git -C "$work" init -q
+          bash scripts/docs_scaffold.sh "$work" >/dev/null
+          DOCS_KIT_NOW=2026-01-01T00:00:00 python3 scripts/docs_render.py "$work" >/dev/null
+          cp "$work/docs/INDEX.md" "$work/first.md"
+          DOCS_KIT_NOW=2026-01-01T00:00:00 python3 scripts/docs_render.py "$work" >/dev/null
+          diff -q "$work/first.md" "$work/docs/INDEX.md" \
+            || { echo "::error::INDEX.md is not deterministic."; exit 1; }
+          for id in ISSUE-000 PROPOSAL-000 DECISION-000 BACKLOG-000; do
+            grep -q "$id" "$work/docs/INDEX.md" \
+              || { echo "::error::INDEX.md omits $id — skills reading it would miss the doc."; exit 1; }
+          done
+          echo "OK — INDEX.md complete and byte-stable"
+
       # Hooks are deterministic and warn-only: they must speak on a real
       # architecture edit and stay silent on anything else.
       - name: Hooks warn on architecture, silent elsewhere

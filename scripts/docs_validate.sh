@@ -14,7 +14,19 @@
 #   [frontmatter]  required fields per type, valid enums, id prefix per folder,
 #                  Proposals contain an "Alternatives considered" heading
 #   [audit-append] 92_audit/ files are append-only vs git HEAD (skipped without git/HEAD)
-#   [amended-by]   every amended_by entry in Architecture cites an existing DECISION id
+#   [amended-by]   every amended_by / rejected entry cites an existing DECISION id
+#   [anchor]       every path a doc names — a `backticked` components path, a fence
+#                  `code:` header — still exists in the repo
+#
+# Informational only (never affect the exit code):
+#   NOTE [layout]  a standard folder is missing
+#   NOTE [stale]   a Layer 1 doc carries verified_at: <rev> and files it names have
+#                  changed since that rev. Changed is not the same as wrong, which is
+#                  why this warns instead of failing (same rationale as STANDARD §8).
+#
+# Layer 2 folders may hold an `_archive/` subfolder for terminal documents; it is
+# validated exactly like the folder above it — archiving lowers read cost, never
+# the standard a document is held to.
 #
 # Portability: bash 3.2 (macOS), BSD awk/grep. No associative arrays, no GNU-isms.
 
@@ -26,6 +38,10 @@ if [ ! -d "$DOCS" ]; then
   exit 2
 fi
 
+# The repo root is the parent of docs/. Anchor paths are relative to it, and
+# checks 4 and 6 both need it, so it is resolved once here.
+ROOT="$(cd "$DOCS/.." 2>/dev/null && pwd)"
+
 TMP="$(mktemp -d)" || exit 2
 trap 'rm -rf "$TMP"' EXIT
 FAILS="$TMP/fails"
@@ -34,6 +50,12 @@ TAB="$(printf '\t')"
 
 fail() { # fail <tag> <file> <message>
   printf 'FAIL [%s] %s: %s\n' "$1" "$2" "$3" >> "$FAILS"
+}
+
+# NOTE lines print immediately and never touch the exit code. Used where
+# "changed" cannot be distinguished from "wrong" without reading the code.
+note() { # note <tag> <file> <message>
+  printf 'NOTE [%s] %s: %s\n' "$1" "$2" "$3"
 }
 
 # ---------------------------------------------------------------- helpers ----
@@ -66,6 +88,27 @@ fm_get() {
 
 fm_has() { # fm_has <file> <key>
   frontmatter "$1" | grep -q "^$2:"
+}
+
+# fm_list <file> <key> → one line per entry of a list-valued frontmatter field.
+# Accepts both YAML shapes the templates allow:
+#   key: [A, B]      flow style  → printed as the single line "[A, B]"
+#   key:             block style → one line per "- entry"
+#     - entry
+# An empty list (`key: []`) prints nothing. Shared by the amended-by and anchor
+# checks so the two cannot disagree about what an entry is.
+fm_list() {
+  frontmatter "$1" | awk -v k="$2" '
+    index($0, k ":") == 1 {
+      blk = 1
+      rest = substr($0, length(k) + 2)
+      sub(/[ \t]#.*$/, "", rest); sub(/^[ \t]+/, "", rest); sub(/[ \t\r]+$/, "", rest)
+      if (rest != "" && rest !~ /^\[[ \t]*\]$/) print rest
+      next
+    }
+    blk && /^[^ \t]/ { blk = 0 }
+    blk && /^[ \t]*-/ { print }
+  '
 }
 
 id_exists() { # id_exists <ID>
@@ -127,7 +170,7 @@ done < "$TMP/files"
 
 # --------------------------------- check 2: Backlog has non-empty source_ref --
 
-for f in "$DOCS"/23_backlog/*.md; do
+for f in "$DOCS"/23_backlog/*.md "$DOCS"/23_backlog/_archive/*.md; do
   [ -f "$f" ] || continue
   case "$(basename "$f")" in README.md) continue ;; esac
   if ! frontmatter "$f" | grep -q .; then
@@ -163,7 +206,8 @@ check_id_prefix() { # check_id_prefix <file> <PREFIX>
 
 for dir in 01_products 02_architecture 03_business-logic 20_issues 21_proposals 22_decisions 23_backlog; do
   [ -d "$DOCS/$dir" ] || continue
-  for f in "$DOCS/$dir"/*.md; do
+  # _archive/ holds terminal documents. They are read less, never validated less.
+  for f in "$DOCS/$dir"/*.md "$DOCS/$dir"/_archive/*.md; do
     [ -f "$f" ] || continue
     case "$(basename "$f")" in README.md) continue ;; esac
     case "$dir" in
@@ -210,7 +254,6 @@ done
 # ------------------------- check 4: 92_audit/ append-only (vs git HEAD) ------
 
 AUDIT_DIR="$DOCS/92_audit"
-ROOT="$(cd "$DOCS/.." 2>/dev/null && pwd)"
 if [ -d "$AUDIT_DIR" ] && [ -n "$ROOT" ] && command -v git >/dev/null 2>&1 \
    && git -C "$ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1 \
    && git -C "$ROOT" rev-parse -q --verify HEAD >/dev/null 2>&1; then
@@ -225,40 +268,123 @@ if [ -d "$AUDIT_DIR" ] && [ -n "$ROOT" ] && command -v git >/dev/null 2>&1 \
   done < "$TMP/numstat"
 fi
 
-# ---------------- check 5: amended_by entries cite existing Decisions --------
+# ------- check 5: amended_by / rejected entries cite existing Decisions ------
+#
+# Both fields record the same kind of event from opposite sides: a Decision that
+# changed layer 1, and a Decision that ruled something out. `rejected:` exists so
+# that "what was already considered and dropped" is answerable from layer 1 alone
+# — without it, every reader has to scan all of 22_decisions to find out.
+# It is optional: a repo scaffolded before it existed stays valid.
 
 for amdir in 02_architecture 03_business-logic; do
   [ -d "$DOCS/$amdir" ] || continue
   for f in "$DOCS/$amdir"/*.md; do
     [ -f "$f" ] || continue
     case "$(basename "$f")" in README.md) continue ;; esac
-    frontmatter "$f" | awk '
-      index($0, "amended_by:") == 1 {
-        blk = 1
-        rest = substr($0, 12)
-        sub(/[ \t]#.*$/, "", rest); sub(/^[ \t]+/, "", rest); sub(/[ \t\r]+$/, "", rest)
-        if (rest != "" && rest !~ /^\[[ \t]*\]$/) print rest   # flow-style, e.g. [DECISION-001]
-        next
-      }
-      blk && /^[^ \t]/ { blk = 0 }
-      blk && /^[ \t]*-/ { print }
-    ' > "$TMP/amended"
-    while IFS= read -r entry; do
-      [ -z "$entry" ] && continue
-      refs="$(printf '%s' "$entry" | grep -oE 'DECISION-[0-9]+' || true)"
-      if [ -z "$refs" ]; then
-        fail amended-by "$f" "amended_by entry lacks a DECISION-NNN ref: '$entry'"
-        continue
-      fi
-      while IFS= read -r r; do
-        [ -z "$r" ] && continue
-        id_exists "$r" || fail amended-by "$f" "amended_by cites '$r' which matches no Decision id: under $DOCS"
-      done <<EOF
+    for key in amended_by rejected; do
+      fm_list "$f" "$key" > "$TMP/amended"
+      while IFS= read -r entry; do
+        [ -z "$entry" ] && continue
+        refs="$(printf '%s' "$entry" | grep -oE 'DECISION-[0-9]+' || true)"
+        if [ -z "$refs" ]; then
+          fail amended-by "$f" "$key entry lacks a DECISION-NNN ref: '$entry'"
+          continue
+        fi
+        while IFS= read -r r; do
+          [ -z "$r" ] && continue
+          id_exists "$r" || fail amended-by "$f" "$key cites '$r' which matches no Decision id: under $DOCS"
+        done <<EOF
 $refs
 EOF
-    done < "$TMP/amended"
+      done < "$TMP/amended"
+    done
   done
 done
+
+# ------------- check 6: anchors still exist (+ verified_at staleness) --------
+#
+# Every load-bearing fact in layer 1 already carries an anchor into the source:
+# a component names its `path/in/repo`, and every figure fence takes a `code:`
+# header. Nothing used them. A path that no longer exists is not a matter of
+# opinion, so it FAILs; a path that merely *changed* since verified_at is a NOTE,
+# because changed is not the same as wrong.
+#
+# Placeholder values — anything containing < or > — are the templates' own
+# "<file to read>" markers and are skipped, so a fresh scaffold passes clean.
+
+anchor_paths() { # anchor_paths <file> → one repo-relative path per line
+  # 1. the backticked path inside each components: entry
+  fm_list "$1" components | awk '
+    { n = split($0, part, "`"); if (n >= 3 && part[2] != "") print part[2] }'
+  # 2. the code: header of each figure fence in the body. Only a bare
+  #    ```<type> line opens one, so a ```flow shown inside a ````markdown
+  #    block is not a fence — same rule the renderer applies.
+  awk '
+    NR == 1 && /^---[ \t\r]*$/ { fm = 1; next }
+    fm && /^---[ \t\r]*$/       { fm = 0; next }
+    fm { next }
+    !fence && /^```(flow|flowchart|state|erd|class)[ \t]*\r?$/ { fence = 1; next }
+    fence && /^```[ \t]*\r?$/ { fence = 0; next }
+    fence && index($0, "code:") == 1 {
+      v = substr($0, 6)
+      sub(/^[ \t]+/, "", v); sub(/[ \t\r]+$/, "", v)
+      sub(/^"/, "", v); sub(/"$/, "", v)
+      if (v != "") print v
+    }
+  ' "$1"
+}
+
+if [ -n "$ROOT" ]; then
+  # Files changed since each doc's verified_at rev, resolved lazily per rev.
+  HAVE_GIT=0
+  if command -v git >/dev/null 2>&1 \
+     && git -C "$ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    HAVE_GIT=1
+  fi
+
+  for andir in 01_products 02_architecture 03_business-logic; do
+    [ -d "$DOCS/$andir" ] || continue
+    for f in "$DOCS/$andir"/*.md; do
+      [ -f "$f" ] || continue
+      case "$(basename "$f")" in README.md) continue ;; esac
+
+      anchor_paths "$f" | LC_ALL=C sort -u > "$TMP/anchors"
+      [ -s "$TMP/anchors" ] || continue
+
+      while IFS= read -r p; do
+        [ -z "$p" ] && continue
+        case "$p" in *"<"*|*">"*) continue ;; esac   # template placeholder
+        [ -e "$ROOT/$p" ] || \
+          fail anchor "$f" "names '$p', which does not exist in the repo (a moved or deleted path makes this doc unverifiable)"
+      done < "$TMP/anchors"
+
+      # verified_at: <rev> — warn when the code under those anchors has moved on.
+      rev="$(fm_get "$f" verified_at)"
+      [ -z "$rev" ] && continue
+      case "$rev" in *"<"*|*">"*) continue ;; esac
+      if [ "$HAVE_GIT" -eq 0 ]; then continue; fi
+      if ! git -C "$ROOT" rev-parse -q --verify "$rev^{commit}" >/dev/null 2>&1; then
+        note stale "$f" "verified_at: '$rev' is not a commit in this repo"
+        continue
+      fi
+      # rev vs the WORKING TREE, not vs HEAD: docs-sync runs at the end of a
+      # session, before the work is committed. Comparing against HEAD would make
+      # exactly the changes that session just made invisible to this check.
+      git -C "$ROOT" diff --name-only "$rev" > "$TMP/changed" 2>/dev/null || continue
+      hits=0
+      while IFS= read -r p; do
+        [ -z "$p" ] && continue
+        case "$p" in *"<"*|*">"*) continue ;; esac
+        if awk -v p="$p" 'index($0, p) == 1 { found = 1; exit } END { exit !found }' "$TMP/changed"; then
+          hits=$((hits + 1))
+        fi
+      done < "$TMP/anchors"
+      if [ "$hits" -gt 0 ]; then
+        note stale "$f" "verified_at $rev — $hits of the paths this doc names changed since then; re-read them and move verified_at forward"
+      fi
+    done
+  done
+fi
 
 # ----------------------------- layout notes (informational, never failing) ---
 
@@ -276,5 +402,5 @@ if [ -s "$FAILS" ]; then
   echo "docs-validate: $(wc -l < "$FAILS" | tr -d ' ') violation(s) across $SCANNED markdown file(s) in $DOCS"
   exit 1
 fi
-echo "docs-validate: OK — $SCANNED markdown file(s) in $DOCS pass all checks (ref, backlog, frontmatter, audit-append, amended-by)"
+echo "docs-validate: OK — $SCANNED markdown file(s) in $DOCS pass all checks (ref, backlog, frontmatter, audit-append, amended-by, anchor)"
 exit 0

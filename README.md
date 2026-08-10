@@ -154,9 +154,9 @@ plugin on by default.
 | Command | What it does | Writes files |
 |---|---|---|
 | `/docs-kit:docs-init` | Scaffold 15 folders + templates into `docs/`, detect the stack from the repo's manifests, read the repo's source to fill Architecture, and optionally wire the rules into `CLAUDE.md`. Refuses to touch an existing `docs/`; asks before every write outside the scaffold. | Yes |
-| `/docs-kit:docs-sync` | End-of-session reconcile: backlog statuses, audit entries, retroactive Issues, pending Architecture amendments, architecture-vs-code drift. | Yes |
+| `/docs-kit:docs-sync` | End-of-session reconcile: backlog statuses, audit entries, retroactive Issues, pending Architecture amendments, architecture-vs-code drift, and archiving what can no longer change. | Yes |
 | `/docs-kit:docs-check` | Run the deterministic validator and explain each failure. Never fixes. | No |
-| `/docs-kit:docs-render` | Generate/refresh the HTML views of `docs/`. Deterministic; never edits markdown. | Yes (HTML only) |
+| `/docs-kit:docs-render` | Generate/refresh the read models of `docs/` — three HTML pages and `INDEX.md`. Deterministic; never edits the source markdown. | Yes (generated files only) |
 | `/docs-kit:brief` | Turn settled decisions into a delegation prompt for a coding agent — gates on a decision-freeze check first. In a repo that has `docs/`, also records the work as an Issue and routes it through Layer 2 before writing the prompt. The one skill Claude may invoke on its own. | Yes (`docs/`, only after you confirm) |
 
 **Typical flow:** `docs-init` once → work → `docs-sync` at the end of a session →
@@ -203,6 +203,13 @@ input, same output bytes, no LLM and no network:
 | `docs/index.html` | Menu beside README: system map, sheet cards, Layer-3 listing, the one hard rule |
 | `docs/current.html` | Layer 1 — product cards, roadmap board, component cards, data-flow figure, business-flow sequences, revision block |
 | `docs/changes.html` | Layer 2 — issue/backlog boards, proposal & decision tables, trace chains, audit table |
+| `docs/INDEX.md` | The read model for **agents** — one line per document: id, status, refs, file, description |
+
+The three pages are for people; `INDEX.md` is for the agent, and it exists to
+delete a habit. Answering "what is already settled?" by reading every Decision costs
+one whole file per decision and grows forever, to produce an answer that does not.
+Skills read the index and open only the ids they need. A repo with four hundred
+decisions then costs the same at this step as a repo with four.
 
 Real output is committed under [`design/`](design/) as the reference for what the
 renderer produces — [`sample-current.html`](design/sample-current.html) is the most

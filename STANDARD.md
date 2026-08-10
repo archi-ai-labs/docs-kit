@@ -57,6 +57,21 @@ Layer rules:
 | 92 | `92_audit` | Review | oversight |
 | 93 | `93_qa` | QA | 3 |
 
+### `_archive/` — terminal documents leave the hot set
+
+Each layer 2 folder may hold an `_archive/` subfolder. A document moves there once
+it can no longer change: a Backlog item at `done` with its audit line written, an
+Issue at `archived`, a Proposal or Decision whose chain has completed.
+
+**Archiving lowers read cost. It never lowers the standard a document is held to.**
+The validator walks `_archive/` exactly as it walks the folder above it — ids are
+collected, refs must still resolve, frontmatter is still checked. Skills read it only
+when an id points there.
+
+Moving a file is safe because §3 already guarantees it: file names are not reference
+keys. Use `git mv` so the history follows. Layer 1 is state, not history — it is never
+archived; a component that no longer exists is removed by a Decision, not filed away.
+
 ## 3. IDs and references
 
 - ID format: `ISSUE-001`, `PROPOSAL-001`, `DECISION-001`, `BACKLOG-001` —
@@ -115,10 +130,24 @@ tech_stack: []
 constraints: []
 amended_by: []      # ONLY the Decision workflow appends entries here.
                     # Entry format: "- YYYY-MM-DD DECISION-NNN <summary>"
+rejected: []        # optional. ONLY the Decision workflow appends entries here.
+                    # Entry format: "- DECISION-NNN <what was ruled out>"
+verified_at: ""     # optional. The git rev at which the paths below were last read.
 ---
 ```
 Each `amended_by` entry must contain a `DECISION-NNN` token that resolves to an
-existing Decision `id:`.
+existing Decision `id:`. `rejected` follows the same rule.
+
+**`rejected` exists so that "what was already considered and dropped" is answerable
+from layer 1 alone.** A Decision with `outcome: rejected` records information that
+appears nowhere else in layer 1 — the architecture doc says what the system *is*, never
+what it deliberately is not. Without this field the only way to find out is to read
+every Decision, which is a cost that grows forever to produce an answer that does not.
+Both fields are optional: a repo scaffolded before they existed stays valid.
+
+**`verified_at` is the anchor for staleness.** It holds the git rev at which someone
+last actually read the paths this document names. The validator diffs that rev against
+the working tree and reports how many of those paths have moved since. See §7.
 
 A component entry is one flat line — the validator reads frontmatter with awk,
 so this grammar never nests:
@@ -146,10 +175,13 @@ all three live here and not in folders of their own.
 ---
 domain: ""          # what this rule set is about
 amended_by: []      # ONLY the Decision workflow appends entries here.
+rejected: []        # optional, same contract as Architecture's
+verified_at: ""     # optional, same contract as Architecture's
 ---
 ```
-Two fields, and no more: adding an optional field later is cheap, removing a
-required one breaks every repo already scaffolded.
+Two required fields, and no more: adding an optional field later is cheap, removing
+a required one breaks every repo already scaffolded — which is exactly why `rejected`
+and `verified_at` arrived as optional.
 
 The split against Architecture is by the question answered, not by subject:
 
@@ -267,13 +299,48 @@ Checks:
 | `[backlog]` | Every Backlog item has a non-empty `source_ref:`. |
 | `[frontmatter]` | Required fields per type (§4) are present; `lane`/`status`/`outcome` enums are valid; `id:` prefixes match their folder; Proposals contain an "Alternatives considered" heading. |
 | `[audit-append]` | `92_audit/` files are append-only vs git HEAD (no deleted or rewritten lines). Skipped when git or HEAD is unavailable. |
-| `[amended-by]` | Every `amended_by` entry in Architecture and Business logic contains a `DECISION-NNN` token that resolves to an existing Decision. |
+| `[amended-by]` | Every `amended_by` and `rejected` entry in Architecture and Business logic contains a `DECISION-NNN` token that resolves to an existing Decision. |
+| `[anchor]` | Every path a layer 1 document names still exists: the backticked `path/in/repo` of each `components` entry, and the `code:` header of each figure fence. |
+
+Informational lines, which never affect the exit code:
+
+| Tag | Meaning |
+|---|---|
+| `NOTE [layout]` | A standard folder is missing. |
+| `NOTE [stale]` | A layer 1 document carries `verified_at: <rev>` and some of the paths it names have changed since that rev — or the rev is not a commit in this repo. |
 
 Output: one line per violation — `FAIL [tag] <file>: <message>` — then a count.
 Exit codes: `0` clean, `1` violations found, `2` setup error (e.g. docs/ missing).
 
+`_archive/` subfolders are validated exactly like the folder above them (§2).
+
+### Why `[anchor]` fails and `[stale]` only warns
+
+Every load-bearing fact in layer 1 already carries an anchor into the source: a
+component names its `path/in/repo`, every figure fence takes a `code:` header. Until
+these checks existed, nothing used them.
+
+- **A path that no longer exists is not a matter of opinion.** The document cannot be
+  verified against anything, so it is a `FAIL`.
+- **A path that merely changed is not proof the document is wrong.** So `verified_at`
+  produces a `NOTE`, on the same reasoning as §8's warn-only hooks: blocking on a
+  false positive teaches people to switch the check off.
+
+The comparison is `git diff --name-only <verified_at>` against the **working tree**,
+not against HEAD. `docs-sync` runs at the end of a session, before the work is
+committed; comparing against HEAD would hide exactly the changes that session made.
+
+Values containing `<` or `>` are treated as template placeholders and skipped — that
+is what lets a fresh scaffold pass clean.
+
+**This is the mechanism by which docs are synchronised to a specific version**, and it
+costs no tokens: it is a filesystem test and a `git diff`. It also bounds the expensive
+half of the work — an LLM re-reading code to check a document only has to look at the
+documents this check flagged.
+
 The validator checks **form, not content**. It is the source of truth for form:
-skills never "eyeball-validate" in its place.
+skills never "eyeball-validate" in its place. `[anchor]` does not change that — it
+verifies that a named path exists, never that the sentence about it is still true.
 
 ## 8. Enforcement hooks (warn-only, deterministic)
 
@@ -320,13 +387,29 @@ network) generates three self-contained pages into `docs/`, styled per
 | `docs/index.html` | Menu beside README.md: system map (clickable), sheet cards, Layer-3/Oversight listing, the one hard rule |
 | `docs/current.html` | Layer 1: product cards, roadmap board, component cards, data-flow figure, constraints, revision block, business-flow sequences |
 | `docs/changes.html` | Layer 2: issue/backlog boards, proposal & decision tables, trace chains, audit table |
+| `docs/INDEX.md` | **The read model for agents**, as the three pages are the read model for people: one line per document — id, status, refs, file, description |
+
+### `INDEX.md` — the rule that makes it worth generating
+
+**A skill reads `INDEX.md` and then opens only the ids it needs. It never globs a
+layer 2 folder.** Reading every Decision to find out what is settled costs one whole
+file per document and grows forever; reading the index costs one line per document
+and produces the same answer. The header is a fixed cost, so the saving is small at
+five documents and large at five hundred — which is the point, since the problem only
+appears at the second number.
+
+Archived documents appear in the index with an `_archive/` prefix on their file
+column, so nothing disappears and the agent still knows where to look.
 
 Rules:
 
 - **Read model only.** The renderer never edits markdown; the markdown stays
   the source of truth. Generated pages carry a `GENERATED` header comment —
-  never hand-edit them; regenerate with `/docs-kit:docs-render`
-  (docs-init creates them, docs-sync refreshes them).
+  `INDEX.md` included — never hand-edit them; regenerate with
+  `/docs-kit:docs-render` (docs-init creates them, docs-sync refreshes them).
+  A derived read model is also why the store stays markdown in git: the index can
+  be regenerated in any shape a query needs, while git keeps the diff, the blame,
+  and the ability to commit a doc change in the same commit as the code change.
 - **Deterministic.** Same input docs → same output bytes; only the
   generated-at stamp moves (override with `DOCS_KIT_NOW=<ISO>` for
   reproducible output). Files sorted by name; logs newest-first.
@@ -548,7 +631,9 @@ Rules:
   (orange = in-progress, green = docs-check clean). No entrance or hover
   animations; `prefers-reduced-motion` disables all of it.
 - The validator ignores `docs/*.html` (it only reads `.md`); check 4's
-  append-only rule is unaffected.
+  append-only rule is unaffected. `docs/INDEX.md` *is* scanned — it carries no
+  frontmatter, so it defines no id and holds no ref, and it is inert to every
+  check. It does count toward the file total the validator prints.
 
 ## 11. Language — English frame, Vietnamese explanation
 

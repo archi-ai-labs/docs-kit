@@ -26,5 +26,10 @@ Backlog); "không" cả hai → fast lane (Issue → Backlog):
 | Một Decision được duyệt | Sửa `docs/02_architecture/` (và `docs/03_business-logic/` nếu Decision đụng quy tắc nghiệp vụ) NGAY trong phiên đó. |
 | Bắt đầu việc không có trong Backlog | Tạo Issue trước khi viết code. |
 
+**Đọc docs cho rẻ:** `docs/INDEX.md` (sinh tự động) là read model cho agent — mỗi tài liệu
+một dòng. Đọc nó trước rồi chỉ mở đúng id cần; **đừng glob cả `22_decisions/` hay
+`23_backlog/`**. Cái gì đã settled thì layer 1 đã giữ: `constraints`, `amended_by`, và
+`rejected` (những phương án đã cân nhắc rồi loại).
+
 Phiên nào có đổi code thì kết thúc bằng `/docs-kit:docs-sync`; kiểm tra cấu trúc bằng `/docs-kit:docs-check`.
 <!-- docs-kit:end -->
