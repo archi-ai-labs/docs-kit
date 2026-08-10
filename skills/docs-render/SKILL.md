@@ -1,20 +1,26 @@
 ---
 name: docs-render
-description: Generate or refresh the HTML views of docs/ (index, current, changes) — deterministic, never edits markdown
+description: Generate or refresh the read models of docs/ — index.html, current.html, changes.html and INDEX.md — deterministic, never edits the source markdown
 disable-model-invocation: true
 ---
 
-Generate the docs-kit HTML views for this repository.
+Generate the docs-kit read models for this repository.
 
 1. Resolve the renderer script, in order:
    - If the environment variable `CLAUDE_PLUGIN_ROOT` is set:
      `"$CLAUDE_PLUGIN_ROOT/scripts/docs_render.sh"`.
    - Otherwise: `find ~/.claude/plugins -type f -path '*docs-kit*/scripts/docs_render.sh' 2>/dev/null | head -1`.
 2. Run it from the repository root: `bash "<script>" "$(pwd)"`.
-3. On success, report the three generated files — `docs/index.html` (entry point),
-   `docs/current.html`, `docs/changes.html` — and remind the user that the pages
-   are a generated read model: the markdown stays the source of truth, and the
-   HTML is refreshed by re-running this command (docs-sync also refreshes it).
+3. On success, report the four generated files — `docs/index.html` (entry point),
+   `docs/current.html`, `docs/changes.html`, and `docs/INDEX.md` — and remind the
+   user that all four are a generated read model: the markdown stays the source of
+   truth, and they are refreshed by re-running this command (docs-sync also
+   refreshes them).
+
+   The three pages are the read model for people. **`docs/INDEX.md` is the one for
+   agents** — one line per document, so a skill can find the ids it needs without
+   globbing a folder (STANDARD §10). Say so when it is regenerated: a stale
+   `INDEX.md` is worse than a missing one, because the next agent trusts it.
 4. On failure, relay the script's stderr and the fix: no `docs/` directory →
    run `/docs-kit:docs-init` first; no `python3` → install Python 3.
 
