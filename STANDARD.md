@@ -37,26 +37,30 @@ Layer rules:
   No traceability fields, no Decision needed.
 - **Review (`92_audit/`)** observes layers 1–2 and appends findings. It never edits them.
 
-## 2. Folder layout (16 folders under `docs/`)
+## 2. Folder layout (up to 16 folders under `docs/`)
 
-| # | Folder | Type | Layer |
-|---|--------|------|-------|
-| 00 | `00_roadmap` | Roadmap | 1 |
-| 01 | `01_products` | Products | 1 |
-| 02 | `02_architecture` | Architecture | 1 |
-| 03 | `03_business-logic` | Business logic | 1 |
-| 04 | `04_api` | API contract | 1 |
-| 20 | `20_issues` | Issue | 2 |
-| 21 | `21_proposals` | Proposal | 2 |
-| 22 | `22_decisions` | Decision | 2 |
-| 23 | `23_backlog` | Backlog | 2 |
-| 30 | `30_conventions` | Conventions | 3 |
-| 40 | `40_services` | Services | 3 |
-| 50 | `50_runbooks` | Runbooks | 3 |
-| 60 | `60_fe-integration` | FE-integration | 3 |
-| 70 | `70_deploy` | Deploy | 3 |
-| 92 | `92_audit` | Review | oversight |
-| 93 | `93_qa` | QA | 3 |
+Eleven of these are **core** and every repo gets them. Five are conditional on what
+the repo declares it owns, and a repo that declares nothing gets all sixteen — the
+full map, and the reasoning for it, is §9.1.
+
+| # | Folder | Type | Layer | Present when |
+|---|--------|------|-------|---|
+| 00 | `00_roadmap` | Roadmap | 1 | always |
+| 01 | `01_products` | Products | 1 | always |
+| 02 | `02_architecture` | Architecture | 1 | always |
+| 03 | `03_business-logic` | Business logic | 1 | always |
+| 04 | `04_api` | API contract | 1 | `owns: endpoints` |
+| 20 | `20_issues` | Issue | 2 | always |
+| 21 | `21_proposals` | Proposal | 2 | always |
+| 22 | `22_decisions` | Decision | 2 | always |
+| 23 | `23_backlog` | Backlog | 2 | always |
+| 30 | `30_conventions` | Conventions | 3 | always |
+| 40 | `40_services` | Services | 3 | `owns: deploys` |
+| 50 | `50_runbooks` | Runbooks | 3 | `owns: deploys` |
+| 60 | `60_fe-integration` | FE-integration | 3 | `owns: screens` |
+| 70 | `70_deploy` | Deploy | 3 | `owns: deploys` |
+| 92 | `92_audit` | Review | oversight | always |
+| 93 | `93_qa` | QA | 3 | always |
 
 ### `_archive/` — terminal documents leave the hot set
 
@@ -415,13 +419,14 @@ Checks:
 | `[audit-append]` | `92_audit/` files are append-only vs git HEAD (no deleted or rewritten lines). Skipped when git or HEAD is unavailable. |
 | `[amended-by]` | Every `amended_by` and `rejected` entry in Architecture and Business logic contains a `DECISION-NNN` token that resolves to an existing Decision. |
 | `[anchor]` | Every path a layer 1 document names still exists: the backticked `path/in/repo` of each `components` entry, and the `code:` header of each figure fence. |
+| `[profile]` | Every token in `.docs-kit.json`'s `owns` is one the standard defines (§9.1). A value outside the enum is a typo, and a typo there silently drops a folder from the scaffold. |
 
 Informational lines, which never affect the exit code:
 
 | Tag | Meaning |
 |---|---|
-| `NOTE [layout]` | A standard folder is missing. |
-| `NOTE [profile]` | `.docs-kit.json` declares `owns`, and a folder holds documents it does not account for — see §9. |
+| `NOTE [layout]` | A folder this repo's profile calls for is missing (§9.1). A folder *outside* the profile is never reported. |
+| `NOTE [profile]` | `.docs-kit.json` declares `owns`, and the repo shows a surface it does not account for — see §9.2. |
 | `NOTE [stale]` | A layer 1 document carries `verified_at: <rev>` and some of the paths it names have changed since that rev — or the rev is not a commit in this repo. |
 
 Output: one line per violation — `FAIL [tag] <file>: <message>` — then a count.
@@ -488,11 +493,59 @@ Hooks are silent in repos that do not use docs-kit (no `docs/` skeleton).
 }
 ```
 
-`sensitive_paths` overrides the default patterns used by the Stop hook.
+`sensitive_paths` overrides the default patterns used by the Stop hook. Patterns
+are matched with fnmatch against the repo-relative path; a leading `**/` also
+matches at the repo root. Paths under `docs/` are never treated as sensitive-zone
+code.
+
+### 9.1 `owns` — what this repo holds title to
 
 `owns` declares what this repo holds title to — `data` (tables), `endpoints` (a
-contract it publishes), `screens` (routes), `jobs` (consumers, schedules). **It is
-optional; a repo that omits it behaves exactly as before.**
+contract it publishes), `screens` (routes), `jobs` (consumers, schedules),
+`deploys` (something that gets shipped and operated). **It is optional; a repo
+that omits it gets all 16 folders and behaves exactly as it did before profiles
+existed.**
+
+It is also what decides the shape of `docs/`:
+
+| `owns` token | folders it justifies |
+|---|---|
+| `endpoints` | `04_api/` |
+| `screens` | `60_fe-integration/` |
+| `deploys` | `40_services/` · `50_runbooks/` · `70_deploy/` |
+| `data` | — |
+| `jobs` | — |
+
+The other eleven folders are **core**: every repo gets them, because the questions
+they answer — what are we building, what is it made of, how does it change, what
+happened — have no profile in which they stop applying.
+
+`data` and `jobs` open no folder on purpose. A repo's tables live in the ```` ```erd ````
+block inside `02_architecture/`, and its workers are `[queue]` components in the same
+place; both are core. The two tokens still earn their keep as evidence below, and as
+the answer to "what is this repo" for anyone who asks.
+
+The map lives in exactly one file, `scripts/docs_profile.sh`, which both the
+scaffold and the validator source. Which folders belong here is one fact, and the
+kit does not get to hold it in two places.
+
+**Three rules keep a profile from becoming state that rots:**
+
+1. **No declaration means no branching.** Absent `owns` → all 16, exactly as before.
+   Nothing a previous version scaffolded changes shape until somebody declares
+   something. `"owns": []` *is* a declaration — a library that owns nothing
+   conditional — and is not the same as saying nothing.
+2. **A folder outside the profile is never a finding.** `--sync` adds and never
+   removes; `NOTE [layout]` reports only folders the profile calls for and that are
+   missing. A repo that declares `owns` after the fact keeps every folder it already
+   had. Deleting documentation because a config line changed is not a trade anyone
+   agreed to.
+3. **A token outside the enum is `FAIL [profile]`, not a shrug.** `owns` is closed —
+   `data` · `endpoints` · `screens` · `jobs` · `deploys` — and now that it decides
+   folders, `"endpoint"` for `"endpoints"` silently costs a repo its `04_api/`. That
+   is a typo with consequences, so it fails.
+
+### 9.2 Keeping `owns` honest
 
 A project changes: a backend grows a frontend, a service stops owning its tables.
 So `owns` is a declared fact and gets the same treatment as `verified_at` and
@@ -503,7 +556,8 @@ knowledge of a framework:
 - **a component's `[kind]` tag** — `[db]` implies `data`, `[ui]` implies `screens`,
   `[queue]` implies `jobs`. This is the stronger signal: it is the repo saying in its
   own architecture doc what it holds, with a path to prove it.
-- **a folder holding real documents** — `04_api/` with contracts implies `endpoints`.
+- **a folder holding real documents** — `04_api/` with contracts implies `endpoints`;
+  anything in `40_services/`, `50_runbooks/` or `70_deploy/` implies `deploys`.
 
 A file byte-identical to its shipped template is a **seed** and counts as neither, or
 a fresh scaffold would trip the check on day one.
@@ -515,9 +569,19 @@ cry wolf.
 **Changing `owns` is a layer 1 change** — what a repo owns is architecture — so it
 goes through the Decision workflow like any other amendment. Adding the folders a new
 `owns` justifies is `/docs-kit:docs-upgrade`, which adds and never overwrites.
-Patterns are matched with fnmatch against the repo-relative path; a leading
-`**/` also matches at the repo root. Paths under `docs/` are never treated as
-sensitive-zone code.
+
+### 9.3 Where a profile comes from
+
+`scripts/docs_detect.py` proposes one. It reads manifests, compose files and
+deployment artifacts and prints `owns-hint:` lines, each carrying the evidence that
+produced it on the same line — `owns-hint: endpoints — go.mod declares
+github.com/gin-gonic/gin`. It writes nothing.
+
+**A hint is never a declaration.** `docs-init` shows the hints, asks with
+AskUserQuestion, and scaffolds the answer — not the guess. That asymmetry is what
+makes generous hinting safe: an unconfirmed hint costs one extra option in a dialog
+the user is answering anyway, while a silent one would put a wrong fact in a config
+file that decides the shape of the tree.
 
 ## 10. Generated HTML views (read models)
 

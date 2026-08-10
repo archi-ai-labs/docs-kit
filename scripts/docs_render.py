@@ -2960,9 +2960,41 @@ def trim(s, n=110):
 
 # ---------------------------------------------------------------- page: current
 
+class Sections:
+    """§ numbers, assigned in the order sections are actually emitted.
+
+    They used to be literals in the markup, and a literal section number is a
+    cross-reference nobody can maintain: inserting §4 (API contracts) in 0.20.0
+    left two prose references pointing one section to the left of what they
+    meant, and neither the byte-identical sample gate nor any check could see it,
+    because both branches rendered fine — they just said the wrong number.
+
+    Numbering by emission order also makes a section omittable. A repo that owns
+    no endpoints has no `docs/04_api/`, so it gets no API section, and the ones
+    after it close the gap instead of leaving a hole that reads as a bug.
+    """
+
+    def __init__(self):
+        self._n = {}
+
+    def add(self, sid):
+        self._n[sid] = len(self._n) + 1
+        return '<span class="idx">§%d</span>' % self._n[sid]
+
+    def ref(self, sid):
+        """"§N" for a section already emitted, "" for one this repo does not have.
+        Callers must read "" as "do not make the comparison at all"."""
+        return "§%d" % self._n[sid] if sid in self._n else ""
+
+    def item(self, sid, anchor, label):
+        """One top-level sidebar entry, numbered to match its heading."""
+        return '<li><a href="#%s">§%d %s</a></li>' % (anchor, self._n[sid], label)
+
+
 def build_current(ctx, docs, data):
     here = "current.html"
     figs = FigCounter()
+    sec = Sections()
     products = data["products"]
     backlog_by_id = {fm_str(d, "id"): d for d in data["backlog"]}
     # one slug per product, computed once: the card id and the sidebar link
@@ -3083,8 +3115,8 @@ def build_current(ctx, docs, data):
              rail]
 
     # --- products
-    parts.append('<h2 id="products" class="s-l1"><span class="idx">§1</span>Products '
-                 '<span class="src tag">docs/01_products/</span></h2>')
+    parts.append('<h2 id="products" class="s-l1">%sProducts '
+                 '<span class="src tag">docs/01_products/</span></h2>' % sec.add("products"))
     parts.append(section_sub("Sản phẩm — ai dùng, giải quyết vấn đề gì, phạm vi tới đâu"))
     if not products:
         parts.append(empty_state("NO PRODUCTS — thêm một file vào <code>docs/01_products/</code> "
@@ -3119,8 +3151,8 @@ def build_current(ctx, docs, data):
                scope_in or "<li>—</li>", scope_out or "<li>—</li>", details))
 
     # --- roadmap
-    parts.append('<h2 id="roadmap" class="s-l1"><span class="idx">§2</span>Roadmap '
-                 '<span class="src tag">docs/00_roadmap/roadmap.md</span></h2>')
+    parts.append('<h2 id="roadmap" class="s-l1">%sRoadmap '
+                 '<span class="src tag">docs/00_roadmap/roadmap.md</span></h2>' % sec.add("roadmap"))
     parts.append(section_sub("Kế hoạch theo giai đoạn — đang làm, sắp làm, để sau"))
     if not sections:
         parts.append(empty_state("NO ROADMAP — điền vào <code>docs/00_roadmap/roadmap.md</code>"))
@@ -3161,9 +3193,10 @@ def build_current(ctx, docs, data):
         parts.append('<div class="board">%s</div>' % "".join(cols))
 
     # --- architecture
-    parts.append('<h2 id="architecture" class="s-l1"><span class="idx">§3</span>Architecture '
+    parts.append('<h2 id="architecture" class="s-l1">%sArchitecture '
                  '<span class="src tag">%s</span></h2>'
-                 % ("docs/02_architecture/ · %d docs" % len(arch_docs) if arch_multi
+                 % (sec.add("architecture"),
+                    "docs/02_architecture/ · %d docs" % len(arch_docs) if arch_multi
                     else "docs/02_architecture/architecture.md"))
     parts.append(section_sub("Kiến trúc hệ thống — chỉ sửa được qua Decision"))
     parts.append('<div class="note"><span class="lbl">Note</span>Chỉ được sửa <b>qua</b> '
@@ -3330,11 +3363,20 @@ def build_current(ctx, docs, data):
     # demanded a Decision before an API contract changes while giving the contract
     # nowhere to live but layer 3 — where §4 says no Decision is needed. That was a
     # contradiction, not a gap.
+    #
+    # The section exists when the folder does. A repo whose `owns` does not list
+    # `endpoints` never received `docs/04_api/` (STANDARD §9), and printing "NO API
+    # CONTRACTS" at it would be the read model nagging about a thing the repo
+    # deliberately does not have — which is the whole failure the profile removes.
+    # An *empty* 04_api/ still gets the empty state: that repo said it publishes a
+    # contract and has not written it down yet, which is a real gap.
     api_docs = data["api"]
-    parts.append('<h2 id="api" class="s-l1"><span class="idx">§4</span>API contracts '
-                 '<span class="src tag">docs/04_api/</span></h2>')
-    parts.append(section_sub("Contract ở ranh giới — service này hứa gì với bên ngoài"))
-    if api_docs:
+    has_api_folder = (docs / "04_api").is_dir()
+    if has_api_folder:
+        parts.append('<h2 id="api" class="s-l1">%sAPI contracts '
+                     '<span class="src tag">docs/04_api/</span></h2>' % sec.add("api"))
+        parts.append(section_sub("Contract ở ranh giới — service này hứa gì với bên ngoài"))
+    if has_api_folder and api_docs:
         for d in api_docs:
             svc = fm_str(d, "service")
             proto = fm_str(d, "protocol")
@@ -3362,7 +3404,7 @@ def build_current(ctx, docs, data):
             if rest_html.strip():
                 parts.append('<details class="more"><summary>Ghi chú contract</summary>'
                              '<div class="md">%s</div></details>' % rest_html)
-    else:
+    elif has_api_folder:
         parts.append(empty_state("NO API CONTRACTS — <code>docs/04_api/</code> đang rỗng. "
                                  "Mỗi service phát ra contract thì một file, "
                                  "<code>service:</code> trỏ đúng tên component"))
@@ -3383,9 +3425,9 @@ def build_current(ctx, docs, data):
             chart_src.append((label, "#logic", d_figs["flowchart"]))
         if d_figs["state"]:
             state_src.append((label, "#states", d_figs["state"]))
-    parts.append('<h2 id="flows" class="s-l1"><span class="idx">§5</span>Business flows '
+    parts.append('<h2 id="flows" class="s-l1">%sBusiness flows '
                  '<span class="src tag">```flow trong docs/01_products/ · 02_architecture/ · '
-                 "03_business-logic/</span></h2>")
+                 "03_business-logic/</span></h2>" % sec.add("flows"))
     parts.append(section_sub("Nghiệp vụ chạy ra sao, theo thứ tự thời gian — mỗi kịch bản một hình. "
                              "Đây là chỗ trả lời “đặt một lệnh thì chuyện gì xảy ra”, thứ mà sơ đồ "
                              "component tĩnh phía trên không nói được."))
@@ -3408,10 +3450,12 @@ def build_current(ctx, docs, data):
             "kèm <code>title:</code>, <code>trigger:</code>, <code>outcome:</code>, "
             "<code>code:</code> nếu có"))
 
-    parts.append('<h2 id="logic" class="s-l1"><span class="idx">§6</span>Business logic '
-                 '<span class="src tag">```flowchart trong docs/03_business-logic/</span></h2>')
+    parts.append('<h2 id="logic" class="s-l1">%sBusiness logic '
+                 '<span class="src tag">```flowchart trong docs/03_business-logic/</span></h2>'
+                 % sec.add("logic"))
     parts.append(section_sub("Quy tắc rẽ nhánh — điều gì xảy ra khi gặp điều kiện nào. "
-                             "Sequence ở §4 kể thứ tự; chỗ này kể lựa chọn"))
+                             "Sequence ở %s kể thứ tự; chỗ này kể lựa chọn"
+                             % sec.ref("flows")))
     if chart_src:
         for label, anchor, blocks in chart_src:
             parts.append('<h3>%s <a class="tag" href="%s">nguồn</a></h3>' % (esc(label), anchor))
@@ -3433,10 +3477,12 @@ def build_current(ctx, docs, data):
             "<code>decide: check — câu hỏi?</code>, rồi nối các bước: "
             "<code>check -&gt; approve : yes</code>"))
 
-    parts.append('<h2 id="states" class="s-l1"><span class="idx">§7</span>State machines '
-                 '<span class="src tag">```state trong docs/03_business-logic/</span></h2>')
+    parts.append('<h2 id="states" class="s-l1">%sState machines '
+                 '<span class="src tag">```state trong docs/03_business-logic/</span></h2>'
+                 % sec.add("states"))
     parts.append(section_sub("Vòng đời của một entity — nó ở được những trạng thái nào, sự kiện "
-                             "nào chuyển nó đi. §5 kể lựa chọn; chỗ này kể trạng thái"))
+                             "nào chuyển nó đi. %s kể lựa chọn; chỗ này kể trạng thái"
+                             % sec.ref("logic")))
     if state_src:
         for label, anchor, blocks in state_src:
             parts.append('<h3>%s <a class="tag" href="%s">nguồn</a></h3>' % (esc(label), anchor))
@@ -3458,27 +3504,30 @@ def build_current(ctx, docs, data):
             "<code>initial: pending</code>, rồi nối: "
             "<code>pending -&gt; paid : payment.succeeded</code>"))
 
-    sidebar = ['<li><a href="#products">§1 Products</a></li>']
+    # The sidebar reads its numbers from the same counter the headings did, so the
+    # two cannot disagree — they used to be two hand-kept lists of the same facts.
+    sidebar = [sec.item("products", "products", "Products")]
     for d in products:
         slug = slugs[d["path"]]
         sidebar.append('<li class="sub"><a href="#p-%s">%s</a></li>'
                        % (slug, esc(trim(fm_str(d, "name") or doc_title(d), 26))))
-    sidebar.append('<li><a href="#roadmap">§2 Roadmap</a></li>')
-    sidebar.append('<li><a href="#architecture">§3 Architecture</a></li>')
+    sidebar.append(sec.item("roadmap", "roadmap", "Roadmap"))
+    sidebar.append(sec.item("architecture", "architecture", "Architecture"))
     for anchor, label in [("a-components", "Components"), ("a-data", "Data model"),
                           ("a-types", "Types &amp; contracts"), ("a-flow", "Data flow"),
                           ("a-stack", "Tech stack"), ("a-constraints", "Constraints"),
                           ("a-rev", "Revision block")]:
         sidebar.append('<li class="sub"><a href="#%s">%s</a></li>' % (anchor, label))
-    sidebar.append('<li><a href="#api">§4 API contracts</a></li>')
-    for d in data["api"]:
-        svc = fm_str(d, "service")
-        sidebar.append('<li class="sub"><a href="#%s">%s</a></li>'
-                       % (slugify("api-" + (svc or d["path"].stem)),
-                          esc(trim(svc or doc_title(d), 26))))
-    sidebar.append('<li><a href="#flows">§5 Business flows</a></li>')
-    sidebar.append('<li><a href="#logic">§6 Business logic</a></li>')
-    sidebar.append('<li><a href="#states">§7 State machines</a></li>')
+    if has_api_folder:
+        sidebar.append(sec.item("api", "api", "API contracts"))
+        for d in data["api"]:
+            svc = fm_str(d, "service")
+            sidebar.append('<li class="sub"><a href="#%s">%s</a></li>'
+                           % (slugify("api-" + (svc or d["path"].stem)),
+                              esc(trim(svc or doc_title(d), 26))))
+    sidebar.append(sec.item("flows", "flows", "Business flows"))
+    sidebar.append(sec.item("logic", "logic", "Business logic"))
+    sidebar.append(sec.item("states", "states", "State machines"))
 
     return page_html(ctx, "%s · Foundation — current state" % ctx["project"],
                      "Foundation", "".join(sidebar), "".join(parts), "FOUNDATION — CURRENT"), latest_rev
@@ -3759,6 +3808,11 @@ def build_index(ctx, docs, data, audit, latest_rev, check_result):
     refrows = []
     l3_files = 0
     for folder, desc in LAYER3:
+        # A folder outside this repo's profile is not "empty", it is not there —
+        # and a row linking to a directory that does not exist is a broken link
+        # dressed as a to-do. See STANDARD §9.
+        if not (docs / folder).is_dir():
+            continue
         n = len(md_files(docs / folder))
         l3_files += n
         cls = "refrow is-empty" if n == 0 else "refrow"

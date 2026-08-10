@@ -20,9 +20,14 @@
 #   [amended-by]   every amended_by / rejected entry cites an existing DECISION id
 #   [anchor]       every path a doc names — a `backticked` components path, a fence
 #                  `code:` header — still exists in the repo
+#   [profile]      `owns` in .docs-kit.json holds only tokens the standard defines.
+#                  A typo there silently drops a folder from the scaffold, so unlike
+#                  the profile NOTEs below this one fails: `owns` is a closed enum,
+#                  and a value outside it cannot be "a judgment call I disagree with"
 #
 # Informational only (never affect the exit code):
-#   NOTE [layout]  a standard folder is missing
+#   NOTE [layout]  a folder this repo's profile calls for is missing (STANDARD §9 —
+#                  the profile is `owns` in .docs-kit.json; no declaration = all 16)
 #   NOTE [stale]   a Layer 1 doc carries verified_at: <rev> and files it names have
 #                  changed since that rev. Changed is not the same as wrong, which is
 #                  why this warns instead of failing (same rationale as STANDARD §8).
@@ -48,6 +53,19 @@ fi
 # The repo root is the parent of docs/. Anchor paths are relative to it, and
 # checks 4 and 6 both need it, so it is resolved once here.
 ROOT="$(cd "$DOCS/.." 2>/dev/null && pwd)"
+
+# Which folders belong here is one question with one answer, and the scaffold has
+# to ask it too — so the map lives in one file that both source (STANDARD §9). A
+# broken install leaves the lib missing; degrade to "all 16", which is what every
+# version before the profile existed did, rather than inventing findings.
+VLIB="$(dirname "${BASH_SOURCE[0]:-$0}")/docs_profile.sh"
+if [ -f "$VLIB" ]; then
+  # shellcheck source=docs_profile.sh
+  . "$VLIB"
+  HAVE_PROFILE=1
+else
+  HAVE_PROFILE=0
+fi
 
 TMP="$(mktemp -d)" || exit 2
 trap 'rm -rf "$TMP"' EXIT
@@ -480,20 +498,10 @@ fi
 # longer has cannot be told apart from "nobody has written it yet", and guessing
 # there would cry wolf.
 #
-# The reader handles a flat JSON array of strings on one logical line, which is
-# all the field is; the Python side uses a real parser.
-owns_declared() {
-  [ -f "$1/.docs-kit.json" ] || return 1
-  tr -d '\n' < "$1/.docs-kit.json" \
-    | sed -n 's/.*"owns"[[:space:]]*:[[:space:]]*\[\([^]]*\)\].*/\1/p' \
-    | grep -q . || return 1
-  return 0
-}
-owns_has() { # owns_has <root> <token>
-  tr -d '\n' < "$1/.docs-kit.json" \
-    | sed -n 's/.*"owns"[[:space:]]*:[[:space:]]*\[\([^]]*\)\].*/\1/p' \
-    | tr ',' '\n' | tr -d ' "' | grep -Fxq "$2"
-}
+# `owns` is read by docs_profile.sh — the same reader the scaffold uses to decide
+# which folders to create. Two readers would be one fact with two sources, which
+# is the thing this kit refuses everywhere else.
+#
 # A file byte-identical to the template it was scaffolded from is a SEED, not
 # something somebody wrote. Without this the check fires on a fresh scaffold —
 # `04_api/example-api.md` ships with the plugin — and a warn-only rule that cries
@@ -532,30 +540,60 @@ component_kinds() { # → one [kind] per component entry, deduped
   done | tr -d '[]' | LC_ALL=C sort -u
 }
 
-if [ -n "$ROOT" ] && [ -n "$VTEMPLATES" ] && owns_declared "$ROOT"; then
+if [ -n "$ROOT" ] && [ "$HAVE_PROFILE" -eq 1 ] && dk_owns_declared "$ROOT"; then
+  # A token outside the enum is not an opinion, it is a typo — and this one has
+  # teeth now: `owns` decides which folders the scaffold creates, so "endpoint"
+  # for "endpoints" silently costs the repo its 04_api/. Fail, do not shrug.
+  for bad in $(dk_owns_unknown "$ROOT"); do
+    fail profile "$ROOT/.docs-kit.json" "unknown owns token '$bad' — valid: $(printf '%s ' $DK_TOKENS)"
+  done
+fi
+
+if [ -n "$ROOT" ] && [ "$HAVE_PROFILE" -eq 1 ] && [ -n "$VTEMPLATES" ] && dk_owns_declared "$ROOT"; then
   KINDS="$(component_kinds)"
   has_kind() { printf '%s\n' "$KINDS" | grep -Fxq "$1"; }
 
-  if { folder_has_docs 04_api || false; } && ! owns_has "$ROOT" endpoints; then
+  if folder_has_docs 04_api && ! dk_owns_has "$ROOT" endpoints; then
     note profile "$DOCS/04_api" "holds contracts but .docs-kit.json 'owns' does not list 'endpoints' — this repo grew an API surface; update owns (that is a layer 1 change, so it goes through a Decision)"
   fi
-  if { folder_has_docs 60_fe-integration || has_kind ui; } && ! owns_has "$ROOT" screens; then
+  if { folder_has_docs 60_fe-integration || has_kind ui; } && ! dk_owns_has "$ROOT" screens; then
     note profile "$DOCS" "declares a [ui] component or fe-integration docs, but .docs-kit.json 'owns' does not list 'screens' — update owns"
   fi
-  if has_kind db && ! owns_has "$ROOT" data; then
+  if has_kind db && ! dk_owns_has "$ROOT" data; then
     note profile "$DOCS" "declares a [db] component, but .docs-kit.json 'owns' does not list 'data' — update owns"
   fi
-  if has_kind queue && ! owns_has "$ROOT" jobs; then
+  if has_kind queue && ! dk_owns_has "$ROOT" jobs; then
     note profile "$DOCS" "declares a [queue] component, but .docs-kit.json 'owns' does not list 'jobs' — update owns"
+  fi
+  # `deploys` decides three folders at once (40_services · 50_runbooks · 70_deploy),
+  # so it is the token whose absence costs the most. Its evidence is the same shape
+  # as the rest: those folders holding something somebody wrote.
+  if { folder_has_docs 40_services || folder_has_docs 50_runbooks \
+       || folder_has_docs 70_deploy; } && ! dk_owns_has "$ROOT" deploys; then
+    note profile "$DOCS" "holds operational docs (40_services / 50_runbooks / 70_deploy) but .docs-kit.json 'owns' does not list 'deploys' — update owns"
   fi
 fi
 
 # ----------------------------- layout notes (informational, never failing) ---
-
-for dir in 00_roadmap 01_products 02_architecture 03_business-logic 04_api \
-           20_issues 21_proposals 22_decisions 23_backlog 30_conventions \
-           40_services 50_runbooks 60_fe-integration 70_deploy 92_audit 93_qa; do
-  [ -d "$DOCS/$dir" ] || echo "NOTE [layout] $DOCS/$dir: standard folder missing (docs-init creates all 16)"
+#
+# What counts as missing depends on the profile: a repo that declares
+# `owns: ["data"]` is not missing 04_api/, it never asked for one. A repo that
+# declares nothing is held to all 16, exactly as before profiles existed.
+#
+# A folder present but *outside* the profile is never reported. Repos grow, docs
+# are not deleted for a config change, and "extra folder" is not a finding
+# anywhere else in this kit.
+if [ "$HAVE_PROFILE" -eq 1 ]; then
+  LAYOUT_WANT="$(dk_folders "$ROOT" | LC_ALL=C sort -u)"
+  LAYOUT_WHY="$(dk_profile_label "$ROOT")"
+else
+  LAYOUT_WANT="$(printf '%s\n' 00_roadmap 01_products 02_architecture 03_business-logic 04_api \
+    20_issues 21_proposals 22_decisions 23_backlog 30_conventions \
+    40_services 50_runbooks 60_fe-integration 70_deploy 92_audit 93_qa)"
+  LAYOUT_WHY="docs_profile.sh not found — held to all 16"
+fi
+for dir in $LAYOUT_WANT; do
+  [ -d "$DOCS/$dir" ] || echo "NOTE [layout] $DOCS/$dir: folder missing — this repo's profile calls for it ($LAYOUT_WHY)"
 done
 
 # -------------------------------------------------------------------- report -
@@ -566,5 +604,5 @@ if [ -s "$FAILS" ]; then
   echo "docs-validate: $(wc -l < "$FAILS" | tr -d ' ') violation(s) across $SCANNED markdown file(s) in $DOCS"
   exit 1
 fi
-echo "docs-validate: OK — $SCANNED markdown file(s) in $DOCS pass all checks (ref, backlog, frontmatter, audit-append, amended-by, anchor)"
+echo "docs-validate: OK — $SCANNED markdown file(s) in $DOCS pass all checks (ref, backlog, frontmatter, audit-append, amended-by, anchor, profile)"
 exit 0

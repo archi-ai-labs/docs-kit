@@ -30,9 +30,20 @@ In order: `$CLAUDE_PLUGIN_ROOT` → two levels above this SKILL.md →
 bash "$PLUGIN_ROOT/scripts/docs_scaffold.sh" --sync .
 ```
 
-It prints one `added docs/…` line per item and ends with `SYNC OK`. Exit `3` means
-`docs/` does not exist — go back to the top. Relay the added list verbatim; that is
-the whole answer to "what did this version bring".
+It prints the repo's profile, one `added docs/…` line per item, and ends with
+`SYNC OK`. Exit `3` means `docs/` does not exist — go back to the top. Relay the
+added list verbatim; that is the whole answer to "what did this version bring".
+
+**It syncs toward the profile, not toward all 16.** The first line of output says
+which: `no owns declared` means this repo is held to the full tree exactly as it
+always was, and `owns: data, endpoints` means it gets those folders and no others
+(STANDARD §9.1). Nothing is ever removed — a folder the profile does not call for
+but that already exists stays, with everything in it.
+
+This is also the path when a repo **grows**. A backend that starts publishing an
+API adds `endpoints` to `owns` in `.docs-kit.json`, runs this skill, and gets
+`04_api/`. Changing `owns` is a layer 1 change, so the edit itself belongs to a
+Decision — this skill does not make it, and will not offer to.
 
 **Do not perform this copy by hand.** It used to be an instruction to an agent to
 run `cp -Rn` carefully, which is a careful file operation living in a prompt. It is
@@ -68,6 +79,10 @@ may now have findings. **That is the point, not a regression — say so.** Group
   checked before this version; they are pre-existing drift being surfaced, not damage
   the upgrade did. Say that plainly or it reads as breakage.
 - **`NOTE [stale]` / `NOTE [profile]`** — informational, never affect the exit code.
+- **`FAIL [profile]`** — a token in `owns` that the standard does not define. It is
+  a typo, and it costs the repo a folder: `"endpoint"` yields no `04_api/`. Say
+  which token and what the valid five are; the fix is one character in
+  `.docs-kit.json`, not a Decision.
 - **Everything else** — normal validator findings.
 
 ## Step 5 — Offer the follow-ups, do not perform them
@@ -80,8 +95,8 @@ belongs elsewhere:
 | `FAIL [anchor]` on a moved path | `/docs-kit:docs-sync` (it is a layer 1 edit → Decision workflow) |
 | Layer 1 docs with no `verified_at` | `/docs-kit:docs-sync`, once the code behind them has been read |
 | Terminal Backlog/Issues still in the hot folders | `/docs-kit:docs-sync` Step 6 archives them |
-| `NOTE [profile]` — `owns` no longer describes this repo | the user: `owns` in `.docs-kit.json` is a declared fact, and changing what a repo owns is a layer 1 change, so it goes through a Decision |
-| An empty new folder | the user, when they have something to put in it. An empty `04_api/` is not a defect in a repo that publishes no contract |
+| `NOTE [profile]` — `owns` no longer describes this repo | the user: `owns` in `.docs-kit.json` is a declared fact, and changing what a repo owns is a layer 1 change, so it goes through a Decision. Once it changes, run this skill again to get the folders it now justifies |
+| An empty new folder | the user, when they have something to put in it. An empty `04_api/` is not a defect in a repo that declared `owns: endpoints` and has not written the contract down yet |
 
 End with the validator's summary line and a one-sentence statement of what is now
 different. Change nothing else on disk.

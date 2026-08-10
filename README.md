@@ -153,11 +153,11 @@ plugin on by default.
 
 | Command | What it does | Writes files |
 |---|---|---|
-| `/docs-kit:docs-init` | Scaffold 16 folders + templates into `docs/`, detect the stack from the repo's manifests, read the repo's source to fill Architecture, and optionally wire the rules into `CLAUDE.md`. Refuses to touch an existing `docs/`; asks before every write outside the scaffold. | Yes |
+| `/docs-kit:docs-init` | Detect the stack from the repo's manifests, ask what the repo owns, scaffold the folders that profile calls for (11–16) + templates into `docs/`, read the repo's source to fill Architecture, and optionally wire the rules into `CLAUDE.md`. Refuses to touch an existing `docs/`; asks before every write outside the scaffold. | Yes |
 | `/docs-kit:docs-sync` | End-of-session reconcile: backlog statuses, audit entries, retroactive Issues, pending Architecture amendments, architecture-vs-code drift, and archiving what can no longer change. | Yes |
 | `/docs-kit:docs-check` | Run the deterministic validator and explain each failure. Never fixes. | No |
 | `/docs-kit:docs-render` | Generate/refresh the read models of `docs/` — three HTML pages and `INDEX.md`. Deterministic; never edits the source markdown. | Yes (generated files only) |
-| `/docs-kit:docs-upgrade` | Bring an existing `docs/` up to the current standard: add folders and seeds this version ships that the repo lacks, regenerate the read models, re-run the checks. Adds only — never overwrites, edits, or deletes. | Yes (adds only) |
+| `/docs-kit:docs-upgrade` | Bring an existing `docs/` up to the current standard, and to its own profile: add folders and seeds it lacks, regenerate the read models, re-run the checks. Also the path when a repo grows — declare a new `owns` token, run this, get the folders it justifies. Adds only — never overwrites, edits, or deletes. | Yes (adds only) |
 | `/docs-kit:brief` | Turn settled decisions into a delegation prompt for a coding agent — gates on a decision-freeze check first. In a repo that has `docs/`, also records the work as an Issue and routes it through Layer 2 before writing the prompt. The one skill Claude may invoke on its own. | Yes (`docs/`, only after you confirm) |
 
 **Typical flow:** `docs-init` once → work → `docs-sync` at the end of a session →
@@ -361,12 +361,15 @@ docs-kit/
 │   └── issue-capture.md         #   creating an Issue — read by brief + docs-sync
 ├── hooks/hooks.json             # 2 deterministic warn-only hooks
 ├── scripts/                     # docs_validate.sh, docs_scaffold.sh, docs_render.{sh,py},
-│                                #   docs_detect.py (read-only stack report), hook workers
+│                                #   docs_profile.sh (which folders belong here — sourced
+│                                #   by both scaffold and validator), docs_detect.py
+│                                #   (read-only stack report), hook workers
 ├── design/                      # "change-control print" design system + generated samples
 │   ├── design-system.html       #   the design contract
 │   ├── sample-*.html            #   real renderer output — regenerate, never hand-edit
 │   └── fixture/ + make-samples.sh
-├── templates/                   # the 16-folder docs tree + CLAUDE.md snippet
+├── templates/                   # the full 16-folder docs tree + CLAUDE.md snippet
+│                                #   (a scaffold takes the subset its profile calls for)
 ├── briefs/                      # gitignored — where `brief` writes its output, in
 │                                #   every repo. Never committed: CHANGELOG.md is
 │                                #   where reasoning lives once a change lands.

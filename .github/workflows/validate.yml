@@ -58,6 +58,167 @@ jobs:
           bash scripts/docs_scaffold.sh "$work"
           bash scripts/docs_validate.sh "$work/docs"
 
+      # The folder set became a function of one declared field, and a function has
+      # branches the byte-identical sample gate cannot see: the samples render one
+      # fixture, which takes one path through it. Every branch is asserted here
+      # instead — the exact folder list, a clean validate with no layout NOTE, and
+      # no seed file leaking in from a folder the profile excluded.
+      - name: Profile decides the folder set, and every branch is covered
+        run: |
+          CORE="00_roadmap 01_products 02_architecture 03_business-logic
+                20_issues 21_proposals 22_decisions 23_backlog 30_conventions
+                92_audit 93_qa"
+          fails=0
+          check() { # check <label> <owns> <expected folders>
+            work="$(mktemp -d)"; git -C "$work" init -q
+            if ! bash scripts/docs_scaffold.sh --owns "$2" "$work" > "$work/out.txt" 2>&1; then
+              echo "::error::scaffold failed for profile '$1'"; cat "$work/out.txt"; fails=1; return
+            fi
+            got="$(cd "$work/docs" && ls -1 | grep -v '\.md$' | LC_ALL=C sort | tr '\n' ' ')"
+            want="$(printf '%s\n' $3 | LC_ALL=C sort | tr '\n' ' ')"
+            if [ "$got" != "$want" ]; then
+              echo "::error::profile '$1' ($2) produced the wrong folder set"
+              echo "  want: $want"
+              echo "  got : $got"
+              fails=1
+            fi
+            if ! bash scripts/docs_validate.sh "$work/docs" > "$work/val.txt" 2>&1; then
+              echo "::error::profile '$1' does not validate clean"; cat "$work/val.txt"; fails=1
+            fi
+            if grep -q 'NOTE \[layout\]' "$work/val.txt"; then
+              echo "::error::profile '$1' reports a missing folder it never asked for"
+              grep 'NOTE \[layout\]' "$work/val.txt"; fails=1
+            fi
+            echo "  ok — $1: $(printf '%s' "$got" | wc -w | tr -d ' ') folders"
+          }
+          check "library (owns nothing conditional)" "" "$CORE"
+          check "backend service" "data,endpoints,deploys" \
+                "$CORE 04_api 40_services 50_runbooks 70_deploy"
+          check "frontend app" "screens,deploys" \
+                "$CORE 60_fe-integration 40_services 50_runbooks 70_deploy"
+          check "fullstack" "data,endpoints,screens,jobs,deploys" \
+                "$CORE 04_api 40_services 50_runbooks 60_fe-integration 70_deploy"
+          # The union must be the whole template tree. A folder no profile can ever
+          # produce is a folder shipped for nobody.
+          shipped="$(cd templates/docs && ls -1 | grep -v '\.md$' | LC_ALL=C sort | tr '\n' ' ')"
+          full="$(mktemp -d)"; git -C "$full" init -q
+          bash scripts/docs_scaffold.sh --owns data,endpoints,screens,jobs,deploys "$full" >/dev/null
+          union="$(cd "$full/docs" && ls -1 | grep -v '\.md$' | LC_ALL=C sort | tr '\n' ' ')"
+          if [ "$shipped" != "$union" ]; then
+            echo "::error::templates/docs ships a folder no profile can produce"
+            echo "  shipped: $shipped"
+            echo "  union  : $union"
+            fails=1
+          fi
+          # A seed from an excluded folder must not arrive by the file loop either.
+          lib="$(mktemp -d)"; git -C "$lib" init -q
+          bash scripts/docs_scaffold.sh --owns '' "$lib" >/dev/null
+          if [ -e "$lib/docs/04_api/example-api.md" ] || [ -e "$lib/docs/60_fe-integration/overview.md" ]; then
+            echo "::error::a seed file leaked in from a folder the profile excluded"; fails=1
+          fi
+          [ "$fails" -eq 0 ] || exit 1
+          echo "OK — every profile branch produces exactly its folder set"
+
+      # The migration guarantee, and the only thing standing between this feature
+      # and every repo scaffolded by an older docs-kit: without a declaration
+      # nothing branches. `owns: []` is a different thing — it IS a declaration.
+      - name: A repo that declares nothing still gets all 16
+        run: |
+          work="$(mktemp -d)"; git -C "$work" init -q
+          printf '{\n  "sensitive_paths": ["**/schema/**"]\n}\n' > "$work/.docs-kit.json"
+          bash scripts/docs_scaffold.sh "$work" > "$work/out.txt"
+          n="$(cd "$work/docs" && ls -1 | grep -cv '\.md$')"
+          [ "$n" -eq 16 ] || { echo "::error::a repo with no owns got $n folders, not 16"; exit 1; }
+          grep -q 'no owns declared' "$work/out.txt" \
+            || { echo "::error::scaffold did not say the profile was undeclared"; cat "$work/out.txt"; exit 1; }
+          bash scripts/docs_validate.sh "$work/docs" > "$work/val.txt"
+          if grep -q 'NOTE \[layout\]' "$work/val.txt"; then
+            echo "::error::an undeclared repo reported a layout NOTE"; cat "$work/val.txt"; exit 1
+          fi
+          # And the other reading: an explicitly empty owns is a library, not silence.
+          empty="$(mktemp -d)"; git -C "$empty" init -q
+          printf '{\n  "owns": []\n}\n' > "$empty/.docs-kit.json"
+          bash scripts/docs_scaffold.sh "$empty" >/dev/null
+          m="$(cd "$empty/docs" && ls -1 | grep -cv '\.md$')"
+          [ "$m" -eq 11 ] || { echo "::error::'owns: []' got $m folders, not 11 — it was read as silence"; exit 1; }
+          echo "OK — no declaration means all 16; an empty declaration means core only"
+
+      # `owns` is a closed enum and now decides folders, so a typo costs a folder
+      # silently. Both ends have to refuse it: the scaffold before writing anything,
+      # the validator on a repo where it already got in.
+      - name: An unknown owns token is refused, not shrugged at
+        run: |
+          work="$(mktemp -d)"; git -C "$work" init -q
+          if bash scripts/docs_scaffold.sh --owns endpoint "$work" > "$work/out.txt" 2>&1; then
+            echo "::error::scaffold accepted the token 'endpoint'"; cat "$work/out.txt"; exit 1
+          fi
+          [ ! -e "$work/docs" ] || { echo "::error::scaffold wrote docs/ before rejecting the token"; exit 1; }
+          grep -q "unknown owns token" "$work/out.txt" \
+            || { echo "::error::scaffold rejected it without saying why"; cat "$work/out.txt"; exit 1; }
+          bash scripts/docs_scaffold.sh --owns endpoints "$work" >/dev/null
+          printf '{\n  "owns": ["endpoint"]\n}\n' > "$work/.docs-kit.json"
+          if bash scripts/docs_validate.sh "$work/docs" > "$work/val.txt" 2>&1; then
+            echo "::error::validator passed a repo whose owns holds a typo"; cat "$work/val.txt"; exit 1
+          fi
+          grep -q 'FAIL \[profile\]' "$work/val.txt" \
+            || { echo "::error::wrong tag for an unknown owns token"; cat "$work/val.txt"; exit 1; }
+          echo "OK — a typo in owns is caught at both ends"
+
+      # A repo grows. Declaring a new token and re-syncing is the whole upgrade
+      # path, and the direction that must NEVER work is the other one: removing a
+      # token must not remove a folder, or a config edit deletes documentation.
+      - name: --sync follows a growing profile and never shrinks one
+        run: |
+          work="$(mktemp -d)"; git -C "$work" init -q
+          bash scripts/docs_scaffold.sh --owns '' "$work" >/dev/null
+          [ ! -d "$work/docs/04_api" ] || { echo "::error::library got 04_api"; exit 1; }
+          printf '{\n  "owns": ["endpoints"]\n}\n' > "$work/.docs-kit.json"
+          bash scripts/docs_scaffold.sh --sync "$work" > "$work/sync.txt"
+          [ -f "$work/docs/04_api/example-api.md" ] \
+            || { echo "::error::sync did not add 04_api for a grown profile"; cat "$work/sync.txt"; exit 1; }
+          bash scripts/docs_scaffold.sh --sync "$work" > "$work/again.txt"
+          grep -q 'nothing to add' "$work/again.txt" \
+            || { echo "::error::sync is not idempotent"; cat "$work/again.txt"; exit 1; }
+          # Now shrink the declaration. Nothing may disappear.
+          echo "mine" > "$work/docs/04_api/hand-written.md"
+          printf '{\n  "owns": []\n}\n' > "$work/.docs-kit.json"
+          bash scripts/docs_scaffold.sh --sync "$work" >/dev/null
+          [ -f "$work/docs/04_api/hand-written.md" ] \
+            || { echo "::error::sync deleted a document because owns shrank"; exit 1; }
+          bash scripts/docs_validate.sh "$work/docs" > "$work/val.txt" || true
+          if grep -q 'NOTE \[layout\]' "$work/val.txt"; then
+            echo "::error::a folder outside the profile was reported as missing"; exit 1
+          fi
+          grep -q "NOTE \[profile\].*endpoints" "$work/val.txt" \
+            || { echo "::error::a repo holding contracts while owns omits 'endpoints' went unreported"; cat "$work/val.txt"; exit 1; }
+          echo "OK — sync grows with the profile, never shrinks the tree"
+
+      # The read model has to follow the profile too, or the saving is undone by a
+      # page nagging about a section the repo deliberately does not have. Section
+      # numbers are assigned in render order for this reason, so an omitted section
+      # closes the gap instead of leaving a hole.
+      - name: current.html omits a section the repo does not have, and renumbers
+        run: |
+          work="$(mktemp -d)"; git -C "$work" init -q
+          bash scripts/docs_scaffold.sh --owns '' "$work" >/dev/null
+          python3 scripts/docs_render.py "$work" >/dev/null
+          cur="$work/docs/current.html"
+          if grep -q 'id="api"' "$cur"; then
+            echo "::error::API section rendered for a repo with no 04_api/"; exit 1
+          fi
+          grep -q '§4</span>Business flows' "$cur" \
+            || { echo "::error::sections did not renumber after the omission"; exit 1; }
+          if grep -q 'href="04_api/"\|href="60_fe-integration/"' "$work/docs/index.html"; then
+            echo "::error::index.html links a folder this profile has no directory for"; exit 1
+          fi
+          # And with the folder present, the section is back and numbered §4.
+          full="$(mktemp -d)"; git -C "$full" init -q
+          bash scripts/docs_scaffold.sh --owns endpoints "$full" >/dev/null
+          python3 scripts/docs_render.py "$full" >/dev/null
+          grep -q '§4</span>API contracts' "$full/docs/current.html" \
+            || { echo "::error::API section missing or misnumbered when 04_api/ exists"; exit 1; }
+          echo "OK — the read model follows the profile"
+
       # docs-init reads this report to fill tech_stack, so it has to state facts
       # the manifest really declares — and stay quiet, not guess, when there is
       # no manifest at all.
@@ -76,6 +237,37 @@ jobs:
           [ "$(python3 scripts/docs_detect.py "$empty")" = "DETECT OK" ] \
             || { echo "::error::detector invented facts about an empty tree."; exit 1; }
           echo "OK — detector states what is declared and nothing else"
+
+      # A hint decides how many folders docs-init scaffolds, so it has to carry the
+      # evidence a user can check — and it must stay a hint: the detector writes
+      # nothing, ever.
+      - name: Detector proposes a profile with evidence, and declares nothing
+        run: |
+          work="$(mktemp -d)"
+          printf 'module example.com/x\n\ngo 1.22\n\nrequire (\n\tgithub.com/gin-gonic/gin v1.9.1\n\tgithub.com/jackc/pgx/v5 v5.5.0\n)\n' > "$work/go.mod"
+          printf 'services:\n  postgres:\n    image: postgres:16\n  broker:\n    image: rabbitmq:3\n' > "$work/docker-compose.yml"
+          printf 'FROM scratch\n' > "$work/Dockerfile"
+          mkdir -p "$work/web" && printf '{"dependencies":{"next":"14"}}\n' > "$work/web/package.json"
+          out="$(python3 scripts/docs_detect.py "$work")"
+          echo "$out"
+          for want in 'owns-hint: endpoints — go.mod declares github.com/gin-gonic/gin' \
+                      'owns-hint: data — go.mod declares github.com/jackc/pgx/v5' \
+                      'owns-hint: jobs — docker-compose runs rabbitmq:3' \
+                      'owns-hint: screens — web/package.json declares next' \
+                      'owns-hint: deploys — Dockerfile present' \
+                      'module-count: 2'; do
+            echo "$out" | grep -qxF "$want" \
+              || { echo "::error::detector missed: $want"; exit 1; }
+          done
+          # Every hint names its evidence on the same line, or a user is being asked
+          # to confirm something they cannot check.
+          echo "$out" | grep '^owns-hint:' | while IFS= read -r line; do
+            case "$line" in *" — "*) ;; *) echo "::error::hint without evidence: $line"; exit 1 ;; esac
+          done
+          # Read-only means read-only: no config appears, no docs/ appears.
+          [ ! -e "$work/.docs-kit.json" ] || { echo "::error::detector wrote .docs-kit.json"; exit 1; }
+          [ ! -e "$work/docs" ] || { echo "::error::detector created docs/"; exit 1; }
+          echo "OK — the detector proposes with evidence and writes nothing"
 
       # A mutation the validator is supposed to catch must actually fail it —
       # otherwise the check above only proves the script exits 0.
@@ -351,6 +543,13 @@ jobs:
             || { echo "::error::--sync overwrote existing content."; exit 1; }
           bash scripts/docs_scaffold.sh --sync "$work" | grep -q "nothing to add" \
             || { echo "::error::--sync is not idempotent."; exit 1; }
+          # A seed arrives with its folder, never alone. Deleting a seed once the
+          # real document is written is the documented thing to do, and sync must
+          # not resurrect it — found by running this on a real repo.
+          rm "$work/docs/04_api/example-api.md"
+          bash scripts/docs_scaffold.sh --sync "$work" >/dev/null
+          [ ! -e "$work/docs/04_api/example-api.md" ] \
+            || { echo "::error::--sync resurrected a deliberately deleted seed."; exit 1; }
           bash scripts/docs_validate.sh "$work/docs" \
             || { echo "::error::a synced tree does not validate."; exit 1; }
           empty="$(mktemp -d)"

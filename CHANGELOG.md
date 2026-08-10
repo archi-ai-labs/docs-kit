@@ -5,6 +5,110 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
+## [0.23.0] — 2026-08-11
+
+### Added — item F: the docs tree follows what the repo actually owns
+
+`docs/` has been 16 folders for every repo since the beginning. A library got a
+`70_deploy/`; a backend got a `60_fe-integration/`. That invariant is gone, and this
+entry is mostly about the four ways it could have gone wrong instead.
+
+**One axis, not two.** The proposal called for `scope` (system/service/app/library)
+beside `owns`. After item D landed — architecture already splits per service by
+globbing the folder — `scope`'s only remaining job was "is this thing deployed?",
+which is one token, not an enum. So `owns` gained a fifth token, `deploys`, and
+`scope` was dropped before it existed. One declared field, one less thing to drift.
+
+| `owns` token | folders it justifies |
+|---|---|
+| `endpoints` | `04_api/` |
+| `screens` | `60_fe-integration/` |
+| `deploys` | `40_services/` `50_runbooks/` `70_deploy/` |
+| `data`, `jobs` | none — an ERD and a `[queue]` component both live in core folders |
+
+The other eleven folders are core. A library scaffolds 11; a fullstack service still
+scaffolds 16.
+
+**The map lives in one file.** `scripts/docs_profile.sh` is sourced by both the
+scaffold and the validator. "Which folders belong here" is one fact, and the kit does
+not get to hold it in two places — the validator's own `owns` reader was deleted and
+now calls the shared one.
+
+### The four ways this could have gone wrong, and what stops each
+
+1. **Every repo scaffolded by an older docs-kit changes shape.** It does not. An
+   absent `owns` key means "nobody declared" and yields all 16, exactly as before.
+   Nothing branches until somebody declares something. `"owns": []` is a different
+   statement — a library that owns nothing conditional — and the reader distinguishes
+   the two, which the 0.22.0 reader could not.
+2. **A missing folder becomes ambiguous.** It is answerable: `.docs-kit.json` says.
+   And because `owns` now decides folders, a typo in it costs a folder silently — so
+   an unrecognised token is `FAIL [profile]` at both ends, refused by the scaffold
+   before it writes anything and failed by the validator on a repo where it got in.
+3. **`--sync` loses its definition.** It syncs toward the profile and still only
+   adds. Declaring a new token and re-syncing is the whole upgrade path when a repo
+   grows an API. The other direction does nothing: removing a token removes no
+   folder and no file. Deleting documentation because a config line changed is not a
+   trade anyone agreed to, and "extra folder" is a finding nowhere in this kit.
+4. **The byte-identical sample gate covers one branch of four.** True — it renders
+   one fixture, which takes one path. Every branch is asserted in CI instead: the
+   exact folder set per profile, a clean validate with no layout NOTE, no seed file
+   leaking in from an excluded folder, and the union of all profiles equalling the
+   shipped template tree, so a folder no profile can produce cannot ship for nobody.
+
+### The read model follows the profile
+
+A page that nags about a section the repo deliberately does not have would undo the
+whole point. `current.html` renders §4 API contracts only when `docs/04_api/` exists,
+and `index.html` lists only layer-3 folders that are actually there.
+
+**Section numbers are now assigned in render order** rather than written as literals,
+so an omitted section closes the gap instead of leaving a hole. This also fixed two
+cross-references that had been wrong since 0.20.0: inserting §4 shifted everything
+after it, and the two prose lines pointing at "§4" and "§5" kept pointing one section
+to the left of what they meant. Neither the sample gate nor any check could see it —
+both branches rendered fine, they just said the wrong number.
+
+### The detector proposes; only the user declares
+
+`docs_detect.py` used to be forbidden from acting on what it knew. It now prints
+`owns-hint:` lines — each carrying its evidence on the same line, `owns-hint:
+endpoints — go.mod declares github.com/gin-gonic/gin` — plus `module-dir:` and
+`module-count:`, the two-deployables fact it has always computed and never said.
+
+It still writes nothing. `docs-init` shows the hints, asks with AskUserQuestion, and
+scaffolds the answer. That asymmetry is what makes generous hinting safe: an
+unconfirmed hint costs one option in a dialog, a silent one would put a wrong fact in
+a file that decides the shape of the tree. Verified on five real repos — the Next.js
+monorepo from 0.22.1 gets `data` (mongodb) and `screens` (next), which is exactly what
+its architecture doc declares by hand.
+
+### Fixed
+
+- **`--sync` resurrected seeds somebody had deliberately deleted.** Deleting the
+  example file once the real document is written is the documented thing to do, and
+  the next sync brought it straight back — the rule was "copy any template file the
+  repo lacks", and a deleted file is lacking. The rule is now **a seed arrives with
+  its folder, never alone**: an existing folder is the repo's, and the only thing
+  sync may put into one is nothing. A missing *folder* still returns with its seed.
+  Found by running this release on a real Express repo, not by any test.
+- **The design fixture never had an `04_api/`.** Shipped in 0.20.0, and every design
+  sample since has shown "NO API CONTRACTS" — an empty state standing in for the
+  section's real render. The byte-identical gate therefore covered neither the
+  operations table nor the drift table, which is the whole of item H. The fixture now
+  carries a contract with a matching `openapi.json`, so the samples show the state a
+  healthy repo is in.
+- `sensitive_paths`' fnmatch paragraph had drifted to the bottom of §9, under `owns`,
+  where it read as a rule about profiles.
+
+### What this does not claim
+
+The measurable saving is close to zero. An empty folder costs no tokens: the renderer
+skips it, `INDEX.md` has no line for it, no agent opens it. What F buys is a tree that
+does not describe a repo the user does not have — a cognitive cost, not a token one.
+Whether that was worth removing an invariant for is a question only real use answers,
+and the honest position is that nobody has complained about empty folders yet.
+
 ## [0.22.1] — 2026-08-10
 
 ### Fixed — two things a real repo found that the fixture could not

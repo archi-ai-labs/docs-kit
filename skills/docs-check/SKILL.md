@@ -55,7 +55,12 @@ nothing, fix nothing.
 
 **Clean run:** say so in one or two sentences, quoting the script's OK line
 (file count). Relay `NOTE` lines as informational — they never affect the exit code:
-- `NOTE [layout]` — a standard folder is missing.
+- `NOTE [layout]` — a folder this repo's profile calls for is missing. Which folders
+  those are comes from `owns` in `.docs-kit.json` (STANDARD §9.1); a repo that
+  declares nothing is held to all 16. A folder *outside* the profile is never
+  reported, so this line always means something is genuinely absent.
+- `NOTE [profile]` — the repo shows a surface `owns` does not account for. Only the
+  growth direction is checked, so this means "declare more", never "declare less".
 - `NOTE [stale]` — a layer 1 doc carries `verified_at: <rev>` and some of the paths
   it names have changed since. Changed is not the same as wrong, which is why this
   warns instead of failing; the fix is to re-read those files and move `verified_at`

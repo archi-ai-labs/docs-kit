@@ -1,6 +1,6 @@
 ---
 name: docs-init
-description: The main entry point. Scaffold the three-layer docs structure into this repo — 16 folders, templates, docs/README.md — and optionally wire the rules into CLAUDE.md.
+description: The main entry point. Scaffold the three-layer docs structure into this repo — the folders this repo's profile calls for, templates, docs/README.md — and optionally wire the rules into CLAUDE.md.
 disable-model-invocation: true
 ---
 
@@ -36,9 +36,9 @@ Verify: `$PLUGIN_ROOT/scripts/docs_scaffold.sh` must exist.
 Check for `docs/` in the repo root (current working directory).
 
 **If `docs/` exists: STOP. Do not create, merge, or overwrite anything.**
-1. Report the current state: which of the 16 standard folders are present /
-   missing (the scaffold script prints exactly this if you run it — it refuses
-   with exit 3 and touches nothing), plus any non-standard entries.
+1. Report the current state: which of the folders this repo's profile calls for
+   are present / missing (the scaffold script prints exactly this if you run it —
+   it refuses with exit 3 and touches nothing), plus any non-standard entries.
 2. Ask the user with AskUserQuestion — question: "docs/ already exists. How
    should docs-init proceed?" with options:
    - "Abort — leave docs/ untouched (Recommended)"
@@ -58,18 +58,63 @@ Check for `docs/` in the repo root (current working directory).
    that just needs catching up with a newer docs-kit, `/docs-kit:docs-upgrade` is
    the whole job — it runs this and then regenerates the read models.
 
-## Step 2 — Scaffold (fresh repo path)
+## Step 2 — Settle the profile, then scaffold (fresh repo path)
 
-Run:
+### 2a. Let the detector propose
 
 ```bash
-bash "$PLUGIN_ROOT/scripts/docs_scaffold.sh" .
+python3 "$PLUGIN_ROOT/scripts/docs_detect.py" .
 ```
 
-The script copies the 16-folder template tree to `./docs/` (every folder ships a
-seed file — templates are never empty), stamps today's date into
-`docs/92_audit/LOG.md`, and prints the created file list ending with
-`SCAFFOLD OK`. If it exits 3 (docs/ appeared meanwhile), go back to Step 1.
+Read-only; it writes nothing. Two groups of lines matter here (the rest is for
+Step 3):
+
+- `owns-hint: <token> — <evidence>` — a proposal for `owns` in `.docs-kit.json`,
+  which decides which folders this repo gets (STANDARD §9.1). Each hint states
+  the evidence that produced it on the same line.
+- `module-dir:` / `module-count:` — one directory per manifest found. More than
+  one usually means more than one deployable, which is the question item 3 of
+  Step 3 has to settle. Note it now; do not act on it yet.
+
+### 2b. Ask — never scaffold a guess
+
+Report the hints in Vietnamese **with their evidence**, then ask with
+AskUserQuestion, `multiSelect: true`: "Repo này sở hữu những gì? (quyết định
+`docs/` có bao nhiêu folder)". One option per token, pre-explained:
+
+| Option | What it means | Folders it adds |
+|---|---|---|
+| `data` | repo này sở hữu bảng dữ liệu | — (ERD nằm trong `02_architecture/`) |
+| `endpoints` | repo này phát ra một contract | `04_api/` |
+| `screens` | repo này có route/màn hình | `60_fe-integration/` |
+| `jobs` | repo này chạy worker/lịch chạy nền | — (component `[queue]`) |
+| `deploys` | repo này được deploy và vận hành | `40_services/` `50_runbooks/` `70_deploy/` |
+
+Mark the hinted tokens "(Recommended)". Nothing is preselected by the script —
+the detector proposes, the user decides.
+
+If AskUserQuestion fails or returns empty, ask in plain text and **end the turn**.
+Do not fall back to "all 16 because it is safe": a profile nobody chose is the
+state that rots, which is exactly what §9.1's three rules exist to prevent. Waiting
+for an answer costs one turn; a wrong declaration costs every session after it.
+
+### 2c. Scaffold the answer
+
+```bash
+bash "$PLUGIN_ROOT/scripts/docs_scaffold.sh" --owns data,endpoints,deploys .
+```
+
+Pass the confirmed tokens, comma-separated. `--owns ''` is correct for a repo that
+owns nothing conditional (a library) — 11 core folders and no more. Omitting the
+flag entirely is a different thing: it means "nobody declared", and yields all 16.
+
+The script copies the folders that profile calls for (every folder ships a seed
+file — templates are never empty), stamps today's date into `docs/92_audit/LOG.md`,
+writes `.docs-kit.json` with the declaration, and prints the created file list
+ending with `SCAFFOLD OK`. If it exits 3 (docs/ appeared meanwhile), go back to
+Step 1. If `.docs-kit.json` already existed it is **not** touched — the script says
+so and prints the `owns` key to add by hand; do that, or the declaration and the
+tree disagree.
 
 ## Step 3 — Ground the Architecture in the real source (ASK FIRST)
 
@@ -80,16 +125,11 @@ not have guessed from the directory listing. This step fills
 repo** — never from the project's name, its README's claims, or a framework's
 conventional layout.
 
-0. First, see what this repo is built with:
-
-   ```bash
-   python3 "$PLUGIN_ROOT/scripts/docs_detect.py" .
-   ```
-
-   It is read-only and writes nothing. Report the findings in Vietnamese —
-   language and version, services from docker-compose, notable dependencies.
-   Nothing printed but `DETECT OK` means no manifest was found; say so plainly
-   and move on, do not guess a stack from folder names.
+0. You already ran `docs_detect.py` in Step 2a — reuse that output, do not run it
+   again. Report the rest of it in Vietnamese: language and version, services from
+   docker-compose, notable dependencies. Nothing printed but `DETECT OK` means no
+   manifest was found; say so plainly and move on, do not guess a stack from folder
+   names.
 
    **Only `tech_stack:` may be filled from this report.** It states what a
    manifest declares, which is a fact. `components:` may not — a component's
@@ -117,7 +157,8 @@ conventional layout.
    `02_architecture/` is a folder. One deployable → keep `architecture.md`. Several
    (a monorepo of services, or one repo that ships more than one runnable thing) →
    one document per service, named after it: `orders.md`, `billing.md`. Each covers
-   **only what that service owns**.
+   **only what that service owns**. `module-count:` from Step 2a is evidence, not
+   the answer — two manifests can be one deployable plus its build tooling.
 
    Placement, so no fact is written twice (STANDARD §4): a component goes in the
    service that contains it; a table in the service that owns the writes; an edge
@@ -168,7 +209,10 @@ conventional layout.
    whole package — pick the boundary a newcomer needs.
 
 8.5 Write the **API contracts** into `docs/04_api/` — one file per service that
-   publishes one. `service:` must name a component you just declared; that is the
+   publishes one. Skip this item entirely when the folder is not there: this repo
+   did not declare `owns: endpoints` in Step 2b, and creating the folder anyway
+   would route around the answer the user gave. One file per service publishing a
+   contract; `service:` must name a component you just declared — that is the
    only join between the two folders and the validator enforces it. One
    ```` ```api ```` block per contract: `GET /orders/{id} -> Order — chú thích`,
    `event order.paid -> OrderPaid`.
@@ -253,8 +297,12 @@ table, "only Decision amends Architecture", the lane test, pointer to
 
 ## Step 6 — Report
 
-Summarize: folders/files created, validation result, CLAUDE.md action taken
-(or skipped and why), and next steps —
+Summarize: the profile the user chose and what it left out, folders/files created,
+validation result, CLAUDE.md action taken (or skipped and why), and next steps —
+
+- The profile is a declaration, not a guess, and it can change. A repo that grows
+  an API adds `endpoints` to `.docs-kit.json` and runs `/docs-kit:docs-upgrade` to
+  get `04_api/`. Nothing is ever removed on the way back.
 
 - Read `docs/README.md` (30 seconds); open `docs/index.html` for the generated
   visual map (regenerate anytime with `/docs-kit:docs-render`).

@@ -11,8 +11,12 @@ without guessing:
     lang: go 1.22
     dep: github.com/jackc/pgx/v5
     dep-count: 24
+    module-dir: .
+    module-count: 1
     service: postgres image postgres:16
     frontend: no
+    owns-hint: endpoints — go.mod requires github.com/gin-gonic/gin
+    owns-hint: data — docker-compose runs postgres:16
     DETECT OK
 
 It reports only what a file actually declares. A version is printed when the
@@ -20,9 +24,18 @@ manifest states one and omitted otherwise — never inferred from a lockfile or 
 CI config, because a guess here becomes a line in `tech_stack:` that nobody can
 trace back to anything.
 
-`frontend:` is informational. It must never change what gets scaffolded: the
-docs tree is 16 folders for every repo, and making it conditional would leave
-every backend repo printing a layout NOTE forever.
+`owns-hint:` lines are PROPOSALS for `owns` in `.docs-kit.json` (STANDARD §9),
+which decides how many folders `docs-init` scaffolds. Every hint carries the
+evidence that produced it, in the same line, for one reason: a profile is a
+declared fact about a repo and nobody should confirm one they cannot check. The
+hints are never written anywhere by this script — `docs-init` shows them, the
+user answers, and the answer is what gets scaffolded. A hint that goes
+unconfirmed changes nothing, which is why guessing generously here is safe and
+guessing silently would not be.
+
+`module-dir:` names each directory holding a manifest. More than one usually
+means more than one deployable, which is the question `docs-init` has to settle
+before writing Architecture — one document, or one per service.
 
 Python 3.9 stdlib only (`tomllib` is 3.11+, so TOML is line-parsed, not parsed).
 """
@@ -35,6 +48,46 @@ DEP_CAP = 15   # per manifest; the true total always follows as dep-count:
 
 UI_FRAMEWORKS = ("@angular/core", "next", "nuxt", "preact", "react", "solid-js",
                  "svelte", "vue")
+
+# Substrings matched against a declared dependency name, lowercased. Every stem
+# is at least five characters and specific enough that a chance match would have
+# to be a package genuinely about that thing — the cost of a wrong hint is one
+# extra option in a dialog the user is answering anyway, so the bar is "would a
+# reader recognise the evidence", not "is this certain".
+API_STEMS = ("express", "fastify", "nestjs", "gin-gonic", "labstack/echo", "gofiber",
+             "go-chi", "grpc", "fastapi", "flask", "django", "starlette", "sinatra",
+             "rails", "laravel/framework", "spring-boot-starter-web", "aspnetcore",
+             "actix-web", "axum", "rocket", "hapi", "restify", "connexion")
+JOB_STEMS = ("celery", "sidekiq", "bullmq", "asynq", "machinery", "dramatiq",
+             "kafka", "rabbitmq", "amqp", "nats.go", "temporal", "resque",
+             "delayed_job", "sidekiq-cron", "apscheduler", "quartz")
+DATA_STEMS = ("pgx", "gorm", "sqlx", "sqlalchemy", "psycopg", "mysql", "mongoose",
+              "mongodb", "mongo-driver", "prisma", "typeorm", "sequelize",
+              "activerecord", "diesel", "hibernate", "entityframework", "knex",
+              "alembic", "migrate", "mikro-orm", "drizzle", "postgres", "sqlite",
+              "dynamodb", "firestore", "supabase")
+
+# Images in a compose file. A datastore says "this repo runs data"; a broker says
+# "this repo runs jobs". Matched as a substring of the image name before its tag.
+#
+# Redis is in neither list on purpose. It is a cache as often as it is a store and
+# a queue backend as often as either, so it would hint whichever answer the reader
+# was already leaning towards — which is what a hint must not do.
+DATA_IMAGES = ("postgres", "mysql", "mariadb", "mongo", "cassandra",
+               "clickhouse", "elasticsearch", "opensearch", "cockroach",
+               "timescale", "neo4j", "minio", "influxdb", "couchdb")
+JOB_IMAGES = ("rabbitmq", "kafka", "redpanda", "nats", "temporal", "beanstalkd",
+              "activemq", "pulsar")
+
+# Files and directories that mean somebody deploys this. Each is an artifact
+# whose only purpose is shipping the thing — none of them exist in a repo that
+# is only ever consumed as a library.
+DEPLOY_FILES = ("Dockerfile", "Procfile", "fly.toml", "render.yaml", "app.yaml",
+                "vercel.json", "netlify.toml", "Chart.yaml", "skaffold.yaml",
+                "docker-compose.yml", "docker-compose.yaml", "compose.yml",
+                "compose.yaml")
+DEPLOY_DIRS = ("k8s", "kubernetes", "helm", "deploy", "deployment", "charts",
+               "terraform", "infra")
 
 
 def read(path):
@@ -266,9 +319,45 @@ def compose_services(root):
     return sorted(set(out))
 
 
+def deploy_evidence(root, where):
+    """Artifacts whose only purpose is shipping this repo. A library consumed as
+    a dependency has none of them; a service has at least one."""
+    out = []
+    for d in where:
+        base = os.path.join(root, d) if d != "." else root
+        for name in DEPLOY_FILES:
+            p = os.path.join(base, name)
+            if os.path.isfile(p):
+                out.append(name if d == "." else os.path.join(d, name))
+        for name in DEPLOY_DIRS:
+            p = os.path.join(base, name)
+            try:
+                if os.path.isdir(p) and os.listdir(p):
+                    out.append((name if d == "." else os.path.join(d, name)) + "/")
+            except OSError:
+                continue
+    return sorted(set(out))
+
+
+def stem_hit(name, stems):
+    """The first stem contained in `name`, lowercased, or "" for no match."""
+    low = name.lower()
+    for stem in stems:
+        if stem in low:
+            return stem
+    return ""
+
+
+# Fixed order, so two runs on the same repo print the same lines and a diff of
+# two detect outputs is a diff of the repo.
+HINT_ORDER = ("data", "endpoints", "screens", "jobs", "deploys")
+HINTS_PER_TOKEN = 2
+
+
 def main():
     root = sys.argv[1] if len(sys.argv) > 1 else "."
-    lines, ui = [], False
+    lines, ui, ui_ev = [], False, ""
+    hints, module_dirs = [], []
     for rel, path in manifests(root):
         name = os.path.basename(path)
         if name in PATH_READERS:
@@ -280,17 +369,56 @@ def main():
         lines.append("manifest: %s" % rel)
         lines.append("lang: %s%s" % (lang, (" " + ver) if ver else ""))
         deps = sorted(set(d for d in deps if d))
-        if name == "package.json" and any(d in UI_FRAMEWORKS for d in deps):
-            ui = True
+        if name == "package.json":
+            for d in deps:
+                if d in UI_FRAMEWORKS:
+                    ui, ui_ev = True, "%s declares %s" % (rel, d)
+                    break
+        for dep in deps:
+            for stems, token in ((DATA_STEMS, "data"), (API_STEMS, "endpoints"),
+                                 (JOB_STEMS, "jobs")):
+                if stem_hit(dep, stems):
+                    hints.append((token, "%s declares %s" % (rel, dep)))
         for dep in deps[:DEP_CAP]:
             lines.append("dep: %s" % dep)
         # Always print the true total. A cap that is not stated reads as
         # "that was all of them", which is a different claim.
         lines.append("dep-count: %d" % len(deps))
+        d = os.path.dirname(rel) or "."
+        if d not in module_dirs:
+            module_dirs.append(d)
+
+    for d in sorted(module_dirs):
+        lines.append("module-dir: %s" % d)
+    if module_dirs:
+        lines.append("module-count: %d" % len(module_dirs))
+
     for svc, image in compose_services(root):
         lines.append("service: %s image %s" % (svc, image))
+        base = image.split(":")[0]
+        if stem_hit(base, DATA_IMAGES):
+            hints.append(("data", "docker-compose runs %s" % image))
+        if stem_hit(base, JOB_IMAGES):
+            hints.append(("jobs", "docker-compose runs %s" % image))
+
+    for artifact in deploy_evidence(root, module_dirs or ["."]):
+        hints.append(("deploys", "%s present" % artifact))
+
+    if ui:
+        hints.append(("screens", ui_ev))
     if lines:
         lines.append("frontend: %s" % ("yes" if ui else "no"))
+
+    # Proposals, not findings. Capped per token because a third piece of evidence
+    # for the same answer buys nothing and pushes the rest off the screen.
+    for token in HINT_ORDER:
+        seen = []
+        for tok, ev in hints:
+            if tok == token and ev not in seen:
+                seen.append(ev)
+        for ev in seen[:HINTS_PER_TOKEN]:
+            lines.append("owns-hint: %s — %s" % (token, ev))
+
     # An unrecognised repo is not an error — it is a repo whose stack this script
     # cannot state, which is exactly what printing nothing says.
     print("\n".join(lines + ["DETECT OK"]))

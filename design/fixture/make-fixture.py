@@ -12,6 +12,7 @@ and not-doing, a recorded deviation, and an empty Layer-3 folder. Driven by
 Language follows STANDARD §11: structure and terms in English, explanation in
 Vietnamese — the fixture has to look like real output, not a translation test.
 """
+import json
 import sys
 from pathlib import Path
 
@@ -445,6 +446,45 @@ FILES["50_runbooks/gateway-502.md"] = "# Gateway 502\n\nKiểm tra sức khoẻ 
 FILES["50_runbooks/psp-outage.md"] = "# PSP outage\n\nXếp hàng capture, báo cho merchant.\n"
 FILES["50_runbooks/webhook-storm.md"] = "# Webhook storm\n\nTạm dừng worker, xả dead-letter.\n"
 FILES["70_deploy/environments.md"] = "# Environments\n\nstaging, prod (một region).\n"
+
+# 04_api arrived in 0.20.0 and the fixture never grew one, so every design sample
+# since has shown "NO API CONTRACTS" — an empty state standing in for the section's
+# actual render. The byte-identical gate therefore covered neither `api_table` nor
+# the drift table, which is the whole of item H. It does now.
+FILES["04_api/orderhub.md"] = """---
+service: api-gateway
+protocol: http
+base: /v1
+generated_from: api/openapi.json
+amended_by:
+  - "2026-03-04 DECISION-002 chỉ payment-adapter được gọi PSP, contract không mở lối thứ hai"
+rejected: []
+verified_at: ""
+---
+
+# orderhub — public contract
+
+> Layer 1 — Foundation. Sửa qua Decision workflow.
+
+```api
+title: orderhub public API
+GET /orders/{id} -> Order — trạng thái đơn, đọc từ order-service
+POST /orders -> OrderCreated — nhận đơn; cần Idempotency-Key
+POST /orders/{id}/refund -> RefundAccepted — xếp hàng hoàn tiền, không hoàn ngay
+event order.paid -> OrderPaid — worker gửi tới webhook merchant
+```
+
+## Không expose
+
+`payment-adapter` không có endpoint công khai. Ràng buộc "chỉ một lối ra tới PSP"
+chỉ giữ được nếu bên ngoài không gọi thẳng vào nó — mở một endpoint ở đây là mở
+lại đúng cái ISSUE-003 đã đóng.
+
+## Compatibility
+
+Thêm field thì được, đổi nghĩa field cũ thì không. Bỏ một operation cần một
+Decision và một mùa deprecation.
+"""
 FILES["93_qa/test-matrix.md"] = "# Test matrix\n\nNhận đơn, capture, hoàn tiền, webhook.\n"
 FILES["README.md"] = "# docs\n\nTài liệu ba lớp. Bản hướng dẫn 30 giây nằm ở đây trong scaffold thật.\n"
 
@@ -474,6 +514,19 @@ SRC = {
     "internal/psp/client.go": "package psp // lối ra duy nhất tới PSP\n",
     "internal/store/schema.sql": "-- orders, outbox\n",
     "deploy/postgres/init.sql": "-- bootstrap\n",
+    # The generated half of the contract above. Its three operations are exactly
+    # the three the document describes, so the sample shows the state a healthy
+    # repo is in rather than a drift table — the failure modes are exercised in CI,
+    # where a red table is the point, not in the design reference.
+    "api/openapi.json": json.dumps({
+        "openapi": "3.0.0",
+        "info": {"title": "orderhub", "version": "1"},
+        "paths": {
+            "/v1/orders/{id}": {"get": {"summary": "đọc đơn"}},
+            "/v1/orders": {"post": {"summary": "nhận đơn"}},
+            "/v1/orders/{id}/refund": {"post": {"summary": "xếp hàng hoàn tiền"}},
+        },
+    }, indent=2, ensure_ascii=False) + "\n",
 }
 for rel, content in SRC.items():
     p = root / rel
