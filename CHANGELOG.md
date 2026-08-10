@@ -5,6 +5,44 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
+## [0.18.1] — 2026-08-10
+
+### Added — `docs_render.sh --check`, the gate that makes the index safe to trust
+
+0.18.0 made skills read `docs/INDEX.md` instead of globbing folders, and said in three
+places that a stale index is worse than a missing one because the next agent trusts it.
+It then shipped nothing that would notice. `docs-sync` was told to always re-render, but
+anyone editing markdown and committing directly walked straight past that.
+
+`--check` writes nothing, rebuilds the index in memory, and compares: `0` current, `1`
+missing or stale, `2` no `docs/`. It goes through the same code path a real render uses,
+so it cannot disagree with one — there is no second description of what the index should
+contain. Only `INDEX.md` is checkable this way; the HTML pages embed a generated-at stamp
+and a git ref and differ every run by design.
+
+Wired into `/docs-kit:docs-check` as a second deterministic script — explicitly *not* a
+second opinion; that skill's "report what the script said, add nothing, fix nothing" rule
+is unchanged. Target repos get the one-liner in `docs/README.md` and the project README.
+
+### Fixed — the wrapper swallowed the repo root whenever a flag came first
+
+`docs_render.sh` forwarded only `"${1:-$(pwd)}"`, so `docs_render.sh --check <root>` checked
+the *current* directory and reported on the wrong tree. It now forwards `"$@"`; the Python
+side already defaulted to the current directory when given no root. Caught by the new CI
+step on its first run, which is the argument for writing the test alongside the feature.
+
+### Fixed — `docs-render` did not know `INDEX.md` exists
+
+The skill that regenerates the read models reported three files and named only the HTML.
+The script always wrote the fourth, so nothing was wrong on disk — but the skill would have
+told the user the index was not part of what it just refreshed.
+
+### Added — CI proves the gate works
+
+A stale index must be caught, and `--check` must write nothing while catching it: the new
+step renders, adds a document without re-rendering, asserts the check fails, and asserts
+the checksums of every generated file are unchanged.
+
 ## [0.18.0] — 2026-08-10
 
 ### The model was optimising the cheap half of its own cost

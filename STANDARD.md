@@ -401,6 +401,19 @@ appears at the second number.
 Archived documents appear in the index with an `_archive/` prefix on their file
 column, so nothing disappears and the agent still knows where to look.
 
+**A stale index is worse than a missing one, because the agent trusts it.** That
+makes it the one generated file needing a gate, and the renderer provides it:
+
+```bash
+docs_render.sh --check .     # 0 = current · 1 = missing or stale · 2 = no docs/
+```
+
+It writes nothing and rebuilds the index through the same code path a real render
+uses, so it cannot disagree with one. Only `INDEX.md` is checkable this way — the
+HTML pages embed a generated-at stamp and a git ref, so they differ every run by
+design. Repos that keep docs in review should run it in CI beside the validator;
+`/docs-kit:docs-check` runs it too.
+
 Rules:
 
 - **Read model only.** The renderer never edits markdown; the markdown stays

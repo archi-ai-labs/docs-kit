@@ -1,5 +1,17 @@
 #!/usr/bin/env python3
-"""docs-kit renderer — generates docs/index.html, docs/current.html, docs/changes.html.
+"""docs-kit renderer — generates docs/{index,current,changes}.html and docs/INDEX.md.
+
+Usage:  docs_render.py [--check] [repo-root]
+
+`--check` writes nothing. It rebuilds `docs/INDEX.md` in memory and compares it
+with the file on disk: exit 0 when they match, 1 when the index is stale, 2 when
+there is no docs/. Skills read INDEX.md *instead of* globbing a folder, so a
+stale one is worse than a missing one — the next agent trusts it. This is the
+gate that makes it safe to trust, and it re-uses the one code path that knows
+what the index should contain rather than describing it a second time.
+
+Only INDEX.md is comparable this way: the HTML pages embed a generated-at stamp
+and the git ref, so they differ on every run by design.
 
 Deterministic, Python 3.9 stdlib only, zero LLM. The visual contract is
 design/design-system.html ("change-control print"): cool paper + graphite ink,
@@ -3620,12 +3632,30 @@ def build_index_md(data):
 
 
 def main():
-    root = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else Path.cwd()
+    argv = [a for a in sys.argv[1:] if a != "--check"]
+    check_only = len(argv) != len(sys.argv) - 1
+    root = Path(argv[0]).resolve() if argv else Path.cwd()
     docs = root / "docs"
     if not docs.is_dir():
         print("docs-render: no docs/ directory under %s — run /docs-kit:docs-init first" % root,
               file=sys.stderr)
         return 2
+
+    if check_only:
+        want = build_index_md(load_docs(docs))
+        target = docs / "INDEX.md"
+        if not target.is_file():
+            print("docs-render --check: docs/INDEX.md is missing — skills that read it "
+                  "will fall back to globbing whole folders. Run docs_render.sh.",
+                  file=sys.stderr)
+            return 1
+        if target.read_text(encoding="utf-8", errors="replace") != want:
+            print("docs-render --check: docs/INDEX.md is stale — it no longer matches the "
+                  "markdown under docs/. An agent reading it would miss or misread a "
+                  "document. Run docs_render.sh and commit the result.", file=sys.stderr)
+            return 1
+        print("INDEX OK — docs/INDEX.md matches the markdown under docs/")
+        return 0
 
     script_dir = Path(__file__).resolve().parent
     dt = now()

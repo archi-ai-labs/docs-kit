@@ -11,7 +11,7 @@ the source of truth for form — do not eyeball-validate in its place, do not ad
 findings it did not report, and **do not fix anything**. Fixing belongs to
 `/docs-kit:docs-sync` or to the user.
 
-## Step 1 — Run the validator
+## Step 1 — Run the two deterministic checks
 
 Resolve the plugin root (in order: `$CLAUDE_PLUGIN_ROOT` env var → two levels
 above this SKILL.md → `find ~/.claude/plugins -maxdepth 6 -type d -name docs-kit`
@@ -23,6 +23,20 @@ bash "$PLUGIN_ROOT/scripts/docs_validate.sh" docs
 
 Exit codes: `0` clean · `1` violations (one `FAIL [tag] file: message` line
 each) · `2` setup error (usually: no `docs/` — suggest `/docs-kit:docs-init`).
+
+Then check that the agent read model is current:
+
+```bash
+bash "$PLUGIN_ROOT/scripts/docs_render.sh" --check .
+```
+
+Exit codes: `0` current · `1` `docs/INDEX.md` missing or stale · `2` no `docs/`
+· `3` no `python3` (say so and move on — it is not a docs problem).
+
+**This is a second script, not a second opinion.** It writes nothing and it
+rebuilds the index through the same code path the renderer uses, so it never
+disagrees with what a real render would produce. The rule below still holds
+exactly: report what the scripts said, add nothing, fix nothing.
 
 ## Step 2 — Report
 
@@ -58,5 +72,13 @@ Remind the user the script checks form, not content quality.
 4. Who should do it: mechanical fixes → offer to run `/docs-kit:docs-sync`;
    judgment calls (e.g. which Decision an amendment belongs to, whether audit
    history was rewritten intentionally) → the user.
+
+**Stale index (`--check` exit 1):** report it separately from the validator's
+findings — it is not a violation of the docs, it means the generated read model
+has fallen behind them. Say what it costs: `brief` and `docs-sync` read
+`docs/INDEX.md` instead of globbing folders, so until it is regenerated they are
+reading an answer that is out of date, and a wrong answer they trust is worse
+than no answer. The fix is one command, and it belongs to
+`/docs-kit:docs-render` or `/docs-kit:docs-sync` — not to this skill.
 
 End with the script's summary count. Change nothing on disk.

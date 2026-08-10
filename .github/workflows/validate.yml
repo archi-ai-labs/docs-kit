@@ -159,6 +159,31 @@ jobs:
           done
           echo "OK — INDEX.md complete and byte-stable"
 
+      # The index is only safe to trust if something notices when it goes stale.
+      # --check must catch a document added without re-rendering, and must write
+      # nothing while doing it.
+      - name: --check catches a stale INDEX.md and writes nothing
+        run: |
+          work="$(mktemp -d)"
+          git -C "$work" init -q
+          bash scripts/docs_scaffold.sh "$work" >/dev/null
+          bash scripts/docs_render.sh --check "$work" \
+            && { echo "::error::--check passed with no INDEX.md at all."; exit 1; }
+          bash scripts/docs_render.sh "$work" >/dev/null
+          bash scripts/docs_render.sh --check "$work" \
+            || { echo "::error::--check called a freshly rendered index stale."; exit 1; }
+          before="$(cd "$work/docs" && cksum INDEX.md *.html | cksum)"
+          printf -- '---\nid: ISSUE-001\ndescription: "x"\nwhy: "y"\nlane: fast\nstatus: open\n---\n\n# ISSUE-001\n' \
+            > "$work/docs/20_issues/ISSUE-001-x.md"
+          if bash scripts/docs_render.sh --check "$work"; then
+            echo "::error::--check missed a document added without re-rendering."
+            exit 1
+          fi
+          after="$(cd "$work/docs" && cksum INDEX.md *.html | cksum)"
+          [ "$before" = "$after" ] \
+            || { echo "::error::--check modified files; it must be read-only."; exit 1; }
+          echo "OK — stale index caught, nothing written"
+
       # Hooks are deterministic and warn-only: they must speak on a real
       # architecture edit and stay silent on anything else.
       - name: Hooks warn on architecture, silent elsewhere

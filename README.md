@@ -211,6 +211,16 @@ one whole file per decision and grows forever, to produce an answer that does no
 Skills read the index and open only the ids they need. A repo with four hundred
 decisions then costs the same at this step as a repo with four.
 
+Which makes a stale index worse than a missing one — the agent trusts it. So it is
+the one generated file with a gate; put this in CI beside the validator:
+
+```bash
+docs_render.sh --check .
+```
+
+It writes nothing, and rebuilds the index through the same code path a real render
+uses, so it cannot disagree with one. Exit `0` current · `1` missing or stale.
+
 Real output is committed under [`design/`](design/) as the reference for what the
 renderer produces — [`sample-current.html`](design/sample-current.html) is the most
 representative. The samples are regenerated from a fixture, never hand-edited, and

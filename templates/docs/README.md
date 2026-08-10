@@ -73,6 +73,17 @@ chỉ đắt thêm theo thời gian, trong khi câu trả lời thì không dài
 Ba file HTML (`index.html`, `current.html`, `changes.html`) là read model cho người.
 Cả bốn đều sinh lại bằng `/docs-kit:docs-render`; markdown vẫn là nguồn sự thật.
 
+**`INDEX.md` cũ nguy hiểm hơn `INDEX.md` không có**, vì agent tin nó. Nên nó là file
+sinh ra duy nhất cần một cổng chặn — đặt dòng này vào CI cạnh validator:
+
+```bash
+docs_render.sh --check .
+```
+
+Không ghi gì, dựng lại index bằng đúng code path của render thật nên không thể lệch.
+`0` = đang khớp · `1` = thiếu hoặc cũ · `2` = không có `docs/`. Chỉ `INDEX.md` kiểm
+được kiểu này; ba trang HTML có dấu thời gian nên lần render nào cũng khác.
+
 ## 7 · Đồng bộ với code
 
 Mọi fact quan trọng ở layer 1 đều mang một **neo** vào source: component có
