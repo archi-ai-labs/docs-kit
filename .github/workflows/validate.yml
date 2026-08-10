@@ -311,6 +311,15 @@ jobs:
           sed -i '/^PATCH \/orders/d' "$work/docs/04_api/example-api.md"
           bash scripts/docs_render.sh --check-api "$work" \
             || { echo "::error::check-api reported drift on a matching contract."; exit 1; }
+          # Next.js and SvelteKit name route folders [id], and copying the route path
+          # into the contract is the obvious thing to do. A real Next repo produced
+          # four findings from that cosmetic difference alone. Asserted here, where
+          # both sides already agree, so any output at all means the spellings did
+          # not unify.
+          sed -i 's|^GET /orders/:id|GET /orders/[id]|' "$work/docs/04_api/example-api.md"
+          out="$(bash scripts/docs_render.sh --check-api "$work" 2>&1 || true)"
+          case "$out" in *"/orders"*)
+            echo "::error::'[id]' was not normalised like '{id}' and ':id'."; exit 1 ;; esac
           # YAML must be refused with a reason, never parsed by guesswork.
           cp "$work/openapi.json" "$work/openapi.yaml"
           sed -i 's|generated_from: "openapi.json"|generated_from: "openapi.yaml"|' \
@@ -372,6 +381,22 @@ jobs:
           out="$(bash scripts/docs_validate.sh "$work/docs" || true)"
           case "$out" in *"NOTE [profile]"*endpoints*) ;; *)
             echo "::error::profile note missed a real contract."; exit 1 ;; esac
+          # A component's own [kind] tag is stronger evidence than a folder having
+          # files, and the folder-only rule stayed silent on a real repo that
+          # obviously owned screens — it had a [ui] component right there.
+          python3 - "$work" <<'PY2'
+          import pathlib, sys
+          a = pathlib.Path(sys.argv[1]) / "docs/02_architecture/architecture.md"
+          a.write_text(a.read_text().replace(
+              "components: []",
+              "components:\n  - ui [ui] `docs` — a screen surface\n  - store [db] `docs` — a datastore"))
+          PY2
+          echo '{"owns":["endpoints"]}' > "$work/.docs-kit.json"
+          out="$(bash scripts/docs_validate.sh "$work/docs" || true)"
+          case "$out" in *"[ui] component"*) ;; *)
+            echo "::error::a [ui] component did not imply owns: screens."; exit 1 ;; esac
+          case "$out" in *"[db] component"*) ;; *)
+            echo "::error::a [db] component did not imply owns: data."; exit 1 ;; esac
           bash scripts/docs_validate.sh "$work/docs" >/dev/null \
             || { echo "::error::a NOTE changed the exit code; it must not."; exit 1; }
           echo "OK — profile drift noticed, seeds ignored, exit code untouched"

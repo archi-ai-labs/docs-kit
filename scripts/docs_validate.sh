@@ -26,9 +26,10 @@
 #   NOTE [stale]   a Layer 1 doc carries verified_at: <rev> and files it names have
 #                  changed since that rev. Changed is not the same as wrong, which is
 #                  why this warns instead of failing (same rationale as STANDARD §8).
-#   NOTE [profile] .docs-kit.json declares `owns`, and a folder holds real documents
-#                  that `owns` does not account for — the repo grew a surface nobody
-#                  declared. Seeds identical to their template do not count.
+#   NOTE [profile] .docs-kit.json declares `owns`, and the repo shows a surface it
+#                  does not account for — a component tagged [db]/[ui]/[queue], or a
+#                  folder holding real documents. Seeds identical to their shipped
+#                  template count as neither.
 #
 # Layer 2 folders may hold an `_archive/` subfolder for terminal documents; it is
 # validated exactly like the folder above it — archiving lowers read cost, never
@@ -517,12 +518,35 @@ folder_has_docs() { # folder_has_docs <dir-name-under-docs>
 
 # No template tree to compare against means every seed would read as content, so
 # the check would invent findings. Skipping is the honest failure mode.
+# The strongest evidence is not a folder having files — it is a component's own
+# [kind] tag. `components` already declares `mongo [db]`, `mini-app [ui]`,
+# `jobs [queue]`, each with a path inside this repo, which is a repo saying in its
+# own architecture doc what it holds. Found by running this on a real repo: it
+# owned screens obviously (a [ui] component right there) and the folder-only rule
+# stayed silent, because 60_fe-integration/ held nothing but its seed.
+component_kinds() { # → one [kind] per component entry, deduped
+  for ck in "$DOCS"/02_architecture/*.md; do
+    [ -f "$ck" ] || continue
+    case "$(basename "$ck")" in README.md) continue ;; esac
+    fm_list "$ck" components | grep -oE '\[(db|queue|ui|svc)\]'
+  done | tr -d '[]' | LC_ALL=C sort -u
+}
+
 if [ -n "$ROOT" ] && [ -n "$VTEMPLATES" ] && owns_declared "$ROOT"; then
-  if folder_has_docs 04_api && ! owns_has "$ROOT" endpoints; then
+  KINDS="$(component_kinds)"
+  has_kind() { printf '%s\n' "$KINDS" | grep -Fxq "$1"; }
+
+  if { folder_has_docs 04_api || false; } && ! owns_has "$ROOT" endpoints; then
     note profile "$DOCS/04_api" "holds contracts but .docs-kit.json 'owns' does not list 'endpoints' — this repo grew an API surface; update owns (that is a layer 1 change, so it goes through a Decision)"
   fi
-  if folder_has_docs 60_fe-integration && ! owns_has "$ROOT" screens; then
-    note profile "$DOCS/60_fe-integration" "holds documents but .docs-kit.json 'owns' does not list 'screens' — this repo grew a frontend surface; update owns"
+  if { folder_has_docs 60_fe-integration || has_kind ui; } && ! owns_has "$ROOT" screens; then
+    note profile "$DOCS" "declares a [ui] component or fe-integration docs, but .docs-kit.json 'owns' does not list 'screens' — update owns"
+  fi
+  if has_kind db && ! owns_has "$ROOT" data; then
+    note profile "$DOCS" "declares a [db] component, but .docs-kit.json 'owns' does not list 'data' — update owns"
+  fi
+  if has_kind queue && ! owns_has "$ROOT" jobs; then
+    note profile "$DOCS" "declares a [queue] component, but .docs-kit.json 'owns' does not list 'jobs' — update owns"
   fi
 fi
 

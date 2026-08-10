@@ -307,9 +307,10 @@ Three constraints, each a consequence rather than a preference:
 - **Events are excluded from the comparison.** OpenAPI describes no events, so counting
   an `event` line as missing would make the check cry wolf on every correct contract.
 
-Path parameters are normalised before comparison — `{id}` and `:id` are the same
-operation, written by two tools neither of which is more correct — and `base` is
-stripped from both sides, so a spec that puts `/v1` in `servers` and one that puts it in
+Path parameters are normalised before comparison — `{id}`, `:id` and `[id]` are the
+same operation, written by tools none of which is more correct; `[id]` is in the list
+because Next.js and SvelteKit name route folders that way and copying the route path
+into the contract is the obvious thing to do — and `base` is stripped from both sides, so a spec that puts `/v1` in `servers` and one that puts it in
 every path describe the same API. The `generated_from` path is itself an anchor, so
 `[anchor]` reports it the moment the artifact moves.
 
@@ -496,9 +497,16 @@ optional; a repo that omits it behaves exactly as before.**
 A project changes: a backend grows a frontend, a service stops owning its tables.
 So `owns` is a declared fact and gets the same treatment as `verified_at` and
 `generated_from` — declare it, and let something deterministic notice when reality
-disagrees. The validator emits `NOTE [profile]` when a folder holds real documents
-that `owns` does not account for; a file byte-identical to its shipped template is a
-seed and does not count, or a fresh scaffold would trip the check on day one.
+disagrees. The validator emits `NOTE [profile]` on two kinds of evidence, neither needing any
+knowledge of a framework:
+
+- **a component's `[kind]` tag** — `[db]` implies `data`, `[ui]` implies `screens`,
+  `[queue]` implies `jobs`. This is the stronger signal: it is the repo saying in its
+  own architecture doc what it holds, with a path to prove it.
+- **a folder holding real documents** — `04_api/` with contracts implies `endpoints`.
+
+A file byte-identical to its shipped template is a **seed** and counts as neither, or
+a fresh scaffold would trip the check on day one.
 
 Only the *growth* direction is checked. `owns` claiming something the repo no longer
 has cannot be told apart from "nobody has written it yet", and guessing there would

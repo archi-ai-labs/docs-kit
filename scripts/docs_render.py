@@ -1703,8 +1703,14 @@ def norm_op(verb, name, base=""):
     """One spelling for an operation, so a hand-written line and a generated one
     can be compared at all.
 
-    Path parameters are normalised (`{id}` and `:id` both become `{}`) because the
-    two halves are written by different tools and neither spelling is more correct.
+    Path parameters are normalised — `{id}`, `:id` and `[id]` all become `{}` —
+    because the two halves are written by different tools and no spelling is more
+    correct than the others. `[id]` is not a hypothetical: Next.js and SvelteKit
+    name route folders that way, and copying the route path into the contract is
+    the obvious thing to do. Trying it on a real Next repo produced four findings
+    from a purely cosmetic difference, which is exactly the crying-wolf failure
+    that gets a check switched off.
+
     The `base:` prefix is stripped from both sides for the same reason: a spec that
     puts /v1 in `servers` and one that puts it in every path describe the same API.
     """
@@ -1712,6 +1718,7 @@ def norm_op(verb, name, base=""):
     if base and n.startswith(base):
         n = n[len(base):] or "/"
     n = re.sub(r"\{[^}]*\}", "{}", n)
+    n = re.sub(r"\[[^\]]*\]", "{}", n)
     n = re.sub(r":[A-Za-z_][A-Za-z0-9_]*", "{}", n)
     if len(n) > 1:
         n = n.rstrip("/")

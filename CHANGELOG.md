@@ -5,6 +5,47 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
+## [0.22.1] — 2026-08-10
+
+### Fixed — two things a real repo found that the fixture could not
+
+Everything from 0.18.0 to 0.22.0 was tested against a fresh scaffold, the design
+fixture, and CI mutations. Running it on a real Next.js repo — a monorepo with a web
+app and a Zalo mini-app, 12 route handlers, MongoDB — found two defects immediately.
+Both are false-positive classes, which is the failure mode that gets a warn-only check
+switched off.
+
+**`[id]` was not normalised.** Next.js and SvelteKit name route folders `[id]`, so
+copying a route path into an `api` fence is the obvious thing to do. `norm_op` folded
+`{id}` and `:id` but not `[id]`, and the contract went from clean to **four findings
+caused by nothing but spelling**. It now folds all three.
+
+**`NOTE [profile]` was looking at the wrong evidence.** The only signal wired was
+"a folder holds documents", so a repo that obviously owned screens — it declared
+`mini-app [ui]` right there in its architecture — produced no note at all. A
+component's `[kind]` tag is far stronger evidence: it is the repo saying in its own
+layer 1 what it holds, with a path to prove it. `[db]` now implies `data`, `[ui]`
+implies `screens`, `[queue]` implies `jobs`, alongside the folder rule for `endpoints`.
+
+### What the trial confirmed
+
+Worth recording, because the point of the trial was to find out:
+
+- Two architecture documents merged correctly, each component card naming its owner,
+  and the cross-deployable edge (`mini-app -> api`, owned by the caller) rendered in
+  the single graph. Item D holds on a real monorepo.
+- `--check-api` matched **13 of 13** real operations against an OpenAPI spec generated
+  from the actual route handlers, and caught the one endpoint planted to be missing.
+  No false positives on a real API surface.
+- `NOTE [stale]` fired on `web.md` alone when `lib/db.ts` was touched — the document
+  that names the path — and stayed silent on `mini-app.md`. `FAIL [anchor]` caught a
+  `git mv` of a real module.
+- `docs_detect.py` read both manifests, including `mini-app/package.json` at depth 2.
+
+One observation left unactioned: the detector sees two manifests and therefore knows
+the repo has two deployables, but says nothing about it. That is the `scope` axis
+sitting in data the detector already has, and it stays unused until F.
+
 ## [0.22.0] — 2026-08-10
 
 ### Added — `/docs-kit:docs-upgrade` and `docs_scaffold.sh --sync`
