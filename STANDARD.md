@@ -11,7 +11,7 @@ The model below is fixed. Do not add stages, remove stages, or reorder them.
 
 ```
 LAYER 1 — FOUNDATION (state; only a Decision may amend it)
-  Products → Roadmap → Architecture → Business logic
+  Products → Roadmap → Architecture → Business logic → API contracts
 
 LAYER 2 — CHANGE (process; fully traceable)
   Issue (status: exploring | open | promoted | archived)
@@ -37,7 +37,7 @@ Layer rules:
   No traceability fields, no Decision needed.
 - **Review (`92_audit/`)** observes layers 1–2 and appends findings. It never edits them.
 
-## 2. Folder layout (15 folders under `docs/`)
+## 2. Folder layout (16 folders under `docs/`)
 
 | # | Folder | Type | Layer |
 |---|--------|------|-------|
@@ -45,6 +45,7 @@ Layer rules:
 | 01 | `01_products` | Products | 1 |
 | 02 | `02_architecture` | Architecture | 1 |
 | 03 | `03_business-logic` | Business logic | 1 |
+| 04 | `04_api` | API contract | 1 |
 | 20 | `20_issues` | Issue | 2 |
 | 21 | `21_proposals` | Proposal | 2 |
 | 22 | `22_decisions` | Decision | 2 |
@@ -235,6 +236,39 @@ needs no grammar of its own.
 `amended_by` entries follow the Architecture rule above: each must contain a
 `DECISION-NNN` token that resolves to an existing Decision `id:`.
 
+### `04_api/*.md` — API contract
+```yaml
+---
+service: ""         # the component that publishes this contract
+protocol: http      # http | grpc | graphql | event
+base: ""            # optional. Base path, proto package, or topic prefix
+amended_by: []      # ONLY the Decision workflow appends entries here.
+rejected: []        # optional, same contract as Architecture's
+verified_at: ""     # optional, same contract as Architecture's
+---
+```
+
+**This folder exists because §6 contradicted itself.** The trigger table has always
+required a Decision before a code change touches an API contract, while the only place
+a contract could live was layer 3 — where §4 says no Decision is needed. That was not a
+gap in coverage; it was the standard demanding a Decision for a thing it gave nowhere
+to record. An API contract is layer 1 state, so it is filed as layer 1.
+
+`service:` **must name a component declared in `02_architecture/`.** That is the single
+join between the two folders, and the validator enforces it: a contract attached to no
+service is worse than no contract, because the boundary then looks documented and is
+not. The check is skipped while the architecture declares no components at all.
+
+The body carries one or more ```` ```api ```` blocks (§10) — and deliberately little
+else. Status codes, field types and payload schemas do **not** belong here: they are the
+volatile half, they are generated better than they are written, and a hand-copy of them
+is stale within a sprint. Putting the volatile half behind the Decision gate is how a
+gate gets routed around.
+
+What lives here is the half no generator can state: which operations exist at the
+boundary, what each one means, and what the service deliberately does **not** expose.
+That changes rarely, which is exactly what makes it worth a Decision.
+
 ### `20_issues/*.md` — Issue (id prefix `ISSUE-`)
 ```yaml
 ---
@@ -304,7 +338,8 @@ approved Decisions.
 
 Ask both. **Any "yes" → FULL lane. Both "no" → FAST lane.**
 
-1. Does this change modify the Architecture doc?
+1. Does this change modify a layer 1 doc — Architecture, Business logic, or an API
+   contract?
 2. If it turns out wrong, would reverting take more than 1 day?
 
 - FAST lane: `Issue → Backlog` (`source_ref` = the Issue).
@@ -314,7 +349,7 @@ Ask both. **Any "yes" → FULL lane. Both "no" → FAST lane.**
 
 | Session event | Required docs action |
 |---|---|
-| Code change touches a schema, API contract, or component boundary | A Decision must already exist. If none exists: create an Issue, stop, and ask the user. |
+| Code change touches a schema, API contract, or component boundary | A Decision must already exist. If none exists: create an Issue, stop, and ask the user. The contract itself lives in `04_api/` — layer 1, so the same rule that demands the Decision now has somewhere to record its result. |
 | Code change alters a branching business rule | Same — the rule lives in `03_business-logic/`, which is layer 1. |
 | A Backlog item is completed | Set its `status: done` and append one line to `92_audit/`. |
 | A Decision is approved | Amend `02_architecture/` in the SAME session (body + `amended_by` entry). |
@@ -381,7 +416,8 @@ verifies that a named path exists, never that the sentence about it is still tru
 Two hooks, both plain scripts, **no LLM calls**:
 
 1. **PostToolUse** on `Edit|Write`: if the edited path is under
-   `docs/02_architecture/` or `docs/03_business-logic/` → warn (user + agent):
+   `docs/02_architecture/`, `docs/03_business-logic/` or `docs/04_api/` → warn
+   (user + agent):
    "this is layer 1, amended only via the Decision workflow — confirm a Decision
    ref exists." Paths under `templates/docs/` are exempt: the plugin ships its own
    template tree at exactly that shape, and firing on it would train docs-kit's
@@ -419,7 +455,7 @@ network) generates three self-contained pages into `docs/`, styled per
 | Page | Content |
 |---|---|
 | `docs/index.html` | Menu beside README.md: system map (clickable), sheet cards, Layer-3/Oversight listing, the one hard rule |
-| `docs/current.html` | Layer 1: product cards, roadmap board, component cards, data-flow figure, constraints, revision block, business-flow sequences |
+| `docs/current.html` | Layer 1: product cards, roadmap board, component cards, data-flow figure, API contract tables, constraints, revision block, business-flow sequences |
 | `docs/changes.html` | Layer 2: issue/backlog boards, proposal & decision tables, trace chains, audit table |
 | `docs/INDEX.md` | **The read model for agents**, as the three pages are the read model for people: one line per document — id, status, refs, file, description |
 
@@ -646,6 +682,26 @@ Rules:
   Budget, warn-only: **12 types · 15 members in one type**. The member table —
   type · member · kind · visibility · signature · note — prints under every class
   diagram.
+- **API contracts** (```` ```api ```` fenced block in the *body* of an `04_api/`
+  doc) render in §4 of `current.html` as a **table, not a figure** — and that is
+  the design, not a shortcut. Every other fence draws because it carries a shape:
+  a sequence, a lifecycle, a set of relations. A list of operations has none.
+  Drawing it would spend a figure number to put boxes around a table, when §10's
+  own rule is that the table is what carries the words.
+
+  | line | meaning |
+  |---|---|
+  | `title:` `base:` `code:` | optional headers |
+  | `<VERB> <path>` | one operation; `VERB` is uppercase — `GET`, `POST`, `RPC`, `QUERY` |
+  | `event <name>` | an event this service publishes |
+  | `<- <Type>` | what it accepts |
+  | `-> <Type>` | what it returns |
+  | trailing ` — <gloss>` | explanation, the shared separator |
+
+  There is no status-code syntax, no field list, and no schema — see §4. Anything
+  the grammar does not recognise makes the whole block fall back to its source
+  text, because a contract nobody can parse must never be shown as one somebody can.
+
 - **Business flows** (```` ```flow ```` fenced block in the *body* of any
   `01_products/`, `02_architecture/` or `03_business-logic/` doc) render as a
   sequence figure —

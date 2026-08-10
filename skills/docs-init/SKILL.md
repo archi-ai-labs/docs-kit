@@ -1,6 +1,6 @@
 ---
 name: docs-init
-description: The main entry point. Scaffold the three-layer docs structure into this repo — 15 folders, templates, docs/README.md — and optionally wire the rules into CLAUDE.md.
+description: The main entry point. Scaffold the three-layer docs structure into this repo — 16 folders, templates, docs/README.md — and optionally wire the rules into CLAUDE.md.
 disable-model-invocation: true
 ---
 
@@ -36,7 +36,7 @@ Verify: `$PLUGIN_ROOT/scripts/docs_scaffold.sh` must exist.
 Check for `docs/` in the repo root (current working directory).
 
 **If `docs/` exists: STOP. Do not create, merge, or overwrite anything.**
-1. Report the current state: which of the 15 standard folders are present /
+1. Report the current state: which of the 16 standard folders are present /
    missing (the scaffold script prints exactly this if you run it — it refuses
    with exit 3 and touches nothing), plus any non-standard entries.
 2. Ask the user with AskUserQuestion — question: "docs/ already exists. How
@@ -59,7 +59,7 @@ Run:
 bash "$PLUGIN_ROOT/scripts/docs_scaffold.sh" .
 ```
 
-The script copies the 15-folder template tree to `./docs/` (every folder ships a
+The script copies the 16-folder template tree to `./docs/` (every folder ships a
 seed file — templates are never empty), stamps today's date into
 `docs/92_audit/LOG.md`, and prints the created file list ending with
 `SCAFFOLD OK`. If it exits 3 (docs/ appeared meanwhile), go back to Step 1.
@@ -159,6 +159,18 @@ conventional layout.
    open a type, `implements` and `extends` are relation lines, a field whose
    type names another declared type draws its own edge. Do not transcribe the
    whole package — pick the boundary a newcomer needs.
+
+8.5 Write the **API contracts** into `docs/04_api/` — one file per service that
+   publishes one. `service:` must name a component you just declared; that is the
+   only join between the two folders and the validator enforces it. One
+   ```` ```api ```` block per contract: `GET /orders/{id} -> Order — chú thích`,
+   `event order.paid -> OrderPaid`.
+
+   **Write the boundary, not the schema.** Status codes, field types and payload
+   shapes belong to whatever generates them (OpenAPI, proto, the route table) — a
+   hand-copy is stale within a sprint. What belongs here is which operations exist,
+   what each means, and what the service deliberately does not expose. Only
+   operations you read in the route table or the proto file.
 
 9. Write the **business logic** into `docs/03_business-logic/` when the code has
    any: one ```` ```flowchart ```` per branching rule (`decide: node — câu hỏi?`

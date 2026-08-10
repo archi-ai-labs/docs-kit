@@ -12,8 +12,9 @@ model (STANDARD.md at the plugin root; digest in `docs/README.md`):
 
 - `docs/92_audit/` is **append-only**: add lines at the end of the log file,
   never edit, reorder, or delete existing lines.
-- `docs/02_architecture/` and `docs/03_business-logic/` may be touched **only** via the approved-Decision path
-  in Step 4 — nothing else in this skill edits layer 1.
+- `docs/02_architecture/`, `docs/03_business-logic/` and `docs/04_api/` may be touched
+  **only** via the approved-Decision path in Step 4 — nothing else in this skill edits
+  layer 1.
 - Never fabricate history: no retroactive Decisions, no invented approvals.
   When traceability is missing, create an **Issue** and tell the user.
 - New IDs: next number per type = highest existing + 1, zero-padded to 3 digits
@@ -125,6 +126,9 @@ Then, for the documents in scope, read `components` and `data_flow` from
 - a `data_flow` edge whose call site was deleted, or a new call/publish between
   two documented components with no edge for it;
 - a business-flow step that no longer matches the code path it names;
+- an endpoint added, removed or renamed this session with no matching operation in
+  `docs/04_api/` — that is the trigger §6 has always named, and now the contract has
+  a place to be corrected;
 - a component whose description is now false — the behaviour changed underneath
   a sentence that still claims the old one.
 

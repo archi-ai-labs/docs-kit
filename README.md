@@ -153,7 +153,7 @@ plugin on by default.
 
 | Command | What it does | Writes files |
 |---|---|---|
-| `/docs-kit:docs-init` | Scaffold 15 folders + templates into `docs/`, detect the stack from the repo's manifests, read the repo's source to fill Architecture, and optionally wire the rules into `CLAUDE.md`. Refuses to touch an existing `docs/`; asks before every write outside the scaffold. | Yes |
+| `/docs-kit:docs-init` | Scaffold 16 folders + templates into `docs/`, detect the stack from the repo's manifests, read the repo's source to fill Architecture, and optionally wire the rules into `CLAUDE.md`. Refuses to touch an existing `docs/`; asks before every write outside the scaffold. | Yes |
 | `/docs-kit:docs-sync` | End-of-session reconcile: backlog statuses, audit entries, retroactive Issues, pending Architecture amendments, architecture-vs-code drift, and archiving what can no longer change. | Yes |
 | `/docs-kit:docs-check` | Run the deterministic validator and explain each failure. Never fixes. | No |
 | `/docs-kit:docs-render` | Generate/refresh the read models of `docs/` — three HTML pages and `INDEX.md`. Deterministic; never edits the source markdown. | Yes (generated files only) |
@@ -175,7 +175,7 @@ $ /docs-kit:docs-sync
 ## 🧭 The model
 
 ```
-LAYER 1 — FOUNDATION   Products → Roadmap → Architecture       (state; only Decisions amend)
+LAYER 1 — FOUNDATION   Products → Roadmap → Architecture → API (state; only Decisions amend)
 LAYER 2 — CHANGE       Issue → [Proposal → Decision] → Backlog (process; traceable)
 LAYER 3 — REFERENCE    Conventions/Services/Runbooks/Deploy/FE/QA (edit directly)
 OVERSIGHT              92_audit — append-only audit log
@@ -243,9 +243,9 @@ STANDARD §10.
 Two hooks, both **deterministic, warn-only, and silent in repos without a `docs/`
 skeleton**. No LLM runs inside a hook.
 
-- **PostToolUse** (Edit/Write) — editing `docs/02_architecture/` or
-  `docs/03_business-logic/` prints a reminder that layer 1 is amended only via the
-  Decision workflow. `templates/docs/` is exempt, so the plugin's own tree is quiet.
+- **PostToolUse** (Edit/Write) — editing `docs/02_architecture/`,
+  `docs/03_business-logic/` or `docs/04_api/` prints a reminder that layer 1 is
+  amended only via the Decision workflow. `templates/docs/` is exempt, so the plugin's own tree is quiet.
 - **Stop** — if the session edited sensitive paths (default `**/schema/**`,
   `**/api/**`, `**/migrations/**`; override via `.docs-kit.json` in the repo root)
   without creating or referencing any Issue or Decision, it suggests
@@ -365,7 +365,7 @@ docs-kit/
 │   ├── design-system.html       #   the design contract
 │   ├── sample-*.html            #   real renderer output — regenerate, never hand-edit
 │   └── fixture/ + make-samples.sh
-├── templates/                   # the 15-folder docs tree + CLAUDE.md snippet
+├── templates/                   # the 16-folder docs tree + CLAUDE.md snippet
 ├── briefs/                      # gitignored — where `brief` writes its output, in
 │                                #   every repo. Never committed: CHANGELOG.md is
 │                                #   where reasoning lives once a change lands.

@@ -5,6 +5,74 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
+## [0.20.0] — 2026-08-10
+
+### Added — `04_api/`, because §6 contradicted itself
+
+Item E. The trigger table in §6 has always read *"code change touches a schema, **API
+contract**, or component boundary → a Decision must already exist"*. The only place an
+API contract could live was `60_fe-integration/` — layer 3, of which §4 says *"Edit it
+directly. No traceability fields, no Decision needed."*
+
+The standard demanded a Decision for a thing it gave nowhere to record. That is not a
+gap in coverage, it is a contradiction, and it is why "thiết kế API thế nào" had no
+answer in a model that otherwise specifies everything.
+
+`04_api/` is layer 1: `service`, `protocol` (`http` | `grpc` | `graphql` | `event`),
+optional `base`, plus the same `amended_by` / `rejected` / `verified_at` as Architecture.
+Sixteen folders now, not fifteen. The PostToolUse hook guards it like the other two
+layer-1 folders — otherwise the folder the Decision gate exists for would be the one
+nothing watches.
+
+**`service:` must name a component declared in `02_architecture/`.** That is the single
+join between the folders and the validator enforces it under `[ref]`: a contract attached
+to no service is worse than no contract, because the boundary then looks documented and
+is not. Skipped while the architecture declares no components, so a fresh scaffold passes.
+
+### Added — the ```` ```api ```` fence, and why it renders as a table
+
+| line | meaning |
+|---|---|
+| `title:` `base:` `code:` | optional headers |
+| `<VERB> <path>` | one operation |
+| `event <name>` | an event this service publishes |
+| `<- <Type>` · `-> <Type>` | what it accepts · what it returns |
+| trailing ` — <gloss>` | explanation, the shared separator |
+
+Every other fence draws because it carries a shape — a sequence, a lifecycle, a set of
+relations. **A list of operations has none.** Drawing it would spend a figure number to
+put boxes around a table, when §10's own rule is that the table carries the words. So
+`api` is the first figure fence that renders as a table, and that is the design.
+
+Unparseable input falls back to its source text, like every other fence: a contract
+nobody can parse must never be displayed as one somebody can.
+
+### The grammar is deliberately minimal, and that is the point
+
+No status codes, no field types, no payload schemas. Those are the **volatile half** —
+generated better than written, and stale within a sprint once hand-copied. Putting the
+volatile half behind the Decision gate is exactly how a gate gets routed around, which
+was the largest risk this item carried (recorded as limitation 3 in §9.2 of the
+proposal).
+
+What lives here is the half no generator can state: which operations exist at the
+boundary, what each one means, and what the service deliberately does **not** expose.
+That changes rarely, which is what makes it worth a Decision. The template ships
+`## Không expose` and `## Compatibility` sections for exactly that content.
+
+### Changed
+
+- `current.html` gains §4 API contracts, right after Architecture; Business flows,
+  Business logic and State machines shift to §5, §6, §7. The sidebar lists each
+  contract by service.
+- `INDEX.md` gains an `04_api` section — file, service, protocol, and the operation
+  count, so an agent can tell whether a contract is worth opening.
+- The lane test's first question widened from "does this modify the Architecture doc"
+  to "does this modify a layer 1 doc — Architecture, Business logic, or an API contract".
+  It always meant that; `04_api` made the omission visible.
+- `docs-init` gained a step for writing contracts, `docs-sync`'s drift list gained the
+  endpoint case, and both the digest and the CLAUDE.md snippet name the new folder.
+
 ## [0.19.0] — 2026-08-10
 
 ### Fixed — the renderer read one architecture document and silently dropped the rest

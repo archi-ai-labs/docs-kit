@@ -1,5 +1,5 @@
 """docs-kit PostToolUse worker: warn on edits under the layer-1 folders
-docs/02_architecture/ and docs/03_business-logic/.
+docs/02_architecture/, docs/03_business-logic/ and docs/04_api/.
 
 WHY WARN-ONLY (do not "fix" this into a block):
     These enforcement rules have not been battle-tested across real projects yet.
@@ -23,7 +23,7 @@ import sys
 # shipped template, which is exactly the false-positive class the warn-only
 # note above says erodes the whole mechanism.
 TEMPLATE_RE = re.compile(r"(^|/)templates/docs/")
-LAYER1_RE = re.compile(r"(^|/)docs/(02_architecture|03_business-logic)/")
+LAYER1_RE = re.compile(r"(^|/)docs/(02_architecture|03_business-logic|04_api)/")
 
 try:
     data = json.load(sys.stdin)
@@ -39,7 +39,9 @@ file_path = file_path.replace("\\", "/")
 hit = LAYER1_RE.search(file_path)
 if hit and not TEMPLATE_RE.search(file_path):
     folder = hit.group(2)
-    subject = ("Architecture" if folder == "02_architecture" else "Business logic")
+    subject = {"02_architecture": "Architecture",
+               "03_business-logic": "Business logic",
+               "04_api": "An API contract"}[folder]
     warning = (
         "docs-kit: a file under docs/%s/ was just edited. "
         "%s is layer 1 — it may only be amended through the Decision "

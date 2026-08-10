@@ -21,7 +21,7 @@ CI config, because a guess here becomes a line in `tech_stack:` that nobody can
 trace back to anything.
 
 `frontend:` is informational. It must never change what gets scaffolded: the
-docs tree is 15 folders for every repo, and making it conditional would leave
+docs tree is 16 folders for every repo, and making it conditional would leave
 every backend repo printing a layout NOTE forever.
 
 Python 3.9 stdlib only (`tomllib` is 3.11+, so TOML is line-parsed, not parsed).

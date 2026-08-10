@@ -207,7 +207,7 @@ check_id_prefix() { # check_id_prefix <file> <PREFIX>
   fi
 }
 
-for dir in 01_products 02_architecture 03_business-logic 20_issues 21_proposals 22_decisions 23_backlog; do
+for dir in 01_products 02_architecture 03_business-logic 04_api 20_issues 21_proposals 22_decisions 23_backlog; do
   [ -d "$DOCS/$dir" ] || continue
   # _archive/ holds terminal documents. They are read less, never validated less.
   for f in "$DOCS/$dir"/*.md "$DOCS/$dir"/_archive/*.md; do
@@ -222,6 +222,12 @@ for dir in 01_products 02_architecture 03_business-logic 20_issues 21_proposals 
         ;;
       03_business-logic)
         require_fields "$f" domain amended_by
+        ;;
+      04_api)
+        if require_fields "$f" service protocol amended_by; then
+          fm_has "$f" protocol && check_enum "$f" protocol "$(fm_get "$f" protocol)" \
+            http grpc graphql event
+        fi
         ;;
       20_issues)
         if require_fields "$f" id description why lane status; then
@@ -279,7 +285,7 @@ fi
 # — without it, every reader has to scan all of 22_decisions to find out.
 # It is optional: a repo scaffolded before it existed stays valid.
 
-for amdir in 02_architecture 03_business-logic; do
+for amdir in 02_architecture 03_business-logic 04_api; do
   [ -d "$DOCS/$amdir" ] || continue
   for f in "$DOCS/$amdir"/*.md; do
     [ -f "$f" ] || continue
@@ -380,6 +386,24 @@ if [ -s "$TMP/compnames" ]; then
   done < "$TMP/compdups"
 fi
 
+# An API doc's `service:` is the one join between 04_api/ and 02_architecture/:
+# it says which component publishes the contract. A name that matches nothing
+# leaves the contract attached to no service at all, which is worse than having
+# no API doc — the boundary looks documented and is not.
+#
+# Skipped when the architecture declares no components: a fresh scaffold has none,
+# and there is nothing for a name to be wrong about.
+if [ -s "$TMP/compnames" ] && [ -d "$DOCS/04_api" ]; then
+  for f in "$DOCS"/04_api/*.md; do
+    [ -f "$f" ] || continue
+    case "$(basename "$f")" in README.md) continue ;; esac
+    svc="$(fm_get "$f" service)"
+    [ -z "$svc" ] && continue      # emptiness is check 3's finding, not this one
+    cut -f1 "$TMP/compnames" | grep -Fxq "$svc" || \
+      fail ref "$f" "service '$svc' matches no component declared in $DOCS/02_architecture/"
+  done
+fi
+
 if [ -n "$ROOT" ]; then
   # Files changed since each doc's verified_at rev, resolved lazily per rev.
   HAVE_GIT=0
@@ -388,7 +412,7 @@ if [ -n "$ROOT" ]; then
     HAVE_GIT=1
   fi
 
-  for andir in 01_products 02_architecture 03_business-logic; do
+  for andir in 01_products 02_architecture 03_business-logic 04_api; do
     [ -d "$DOCS/$andir" ] || continue
     for f in "$DOCS/$andir"/*.md; do
       [ -f "$f" ] || continue
@@ -434,10 +458,10 @@ fi
 
 # ----------------------------- layout notes (informational, never failing) ---
 
-for dir in 00_roadmap 01_products 02_architecture 03_business-logic \
+for dir in 00_roadmap 01_products 02_architecture 03_business-logic 04_api \
            20_issues 21_proposals 22_decisions 23_backlog 30_conventions \
            40_services 50_runbooks 60_fe-integration 70_deploy 92_audit 93_qa; do
-  [ -d "$DOCS/$dir" ] || echo "NOTE [layout] $DOCS/$dir: standard folder missing (docs-init creates all 15)"
+  [ -d "$DOCS/$dir" ] || echo "NOTE [layout] $DOCS/$dir: standard folder missing (docs-init creates all 16)"
 done
 
 # -------------------------------------------------------------------- report -

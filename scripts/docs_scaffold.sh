@@ -11,7 +11,7 @@
 #             must report the situation and ask the user; never auto-merge)
 #
 # Behavior on success:
-#   - copies the full 15-folder template tree (every folder ships a seed file)
+#   - copies the full 16-folder template tree (every folder ships a seed file)
 #   - substitutes {{DOCS_KIT_DATE}} with today's date in 92_audit/LOG.md
 #   - prints the created file list, then "SCAFFOLD OK"
 
@@ -39,7 +39,7 @@ if [ -e "$TARGET" ]; then
   echo "Existing top-level entries:"
   ls -1 "$TARGET" | sed 's/^/  - /'
   echo "Standard folders present/missing:"
-  for d in 00_roadmap 01_products 02_architecture 03_business-logic \
+  for d in 00_roadmap 01_products 02_architecture 03_business-logic 04_api \
            20_issues 21_proposals 22_decisions 23_backlog 30_conventions \
            40_services 50_runbooks 60_fe-integration 70_deploy 92_audit 93_qa; do
     if [ -d "$TARGET/$d" ]; then echo "  present: $d"; else echo "  MISSING: $d"; fi

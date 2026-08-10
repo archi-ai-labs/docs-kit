@@ -218,6 +218,50 @@ jobs:
           fi
           echo "OK — every architecture doc renders, duplicate component names rejected"
 
+      # 04_api exists because STANDARD 6 demanded a Decision before an API contract
+      # changes while 4 said layer 3 needs none. Closing that means the folder has
+      # to be held to layer 1's rules: the service join must resolve, the protocol
+      # enum must bite, and the operations must reach the page.
+      - name: API contracts are layer 1, and the service join resolves
+        run: |
+          work="$(mktemp -d)"
+          git -C "$work" init -q
+          bash scripts/docs_scaffold.sh "$work" >/dev/null
+          test -f "$work/docs/04_api/example-api.md" \
+            || { echo "::error::the scaffold does not ship 04_api/."; exit 1; }
+          mkdir -p "$work/internal/orders" && echo x > "$work/internal/orders/svc.go"
+          python3 - "$work" <<'PY'
+          import pathlib, sys
+          root = pathlib.Path(sys.argv[1])
+          a = root / "docs/02_architecture/architecture.md"
+          a.write_text(a.read_text().replace(
+              "components: []",
+              "components:\n  - orders `internal/orders/svc.go` — sở hữu đơn hàng"))
+          q = root / "docs/04_api/example-api.md"
+          q.write_text(q.read_text().replace('service: ""', 'service: "orders"'))
+          PY
+          bash scripts/docs_validate.sh "$work/docs" \
+            || { echo "::error::a valid API contract failed validation."; exit 1; }
+          DOCS_KIT_NOW=2026-01-01T00:00:00 python3 scripts/docs_render.py "$work" >/dev/null
+          grep -q '§4</span>API contracts' "$work/docs/current.html" \
+            || { echo "::error::the API section is missing from current.html."; exit 1; }
+          grep -q '/orders/{id}' "$work/docs/current.html" \
+            || { echo "::error::the api fence did not reach the page."; exit 1; }
+          grep -q '^# file | service | protocol | ops' "$work/docs/INDEX.md" \
+            || { echo "::error::INDEX.md has no 04_api section."; exit 1; }
+          sed -i 's/^service: "orders"/service: "ordrs"/' "$work/docs/04_api/example-api.md"
+          if bash scripts/docs_validate.sh "$work/docs"; then
+            echo "::error::service: naming no component was accepted."
+            exit 1
+          fi
+          sed -i 's/^service: "ordrs"/service: "orders"/; s/^protocol: http/protocol: soap/' \
+            "$work/docs/04_api/example-api.md"
+          if bash scripts/docs_validate.sh "$work/docs"; then
+            echo "::error::an invalid protocol enum was accepted."
+            exit 1
+          fi
+          echo "OK — 04_api validated, joined and rendered"
+
       # Hooks are deterministic and warn-only: they must speak on a real
       # architecture edit and stay silent on anything else.
       - name: Hooks warn on architecture, silent elsewhere
@@ -226,6 +270,11 @@ jobs:
                  | python3 scripts/hook_architecture_warn.py | wc -c)
           logic=$(echo '{"tool_input":{"file_path":"docs/03_business-logic/rules.md"}}' \
                  | python3 scripts/hook_architecture_warn.py | wc -c)
+          # 04_api joined layer 1 in 0.20.0; the hook has to guard it like the rest,
+          # or the folder the Decision gate exists for is the one nothing watches.
+          api=$(echo '{"tool_input":{"file_path":"docs/04_api/orders.md"}}' \
+                 | python3 scripts/hook_architecture_warn.py | wc -c)
+          [ "$api" -gt 0 ] || { echo "::error::hook stayed silent on an API contract edit."; exit 1; }
           quiet=$(echo '{"tool_input":{"file_path":"src/main.go"}}' \
                   | python3 scripts/hook_architecture_warn.py | wc -c)
           # The plugin ships templates/docs/02_architecture/ — a path that ends in

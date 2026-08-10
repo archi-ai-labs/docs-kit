@@ -1568,7 +1568,7 @@ def scan_fence(lines, i):
 
 # Every fence that renders as a figure. Adding a figure type is adding a name
 # here plus its parser — the scan below never changes shape again.
-FIGURE_FENCES = ("flow", "flowchart", "state", "erd", "class")
+FIGURE_FENCES = ("flow", "flowchart", "state", "erd", "class", "api")
 
 
 def extract_figures(md, names=FIGURE_FENCES):
@@ -1645,6 +1645,95 @@ def split_decl(body):
             return name.strip(), gloss.strip()
     return body.strip(), ""
 
+
+API_HEAD_RE = re.compile(r"^(title|code|base)\s*:\s*(.*)$")
+API_OP_RE = re.compile(r"^(?P<verb>[A-Z][A-Z0-9]{1,9}|event)\s+(?P<name>\S+)\s*(?P<rest>.*)$")
+API_ARROW_RE = re.compile(r"(<-|->)\s*(\S+)")
+
+
+def parse_api(src):
+    """`api` fence — the operations a service publishes at its boundary.
+
+    Deliberately minimal, and that is the whole design. Status codes, field types
+    and payload schemas belong to a generated artifact (OpenAPI, proto, a route
+    table) — they are the volatile half of an API document, and a hand-written
+    copy of them is stale by the next sprint. Putting them behind the Decision
+    gate would only teach people to route around the gate.
+
+    What no generator can state, and so lives here: which operations exist at the
+    boundary, what each one means, and what the service deliberately does not
+    expose. That half changes rarely, which is exactly what makes it worth the gate.
+
+    Returns (meta, ops) or None — None falls back to the source text, because a
+    contract nobody can parse must never be shown as a contract somebody can.
+    """
+    meta, ops = {}, []
+    for raw in src.split("\n"):
+        line = raw.strip()
+        if not line:
+            continue
+        m = API_HEAD_RE.match(line)
+        if m:
+            meta[m.group(1)] = m.group(2).strip()
+            continue
+        body, gloss = split_decl(line)
+        m = API_OP_RE.match(body)
+        if not m:
+            return None
+        rest = m.group("rest")
+        req = resp = ""
+        for arrow, target in API_ARROW_RE.findall(rest):
+            if arrow == "<-":
+                req = target
+            else:
+                resp = target
+        # Anything left over is syntax this grammar does not have. Refusing beats
+        # rendering a contract with a silently dropped clause in it.
+        if API_ARROW_RE.sub("", rest).strip():
+            return None
+        ops.append({"verb": m.group("verb"), "name": m.group("name"),
+                    "req": req, "resp": resp, "gloss": gloss})
+    return (meta, ops) if ops else None
+
+
+def api_table(src, here):
+    """An `api` fence renders as a table, never a figure — on purpose.
+
+    Every other fence draws because it carries a shape: a sequence, a lifecycle,
+    a set of relations. A list of operations has none. Drawing it would spend a
+    figure number to put boxes round a table, and §10's rule is that the table is
+    what carries the words anyway.
+    """
+    parsed = parse_api(src)
+    if parsed is None:
+        return ('<div class="note"><span class="lbl">Note</span>Không đọc được khối '
+                "<code>api</code> — hiển thị nguyên văn. Cú pháp: "
+                "<code>GET /orders/{id} -&gt; Order — chú thích</code>, "
+                "<code>POST /orders &lt;- CreateOrder -&gt; Order</code>, "
+                "<code>event order.paid -&gt; OrderPaid</code>.</div>"
+                "<pre><code>%s</code></pre>" % esc(src))
+    meta, ops = parsed
+    head = []
+    if meta.get("title"):
+        head.append('<div class="seqline"><span class="lbl">Contract</span>%s</div>'
+                    % inline_md(meta["title"], here))
+    if meta.get("base"):
+        head.append('<div class="seqline"><span class="lbl">Base</span><code>%s</code></div>'
+                    % esc(meta["base"]))
+    if meta.get("code"):
+        head.append('<div class="seqline"><span class="lbl">Code</span><code>%s</code></div>'
+                    % esc(meta["code"]))
+    rows = []
+    for op in ops:
+        rows.append('<tr><td class="mono">%s</td><td class="mono">%s</td>'
+                    '<td class="mono">%s</td><td class="mono">%s</td><td>%s</td></tr>'
+                    % (esc(op["verb"]), esc(op["name"]),
+                       esc(op["req"]) or "—", esc(op["resp"]) or "—",
+                       inline_md(op["gloss"], here) if op["gloss"] else "—"))
+    return ("".join(head)
+            + '<table class="data"><tr><th style="width:70px">op</th><th>name</th>'
+              '<th style="width:130px">in</th><th style="width:130px">out</th>'
+              "<th>note</th></tr>%s</table>" % "".join(rows))
 
 
 CHART_MAX_NODES = 20
@@ -2702,6 +2791,7 @@ def load_docs(docs):
     return {
         "products": load("01_products"),
         "architecture": load("02_architecture"),
+        "api": load("04_api"),
         "logic": load("03_business-logic"),
         "issues": load("20_issues"),
         "proposals": load("21_proposals"),
@@ -3096,6 +3186,44 @@ def build_current(ctx, docs, data):
         parts.append('<details class="more" style="margin-top:20px"><summary>Full architecture document'
                      "</summary><div class=\"md\">%s</div></details>" % body_html)
 
+    # --- api contracts
+    #
+    # Its own section, and its own layer 1 folder, because STANDARD §6 has always
+    # demanded a Decision before an API contract changes while giving the contract
+    # nowhere to live but layer 3 — where §4 says no Decision is needed. That was a
+    # contradiction, not a gap.
+    api_docs = data["api"]
+    parts.append('<h2 id="api" class="s-l1"><span class="idx">§4</span>API contracts '
+                 '<span class="src tag">docs/04_api/</span></h2>')
+    parts.append(section_sub("Contract ở ranh giới — service này hứa gì với bên ngoài"))
+    if api_docs:
+        for d in api_docs:
+            svc = fm_str(d, "service")
+            proto = fm_str(d, "protocol")
+            slug = slugify("api-" + (svc or d["path"].stem))
+            meta_tags = "".join(tag(x) for x in (proto, fm_str(d, "base")) if x)
+            parts.append('<h3 id="%s">%s%s</h3>'
+                         % (slug, esc(svc or doc_title(d)),
+                            (' <span class="dim2">· %s</span>' % esc(d["path"].name))))
+            if meta_tags:
+                parts.append('<div class="meta-row" style="padding-bottom:0;margin-top:8px">%s</div>'
+                             % meta_tags)
+            blocks, rest_body = extract_figures(d["body"])
+            if blocks["api"]:
+                for block in blocks["api"]:
+                    parts.append(api_table(block, here))
+            else:
+                parts.append(empty_state("NO OPERATIONS — thêm một khối <code>api</code> "
+                                         "vào body: <code>GET /orders/{id} -&gt; Order</code>"))
+            rest_html = md_to_html(rest_body, here, comps, figs)
+            if rest_html.strip():
+                parts.append('<details class="more"><summary>Ghi chú contract</summary>'
+                             '<div class="md">%s</div></details>' % rest_html)
+    else:
+        parts.append(empty_state("NO API CONTRACTS — <code>docs/04_api/</code> đang rỗng. "
+                                 "Mỗi service phát ra contract thì một file, "
+                                 "<code>service:</code> trỏ đúng tên component"))
+
     # --- business flows
     if arch_flows:
         flow_src.append(("Architecture", "#architecture", arch_flows))
@@ -3112,7 +3240,7 @@ def build_current(ctx, docs, data):
             chart_src.append((label, "#logic", d_figs["flowchart"]))
         if d_figs["state"]:
             state_src.append((label, "#states", d_figs["state"]))
-    parts.append('<h2 id="flows" class="s-l1"><span class="idx">§4</span>Business flows '
+    parts.append('<h2 id="flows" class="s-l1"><span class="idx">§5</span>Business flows '
                  '<span class="src tag">```flow trong docs/01_products/ · 02_architecture/ · '
                  "03_business-logic/</span></h2>")
     parts.append(section_sub("Nghiệp vụ chạy ra sao, theo thứ tự thời gian — mỗi kịch bản một hình. "
@@ -3137,7 +3265,7 @@ def build_current(ctx, docs, data):
             "kèm <code>title:</code>, <code>trigger:</code>, <code>outcome:</code>, "
             "<code>code:</code> nếu có"))
 
-    parts.append('<h2 id="logic" class="s-l1"><span class="idx">§5</span>Business logic '
+    parts.append('<h2 id="logic" class="s-l1"><span class="idx">§6</span>Business logic '
                  '<span class="src tag">```flowchart trong docs/03_business-logic/</span></h2>')
     parts.append(section_sub("Quy tắc rẽ nhánh — điều gì xảy ra khi gặp điều kiện nào. "
                              "Sequence ở §4 kể thứ tự; chỗ này kể lựa chọn"))
@@ -3162,7 +3290,7 @@ def build_current(ctx, docs, data):
             "<code>decide: check — câu hỏi?</code>, rồi nối các bước: "
             "<code>check -&gt; approve : yes</code>"))
 
-    parts.append('<h2 id="states" class="s-l1"><span class="idx">§6</span>State machines '
+    parts.append('<h2 id="states" class="s-l1"><span class="idx">§7</span>State machines '
                  '<span class="src tag">```state trong docs/03_business-logic/</span></h2>')
     parts.append(section_sub("Vòng đời của một entity — nó ở được những trạng thái nào, sự kiện "
                              "nào chuyển nó đi. §5 kể lựa chọn; chỗ này kể trạng thái"))
@@ -3199,9 +3327,15 @@ def build_current(ctx, docs, data):
                           ("a-stack", "Tech stack"), ("a-constraints", "Constraints"),
                           ("a-rev", "Revision block")]:
         sidebar.append('<li class="sub"><a href="#%s">%s</a></li>' % (anchor, label))
-    sidebar.append('<li><a href="#flows">§4 Business flows</a></li>')
-    sidebar.append('<li><a href="#logic">§5 Business logic</a></li>')
-    sidebar.append('<li><a href="#states">§6 State machines</a></li>')
+    sidebar.append('<li><a href="#api">§4 API contracts</a></li>')
+    for d in data["api"]:
+        svc = fm_str(d, "service")
+        sidebar.append('<li class="sub"><a href="#%s">%s</a></li>'
+                       % (slugify("api-" + (svc or d["path"].stem)),
+                          esc(trim(svc or doc_title(d), 26))))
+    sidebar.append('<li><a href="#flows">§5 Business flows</a></li>')
+    sidebar.append('<li><a href="#logic">§6 Business logic</a></li>')
+    sidebar.append('<li><a href="#states">§7 State machines</a></li>')
 
     return page_html(ctx, "%s · Foundation — current state" % ctx["project"],
                      "Foundation", "".join(sidebar), "".join(parts), "FOUNDATION — CURRENT"), latest_rev
@@ -3648,6 +3782,18 @@ def build_index_md(data):
 
     section("03_business-logic", ["file", "domain"], data["logic"],
             lambda d: [where(d), cell(fm_str(d, "domain") or doc_title(d), 80)], by_id=False)
+
+    def api_ops(d):
+        n = 0
+        for block in extract_figures(d["body"])[0]["api"]:
+            parsed = parse_api(block)
+            if parsed:
+                n += len(parsed[1])
+        return "%d ops" % n
+
+    section("04_api", ["file", "service", "protocol", "ops"], data["api"],
+            lambda d: [where(d), cell(fm_str(d, "service"), 30),
+                       cell(fm_str(d, "protocol"), 12), api_ops(d)], by_id=False)
 
     section("20_issues", ["id", "status", "lane", "file", "description"], data["issues"],
             lambda d: [cell(fm_str(d, "id"), 20), cell(fm_str(d, "status"), 12),
