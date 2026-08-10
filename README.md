@@ -22,7 +22,7 @@ renderer skips with a message and nothing else breaks. Scripts hold a **bash 3.2
 / BSD awk** floor, so they run on a stock macOS shell.
 
 **Always-on context cost: about 77 tokens** — one skill description, the only
-thing here Claude can reach on its own. The other four load nothing until you
+thing here Claude can reach on its own. The other five load nothing until you
 type them.
 
 **Menu:** [Install](#-install) · [Usage](#-usage) · [The model](#-the-model) · [Generated views](#-generated-views) · [Enforcement](#-enforcement) · [Uninstall](#-uninstall) · [For maintainers](#-for-maintainers) · [Roadmap](#-roadmap)
@@ -157,6 +157,7 @@ plugin on by default.
 | `/docs-kit:docs-sync` | End-of-session reconcile: backlog statuses, audit entries, retroactive Issues, pending Architecture amendments, architecture-vs-code drift, and archiving what can no longer change. | Yes |
 | `/docs-kit:docs-check` | Run the deterministic validator and explain each failure. Never fixes. | No |
 | `/docs-kit:docs-render` | Generate/refresh the read models of `docs/` — three HTML pages and `INDEX.md`. Deterministic; never edits the source markdown. | Yes (generated files only) |
+| `/docs-kit:docs-upgrade` | Bring an existing `docs/` up to the current standard: add folders and seeds this version ships that the repo lacks, regenerate the read models, re-run the checks. Adds only — never overwrites, edits, or deletes. | Yes (adds only) |
 | `/docs-kit:brief` | Turn settled decisions into a delegation prompt for a coding agent — gates on a decision-freeze check first. In a repo that has `docs/`, also records the work as an Issue and routes it through Layer 2 before writing the prompt. The one skill Claude may invoke on its own. | Yes (`docs/`, only after you confirm) |
 
 **Typical flow:** `docs-init` once → work → `docs-sync` at the end of a session →

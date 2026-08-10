@@ -324,6 +324,58 @@ jobs:
             || { echo "::error::a missing generated_from artifact was not caught by [anchor]."; exit 1; }
           echo "OK — drift caught both ways, paths normalised, YAML refused"
 
+      # --sync is how a repo scaffolded by an older docs-kit picks up a folder a
+      # later version added. It must add what is missing and, far more important,
+      # never touch a byte of what is already there.
+      - name: --sync adds what is missing and overwrites nothing
+        run: |
+          work="$(mktemp -d)"
+          git -C "$work" init -q
+          bash scripts/docs_scaffold.sh "$work" >/dev/null
+          rm -rf "$work/docs/04_api"
+          echo "MY OWN CONTENT" > "$work/docs/00_roadmap/roadmap.md"
+          before="$(cd "$work/docs" && find . -type f | LC_ALL=C sort | xargs cksum | cksum)"
+          bash scripts/docs_scaffold.sh --sync "$work" | tee /tmp/sync.out
+          grep -q "added docs/04_api/example-api.md" /tmp/sync.out \
+            || { echo "::error::--sync did not restore the missing folder."; exit 1; }
+          [ "$(cat "$work/docs/00_roadmap/roadmap.md")" = "MY OWN CONTENT" ] \
+            || { echo "::error::--sync overwrote existing content."; exit 1; }
+          bash scripts/docs_scaffold.sh --sync "$work" | grep -q "nothing to add" \
+            || { echo "::error::--sync is not idempotent."; exit 1; }
+          bash scripts/docs_validate.sh "$work/docs" \
+            || { echo "::error::a synced tree does not validate."; exit 1; }
+          empty="$(mktemp -d)"
+          bash scripts/docs_scaffold.sh --sync "$empty" && {
+            echo "::error::--sync did not refuse a repo with no docs/."; exit 1; }
+          echo "OK — sync adds only, is idempotent, and refuses an unscaffolded repo"
+
+      # `owns` answers "when does the profile get updated": something deterministic
+      # notices when the repo grew a surface nobody declared. It must stay quiet on
+      # a fresh scaffold, whose example files are seeds rather than content.
+      - name: NOTE [profile] fires on real content, never on a seed
+        run: |
+          work="$(mktemp -d)"
+          git -C "$work" init -q
+          bash scripts/docs_scaffold.sh "$work" >/dev/null
+          # Captured rather than piped into grep -q: closing the pipe early makes the
+          # validator's own echo fail with EPIPE and litters the log with a red
+          # herring on every passing run.
+          out="$(bash scripts/docs_validate.sh "$work/docs" || true)"
+          case "$out" in *"NOTE [profile]"*)
+            echo "::error::profile note fired with no owns declared."; exit 1 ;; esac
+          echo '{"owns":["data"]}' > "$work/.docs-kit.json"
+          out="$(bash scripts/docs_validate.sh "$work/docs" || true)"
+          case "$out" in *"NOTE [profile]"*)
+            echo "::error::profile note fired on untouched template seeds."; exit 1 ;; esac
+          printf -- '---\nservice: ""\nprotocol: http\namended_by: []\n---\n\n# Orders API\n' \
+            > "$work/docs/04_api/orders.md"
+          out="$(bash scripts/docs_validate.sh "$work/docs" || true)"
+          case "$out" in *"NOTE [profile]"*endpoints*) ;; *)
+            echo "::error::profile note missed a real contract."; exit 1 ;; esac
+          bash scripts/docs_validate.sh "$work/docs" >/dev/null \
+            || { echo "::error::a NOTE changed the exit code; it must not."; exit 1; }
+          echo "OK — profile drift noticed, seeds ignored, exit code untouched"
+
       # Hooks are deterministic and warn-only: they must speak on a real
       # architecture edit and stay silent on anything else.
       - name: Hooks warn on architecture, silent elsewhere

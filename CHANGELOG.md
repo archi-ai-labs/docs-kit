@@ -5,6 +5,61 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
+## [0.22.0] — 2026-08-10
+
+### Added — `/docs-kit:docs-upgrade` and `docs_scaffold.sh --sync`
+
+Everything shipped today changed what a scaffold contains — `_archive/` and `INDEX.md`
+in 0.18.0, `04_api/` in 0.20.0 — and a repo scaffolded before them had no way to catch
+up. `docs-init` refuses to touch an existing `docs/`, correctly, and its "add missing
+pieces only" branch was **an instruction to an agent to run `cp -Rn` carefully**. A
+careful file operation belongs in a script, not in a prompt.
+
+`docs_scaffold.sh --sync` adds what is absent and never overwrites, edits, or deletes:
+an existing file is the repo's content, and the script has no way to tell an edited
+template from a deliberate rewrite, so it does not get to guess. Idempotent, and it
+refuses a repo with no `docs/` rather than half-scaffolding one.
+
+`/docs-kit:docs-upgrade` is the whole job around it — sync, regenerate the read models
+(not optional: the sync may add documents, and a stale `INDEX.md` is worse than a
+missing one), then re-run all three checks. It says out loud that **a newer standard
+checks more than the old one did**, so `FAIL [anchor]` lines on an upgraded repo are
+pre-existing drift being surfaced, not damage the upgrade caused. It changes no content
+and routes every finding to whoever should fix it.
+
+Six skills now; five still carry `disable-model-invocation: true`, so the always-on
+context budget is unchanged — `brief` remains the only one Claude can reach on its own.
+
+### Added — `owns` in `.docs-kit.json`, and the answer to "when does it get updated?"
+
+Asking what a repo owns once at scaffold time would have been a mistake: that is state,
+and state drifts. A backend grows a frontend; a service stops owning its tables.
+
+So `owns` gets the treatment the kit already gives `verified_at` and `generated_from` —
+**declare it, and let something deterministic notice when reality disagrees.** The
+validator emits `NOTE [profile]` when a folder holds real documents that `owns` does not
+account for. Optional throughout: a repo that omits it behaves exactly as before.
+
+Two deliberate limits:
+
+- **A file byte-identical to its shipped template is a seed, not content.** Without that
+  rule the check fires on a fresh scaffold, because `04_api/example-api.md` ships with
+  the plugin — and a warn-only rule that cries wolf on day one is a rule people switch
+  off. Compared by bytes, not by name: `60_fe-integration/overview.md` has no "example"
+  in its name.
+- **Only the growth direction is checked.** `owns` claiming something the repo no longer
+  has cannot be told apart from "nobody has written it yet". Guessing there would cry
+  wolf, and the shrink direction runs into the unsolved deletion hole anyway.
+
+Changing `owns` is a layer 1 change — what a repo owns is architecture — so it goes
+through the Decision workflow, and `docs-upgrade` adds whatever folders the new `owns`
+justifies.
+
+This is the measurable half of item F. The breaking half — branching a fresh scaffold on
+a detected profile — is deliberately still not done: the `scope`/`owns` axis was derived
+from six repo shapes reasoned about, not six repos measured, and `NOTE [profile]` firing
+(or not) on real repos is what turns that into evidence cheaply.
+
 ## [0.21.0] — 2026-08-10
 
 ### Added — `generated_from:`, the volatile half read instead of maintained

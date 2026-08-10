@@ -420,6 +420,7 @@ Informational lines, which never affect the exit code:
 | Tag | Meaning |
 |---|---|
 | `NOTE [layout]` | A standard folder is missing. |
+| `NOTE [profile]` | `.docs-kit.json` declares `owns`, and a folder holds documents it does not account for — see §9. |
 | `NOTE [stale]` | A layer 1 document carries `verified_at: <rev>` and some of the paths it names have changed since that rev — or the rev is not a commit in this repo. |
 
 Output: one line per violation — `FAIL [tag] <file>: <message>` — then a count.
@@ -481,11 +482,31 @@ Hooks are silent in repos that do not use docs-kit (no `docs/` skeleton).
 
 ```json
 {
-  "sensitive_paths": ["**/schema/**", "**/api/**", "**/migrations/**"]
+  "sensitive_paths": ["**/schema/**", "**/api/**", "**/migrations/**"],
+  "owns": ["data", "endpoints", "screens", "jobs"]
 }
 ```
 
 `sensitive_paths` overrides the default patterns used by the Stop hook.
+
+`owns` declares what this repo holds title to — `data` (tables), `endpoints` (a
+contract it publishes), `screens` (routes), `jobs` (consumers, schedules). **It is
+optional; a repo that omits it behaves exactly as before.**
+
+A project changes: a backend grows a frontend, a service stops owning its tables.
+So `owns` is a declared fact and gets the same treatment as `verified_at` and
+`generated_from` — declare it, and let something deterministic notice when reality
+disagrees. The validator emits `NOTE [profile]` when a folder holds real documents
+that `owns` does not account for; a file byte-identical to its shipped template is a
+seed and does not count, or a fresh scaffold would trip the check on day one.
+
+Only the *growth* direction is checked. `owns` claiming something the repo no longer
+has cannot be told apart from "nobody has written it yet", and guessing there would
+cry wolf.
+
+**Changing `owns` is a layer 1 change** — what a repo owns is architecture — so it
+goes through the Decision workflow like any other amendment. Adding the folders a new
+`owns` justifies is `/docs-kit:docs-upgrade`, which adds and never overwrites.
 Patterns are matched with fnmatch against the repo-relative path; a leading
 `**/` also matches at the repo root. Paths under `docs/` are never treated as
 sensitive-zone code.

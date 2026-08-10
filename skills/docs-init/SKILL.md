@@ -47,9 +47,16 @@ Check for `docs/` in the repo root (current working directory).
 3. If AskUserQuestion fails or returns an empty answer, ask the same question
    in plain text and **end the turn** — wait for the user's reply. Never proceed
    on silence.
-4. On "Add missing pieces only": copy from `$PLUGIN_ROOT/templates/docs/` only
-   the folders/files that do not exist yet (`cp -Rn` semantics; check each path
-   first). Never overwrite an existing file.
+4. On "Add missing pieces only": do **not** copy by hand — that is a careful
+   file operation, and it belongs in a script rather than in a prompt. Run:
+
+   ```bash
+   bash "$PLUGIN_ROOT/scripts/docs_scaffold.sh" --sync .
+   ```
+
+   It adds only what is absent and never overwrites, edits, or deletes. For a repo
+   that just needs catching up with a newer docs-kit, `/docs-kit:docs-upgrade` is
+   the whole job — it runs this and then regenerates the read models.
 
 ## Step 2 — Scaffold (fresh repo path)
 

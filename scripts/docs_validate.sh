@@ -26,6 +26,9 @@
 #   NOTE [stale]   a Layer 1 doc carries verified_at: <rev> and files it names have
 #                  changed since that rev. Changed is not the same as wrong, which is
 #                  why this warns instead of failing (same rationale as STANDARD §8).
+#   NOTE [profile] .docs-kit.json declares `owns`, and a folder holds real documents
+#                  that `owns` does not account for — the repo grew a surface nobody
+#                  declared. Seeds identical to their template do not count.
 #
 # Layer 2 folders may hold an `_archive/` subfolder for terminal documents; it is
 # validated exactly like the folder above it — archiving lowers read cost, never
@@ -458,6 +461,69 @@ if [ -n "$ROOT" ]; then
       fi
     done
   done
+fi
+
+# ------------- profile notes: does `owns` still describe this repo? ----------
+#
+# A project changes. A repo that owned no API grows one; a backend grows a
+# frontend. `owns` in .docs-kit.json is a declared fact, and a declared fact
+# drifts — so it gets the same treatment as verified_at and generated_from:
+# declare it, and let something deterministic notice when reality disagrees.
+#
+# The evidence used here is the docs themselves, which needs no knowledge of any
+# framework: a folder holding real documents that `owns` does not account for
+# means the repo grew something nobody declared. It is a NOTE, not a FAIL —
+# `owns` is optional and this rule has not been used in anger yet (STANDARD §8).
+#
+# Only the growth direction is checked. `owns` claiming something the repo no
+# longer has cannot be told apart from "nobody has written it yet", and guessing
+# there would cry wolf.
+#
+# The reader handles a flat JSON array of strings on one logical line, which is
+# all the field is; the Python side uses a real parser.
+owns_declared() {
+  [ -f "$1/.docs-kit.json" ] || return 1
+  tr -d '\n' < "$1/.docs-kit.json" \
+    | sed -n 's/.*"owns"[[:space:]]*:[[:space:]]*\[\([^]]*\)\].*/\1/p' \
+    | grep -q . || return 1
+  return 0
+}
+owns_has() { # owns_has <root> <token>
+  tr -d '\n' < "$1/.docs-kit.json" \
+    | sed -n 's/.*"owns"[[:space:]]*:[[:space:]]*\[\([^]]*\)\].*/\1/p' \
+    | tr ',' '\n' | tr -d ' "' | grep -Fxq "$2"
+}
+# A file byte-identical to the template it was scaffolded from is a SEED, not
+# something somebody wrote. Without this the check fires on a fresh scaffold —
+# `04_api/example-api.md` ships with the plugin — and a warn-only rule that cries
+# wolf on day one is a rule people switch off. Compared by bytes rather than by
+# name because `60_fe-integration/overview.md` carries no "example" in its name.
+VTEMPLATES="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/../templates/docs" 2>/dev/null && pwd || true)"
+
+folder_has_docs() { # folder_has_docs <dir-name-under-docs>
+  fhd="$DOCS/$1"
+  [ -d "$fhd" ] || return 1
+  for fh in "$fhd"/*.md; do
+    [ -f "$fh" ] || continue
+    case "$(basename "$fh")" in README.md) continue ;; esac
+    seed="$VTEMPLATES/$1/$(basename "$fh")"
+    if [ -n "$VTEMPLATES" ] && [ -f "$seed" ] && cmp -s "$fh" "$seed"; then
+      continue    # untouched template seed
+    fi
+    return 0
+  done
+  return 1
+}
+
+# No template tree to compare against means every seed would read as content, so
+# the check would invent findings. Skipping is the honest failure mode.
+if [ -n "$ROOT" ] && [ -n "$VTEMPLATES" ] && owns_declared "$ROOT"; then
+  if folder_has_docs 04_api && ! owns_has "$ROOT" endpoints; then
+    note profile "$DOCS/04_api" "holds contracts but .docs-kit.json 'owns' does not list 'endpoints' — this repo grew an API surface; update owns (that is a layer 1 change, so it goes through a Decision)"
+  fi
+  if folder_has_docs 60_fe-integration && ! owns_has "$ROOT" screens; then
+    note profile "$DOCS/60_fe-integration" "holds documents but .docs-kit.json 'owns' does not list 'screens' — this repo grew a frontend surface; update owns"
+  fi
 fi
 
 # ----------------------------- layout notes (informational, never failing) ---
