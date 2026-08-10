@@ -184,6 +184,40 @@ jobs:
             || { echo "::error::--check modified files; it must be read-only."; exit 1; }
           echo "OK — stale index caught, nothing written"
 
+      # 02_architecture/ is a folder. The renderer used to read architecture.md and
+      # nothing else, so a per-service split was silently dropped from the sheet
+      # while the validator called the tree clean. Both halves are asserted: every
+      # document reaches the page, and a component name declared twice is rejected
+      # because data_flow resolves components by name.
+      - name: Architecture splits per service without losing a document
+        run: |
+          work="$(mktemp -d)"
+          git -C "$work" init -q
+          bash scripts/docs_scaffold.sh "$work" >/dev/null
+          mkdir -p "$work/internal/orders" "$work/internal/billing"
+          echo x > "$work/internal/orders/svc.go"
+          echo x > "$work/internal/billing/svc.go"
+          rm "$work/docs/02_architecture/architecture.md"
+          for s in orders billing; do
+            printf -- '---\ncomponents:\n  - %s `internal/%s/svc.go` — %s service\ndata_flow:\n  - %s -> other : x\ntech_stack: [go]\nconstraints: []\namended_by: []\n---\n\n# %s\n' \
+              "$s" "$s" "$s" "$s" "$s" > "$work/docs/02_architecture/$s.md"
+          done
+          bash scripts/docs_validate.sh "$work/docs" \
+            || { echo "::error::a per-service architecture split failed validation."; exit 1; }
+          DOCS_KIT_NOW=2026-01-01T00:00:00 python3 scripts/docs_render.py "$work" >/dev/null
+          for s in orders billing; do
+            grep -q "class=\"nm\">$s<" "$work/docs/current.html" \
+              || { echo "::error::$s.md was dropped from current.html."; exit 1; }
+            grep -q "<code>$s.md</code>" "$work/docs/current.html" \
+              || { echo "::error::the card for $s does not name the doc that declares it."; exit 1; }
+          done
+          sed -i 's/^  - billing /  - orders /' "$work/docs/02_architecture/billing.md"
+          if bash scripts/docs_validate.sh "$work/docs"; then
+            echo "::error::a component name declared in two architecture docs was accepted."
+            exit 1
+          fi
+          echo "OK — every architecture doc renders, duplicate component names rejected"
+
       # Hooks are deterministic and warn-only: they must speak on a real
       # architecture edit and stay silent on anything else.
       - name: Hooks warn on architecture, silent elsewhere

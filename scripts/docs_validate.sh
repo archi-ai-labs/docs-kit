@@ -9,7 +9,10 @@
 #         "NOTE [layout] ..." lines are informational only (never affect exit code).
 #
 # Checks (tags):
-#   [ref]          every *_ref: resolves to an existing id: under docs/ (+ duplicate ids)
+#   [ref]          every *_ref: resolves to an existing id: under docs/. Keys that must
+#                  be unique and are not are reported here too: a duplicate id:, and a
+#                  component name declared in two 02_architecture/ docs (edges and the
+#                  rendered cards resolve components by name, so a clash is ambiguous)
 #   [backlog]      every Backlog item has a non-empty source_ref:
 #   [frontmatter]  required fields per type, valid enums, id prefix per folder,
 #                  Proposals contain an "Alternatives considered" heading
@@ -312,6 +315,27 @@ done
 # Placeholder values — anything containing < or > — are the templates' own
 # "<file to read>" markers and are skipped, so a fresh scaffold passes clean.
 
+# component_names <file> → the name of each components: entry, one per line.
+# Mirrors parse_components() in the renderer: split off the description at the
+# first " — " / " – " / " -- " / ": ", then drop the [kind] tag and the `path`.
+component_names() {
+  fm_list "$1" components | awk '
+    {
+      s = $0
+      sub(/^[ \t]*-[ \t]*/, "", s)
+      sub(/^"/, "", s); sub(/"$/, "", s)
+      for (i = 1; i <= 4; i++) {
+        sep = (i == 1) ? " — " : (i == 2) ? " – " : (i == 3) ? " -- " : ": "
+        p = index(s, sep)
+        if (p > 0) { s = substr(s, 1, p - 1); break }
+      }
+      gsub(/\[[a-z]+\]/, "", s)
+      gsub(/`[^`]*`/, "", s)
+      gsub(/^[ \t]+|[ \t\r]+$/, "", s)
+      if (s != "") print s
+    }'
+}
+
 anchor_paths() { # anchor_paths <file> → one repo-relative path per line
   # 1. the backticked path inside each components: entry
   fm_list "$1" components | awk '
@@ -333,6 +357,28 @@ anchor_paths() { # anchor_paths <file> → one repo-relative path per line
     }
   ' "$1"
 }
+
+# A component name IS a reference key: data_flow edges name components, and the
+# rendered cards resolve upstream/downstream by name. Once 02_architecture/ holds
+# one doc per service, two docs can declare the same name — and the renderer takes
+# the first, silently. Reported here for the same reason a duplicate id: is.
+: > "$TMP/compnames"
+for f in "$DOCS"/02_architecture/*.md; do
+  [ -f "$f" ] || continue
+  case "$(basename "$f")" in README.md) continue ;; esac
+  component_names "$f" | while IFS= read -r n; do
+    [ -n "$n" ] && printf '%s\t%s\n' "$n" "$f" >> "$TMP/compnames"
+  done
+done
+if [ -s "$TMP/compnames" ]; then
+  cut -f1 "$TMP/compnames" | LC_ALL=C sort | uniq -d > "$TMP/compdups"
+  while IFS= read -r dup; do
+    [ -z "$dup" ] && continue
+    where="$(awk -F"$TAB" -v d="$dup" '$1==d { print $2 }' "$TMP/compnames" | tr '\n' ' ')"
+    first="$(awk -F"$TAB" -v d="$dup" '$1==d { print $2; exit }' "$TMP/compnames")"
+    fail ref "$first" "component '$dup' is declared in more than one architecture doc: $where"
+  done < "$TMP/compdups"
+fi
 
 if [ -n "$ROOT" ]; then
   # Files changed since each doc's verified_at rev, resolved lazily per rev.

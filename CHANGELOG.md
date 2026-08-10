@@ -5,6 +5,72 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
+## [0.19.0] — 2026-08-10
+
+### Fixed — the renderer read one architecture document and silently dropped the rest
+
+`02_architecture/` has always been a folder, and the validator has always globbed it.
+The renderer opened `docs/02_architecture/architecture.md` and nothing else. So a repo
+that split its architecture per service — the shape a monorepo of services actually
+needs — had those documents **vanish from the sheet while `docs-check` called the tree
+clean**. Rename the file and §3 rendered empty.
+
+`build_current` now merges the folder: one component list, one data-flow graph, every
+ERD and class block in document order, merged `tech_stack`, `constraints` and
+`amended_by`. `main()` derives the component count and revision letters the same way.
+
+Merging is not a compromise; it is what the ownership rule buys. A component belongs to
+the document that declares it and an edge to the caller that declares it, so no fact is
+written twice and re-assembling them reconstructs the system.
+
+**With a single architecture document the output is byte-identical** — verified against
+`design/sample-*.html` before and after the refactor.
+
+### Added — item D of the cost proposal: one architecture document per service
+
+STANDARD §4 now states the split and, more importantly, where each fact goes:
+
+| Fact | Document |
+|---|---|
+| a component | the service that contains it |
+| a table | the service that owns the writes |
+| an edge `a -> b` | **`a`, the caller** — a dependency is a property of the thing that has it |
+| the contract behind it | `b`, the callee |
+
+Without that rule a split just duplicates: the edge `orders -> billing` looks like it
+belongs to both. This is the same argument that makes ERD cardinality derived from `fk`
+and a component card's `role` derived from `data_flow` — one source per fact.
+
+The ERD was already following this by accident. A schema is only correct scoped to its
+owner, and one fence holding every service's tables blows §10's 10-table budget while
+saying nothing about who owns what. §10's wording moved from "the `02_architecture/`
+doc" to "an `02_architecture/` doc" accordingly.
+
+Each component card names the document that declares it (`owner`), and §3's source tag
+reads `docs/02_architecture/ · N docs`. Both appear only when there is more than one
+document, which is what keeps single-document output unchanged.
+
+`docs-init` gained a step before it writes anything: decide how many architecture
+documents this repo needs. `docs-sync`'s drift step gained the cross-document case — a
+new service is a new document, and a new call between two services goes in the caller's.
+
+### Added — `[ref]` now catches a component name declared twice
+
+A component name **is** a reference key: `data_flow` edges name components and the
+rendered cards resolve upstream/downstream by name. Two documents declaring `store` make
+every edge touching it ambiguous, and the renderer resolves it by taking the first —
+silently. It is now reported under `[ref]`, for the same reason a duplicate `id:` is.
+The validator's `component_names()` mirrors the renderer's `parse_components()` so the
+two agree on where a name ends.
+
+### Fixed — an unrendered branch still referenced the old single-document variable
+
+The "could not parse `data_flow`" fallback still read `arch_fm`, which the merge removed.
+The design fixture parses cleanly, so that branch never runs there and the
+byte-identical sample gate could not see it — a reminder that the gate proves the taken
+path and nothing about the others. Found by rendering a tree with a deliberately
+unparseable edge.
+
 ## [0.18.1] — 2026-08-10
 
 ### Added — `docs_render.sh --check`, the gate that makes the index safe to trust

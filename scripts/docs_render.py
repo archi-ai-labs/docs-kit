@@ -2759,15 +2759,48 @@ def build_current(ctx, docs, data):
         if current_h is not None:
             sections.append((current_h, bullets))
 
-    # architecture
-    arch_file = docs / "02_architecture" / "architecture.md"
-    arch_fm, arch_body = ({}, "")
-    if arch_file.is_file():
-        arch_fm, arch_body = parse_frontmatter(arch_file.read_text(encoding="utf-8", errors="replace"))
-    comps = parse_components(arch_fm.get("components", []))
-    edges, flow_ok = parse_flows(arch_fm.get("data_flow", []))
-    arch_figs, arch_body = extract_figures(arch_body)
+    # architecture — one document per service once a repo has more than one.
+    #
+    # This used to read `02_architecture/architecture.md` and nothing else, so a
+    # repo that split its architecture per service had those documents silently
+    # dropped from the sheet while the validator called the tree clean. Everything
+    # below merges across the folder instead.
+    #
+    # Merging is not a compromise, it is what the ownership rule buys: a component
+    # belongs to the document that declares it and an edge to the caller that
+    # declares it (STANDARD §4), so no fact is written twice and re-assembling them
+    # reconstructs the system. First declaration wins on a name clash, and the
+    # validator reports the clash — the renderer never adjudicates.
+    #
+    # With a single document every value below is exactly what it was before.
+    arch_docs = data["architecture"]
+    comps, comp_home = {}, {}
+    edge_lines, stack_raw, constraints_raw, amend_raw = [], [], [], []
+    arch_figs = dict((n, []) for n in FIGURE_FENCES)
+    arch_bodies = []
+    for d in arch_docs:
+        fm = d["fm"]
+        for name, c in parse_components(fm.get("components", [])).items():
+            if name not in comps:
+                comps[name] = c
+                comp_home[name] = d["path"].name
+        for line in as_list(fm.get("data_flow")):
+            if line not in edge_lines:
+                edge_lines.append(line)
+        for key, sink in (("tech_stack", stack_raw), ("constraints", constraints_raw),
+                          ("amended_by", amend_raw)):
+            for v in as_list(fm.get(key)):
+                if v not in sink:
+                    sink.append(v)
+        figs_d, body_d = extract_figures(d["body"])
+        for n in arch_figs:
+            arch_figs[n].extend(figs_d[n])
+        if body_d.strip():
+            arch_bodies.append(body_d)
+    arch_body = "\n\n".join(arch_bodies)
+    edges, flow_ok = parse_flows(edge_lines)
     arch_flows, arch_charts = arch_figs["flow"], arch_figs["flowchart"]
+    arch_multi = len(arch_docs) > 1
     # (source label, anchor, blocks) — business flows collected from every Layer-1
     # doc and shown together, so they read as a set instead of one per card.
     flow_src, chart_src, state_src = [], [], []
@@ -2777,7 +2810,7 @@ def build_current(ctx, docs, data):
     logic_charts = sum(len(f["flowchart"]) for _label, f in logic_figs)
     logic_states = sum(len(f["state"]) for _label, f in logic_figs)
     amends = []
-    for entry in as_list(arch_fm.get("amended_by", [])):
+    for entry in amend_raw:
         m = AMEND_RE.match(str(entry).strip())
         if m:
             amends.append({"date": m.group(1), "decision": m.group(2), "summary": m.group(3).strip()})
@@ -2901,7 +2934,9 @@ def build_current(ctx, docs, data):
 
     # --- architecture
     parts.append('<h2 id="architecture" class="s-l1"><span class="idx">§3</span>Architecture '
-                 '<span class="src tag">docs/02_architecture/architecture.md</span></h2>')
+                 '<span class="src tag">%s</span></h2>'
+                 % ("docs/02_architecture/ · %d docs" % len(arch_docs) if arch_multi
+                    else "docs/02_architecture/architecture.md"))
     parts.append(section_sub("Kiến trúc hệ thống — chỉ sửa được qua Decision"))
     parts.append('<div class="note"><span class="lbl">Note</span>Chỉ được sửa <b>qua</b> '
                  'Decision workflow — mọi revision trong <a href="#a-rev">revision block</a> '
@@ -2928,6 +2963,12 @@ def build_current(ctx, docs, data):
             rows = []
             if c["code"]:
                 rows.append('<tr><th>code</th><td><code>%s</code></td></tr>' % esc(c["code"]))
+            # Which architecture doc declares it — that is what "owns" means once the
+            # folder holds one doc per service. Omitted when there is only one doc, so
+            # a single-architecture repo renders exactly as it always did.
+            if arch_multi:
+                rows.append('<tr><th>owner</th><td><code>%s</code></td></tr>'
+                            % esc(comp_home[name]))
             rows.append('<tr><th>role</th><td>%s</td></tr>' % esc(facts["role"]))
             if facts["upstream"]:
                 rows.append('<tr><th>in from</th><td>%s</td></tr>'
@@ -3009,18 +3050,18 @@ def build_current(ctx, docs, data):
             parts.append(dag)
         parts.append('<h4 id="a-edges">Mọi cạnh</h4>')
         parts.append(edge_table(edges, here))
-    elif as_list(arch_fm.get("data_flow")):
+    elif edge_lines:
         parts.append('<div class="note"><span class="lbl">Note</span>Không đọc được '
                      "<code>data_flow</code> — hiển thị nguyên văn. Cú pháp cạnh: "
                      "<code>a -&gt; b</code>, <code>a ~&gt; b</code> (async), <code>a -&gt; b : label</code>.</div>")
-        parts.append("<pre><code>%s</code></pre>" % esc("\n".join(str(x) for x in as_list(arch_fm.get("data_flow")))))
+        parts.append("<pre><code>%s</code></pre>" % esc("\n".join(str(x) for x in edge_lines)))
     else:
         parts.append(empty_state("NO DATA FLOW — thêm cạnh vào <code>data_flow</code> "
                                  "(<code>a -&gt; b</code>, <code>a ~&gt; b</code> async, "
                                  "<code>a -&gt; b : label</code>)"))
 
     parts.append('<h3 id="a-stack">Tech stack</h3>')
-    stack = as_list(arch_fm.get("tech_stack"))
+    stack = stack_raw
     if stack:
         parts.append('<div class="meta-row" style="padding-bottom:0;margin-top:8px">%s</div>'
                      % "".join(tag(x) for x in stack))
@@ -3028,7 +3069,7 @@ def build_current(ctx, docs, data):
         parts.append(empty_state("NO TECH STACK — chưa liệt kê gì"))
 
     parts.append('<h3 id="a-constraints">Constraints</h3>')
-    constraints = as_list(arch_fm.get("constraints"))
+    constraints = constraints_raw
     if constraints:
         parts.append('<ul class="constraints">%s</ul>'
                      % "".join("<li>%s</li>" % inline_md(c, here) for c in constraints))
@@ -3671,15 +3712,16 @@ def main():
     audit = load_audit(docs, dt)
 
     # rev letters shared between pages
-    arch_file = docs / "02_architecture" / "architecture.md"
-    amends = []
-    if arch_file.is_file():
-        arch_fm, _ = parse_frontmatter(arch_file.read_text(encoding="utf-8", errors="replace"))
-        for entry in as_list(arch_fm.get("amended_by", [])):
+    # Across every architecture doc, not just architecture.md — see build_current.
+    amends, comp_names = [], set()
+    for d in data["architecture"]:
+        for entry in as_list(d["fm"].get("amended_by", [])):
             m = AMEND_RE.match(str(entry).strip())
-            if m:
+            if m and m.group(2) not in amends:
                 amends.append(m.group(2))
-        ctx["component_count"] = len(parse_components(arch_fm.get("components", [])))
+        comp_names.update(parse_components(d["fm"].get("components", [])).keys())
+    if data["architecture"]:
+        ctx["component_count"] = len(comp_names)
     ctx["rev_letter"] = {dec: chr(65 + i) for i, dec in enumerate(amends)}
 
     current_html, latest_rev = build_current(ctx, docs, data)

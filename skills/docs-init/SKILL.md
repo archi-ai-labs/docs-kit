@@ -106,6 +106,21 @@ conventional layout.
    deployment manifests), then follow the calls outward. Read enough of each
    component to state what it *is* — not what its folder is called.
 
+2.5. **Decide how many Architecture documents this repo needs, before writing any.**
+   `02_architecture/` is a folder. One deployable → keep `architecture.md`. Several
+   (a monorepo of services, or one repo that ships more than one runnable thing) →
+   one document per service, named after it: `orders.md`, `billing.md`. Each covers
+   **only what that service owns**.
+
+   Placement, so no fact is written twice (STANDARD §4): a component goes in the
+   service that contains it; a table in the service that owns the writes; an edge
+   `a -> b` in **`a`, the caller** — a dependency belongs to the thing that has it;
+   the contract behind it in `b`. Component names must be unique across the folder,
+   because `data_flow` resolves components by name.
+
+   The scaffold ships a single `architecture.md`. Splitting means renaming it and
+   adding siblings — say what you are doing and why before you do it.
+
 3. Write `components`, one flat line each:
    `name [kind] `path/in/repo` — what it is, one sentence`. Rules:
    - the backticked path must be a path that **exists in this repo** — the

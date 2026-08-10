@@ -115,7 +115,13 @@ Then, for the documents in scope, read `components` and `data_flow` from
 
 - a component whose backticked path **no longer exists**, or moved;
 - a new component-sized thing added this session (a new service, datastore,
-  queue, or scheduled worker) that is absent from `components`;
+  queue, or scheduled worker) that is absent from `components`. When
+  `02_architecture/` holds one document per service, it belongs to the document
+  for the service that contains it — and a whole new service is a new document,
+  not a row appended to someone else's (STANDARD §4);
+- a new call between two services documented in *different* architecture docs:
+  the edge belongs to the **caller's** document, the contract to the callee's.
+  Writing it in both is the duplication the split exists to prevent;
 - a `data_flow` edge whose call site was deleted, or a new call/publish between
   two documented components with no edge for it;
 - a business-flow step that no longer matches the code path it names;

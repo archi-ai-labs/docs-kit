@@ -149,6 +149,39 @@ Both fields are optional: a repo scaffolded before they existed stays valid.
 last actually read the paths this document names. The validator diffs that rev against
 the working tree and reports how many of those paths have moved since. See §7.
 
+#### One architecture document per service
+
+`02_architecture/` is a folder, not a file. A repo with one deployable keeps one
+`architecture.md`; a repo with several keeps one document per service — `orders.md`,
+`billing.md` — and each describes **only what that service owns**: its components, the
+tables in its own ```` ```erd ````, its own contracts in ```` ```class ````.
+
+This is the same rule the ERD was always following by accident. A schema is only
+correct when it is scoped to its owner; a single fence holding every service's tables
+blows the budget in §10 and, worse, says nothing about who owns what.
+
+Four placements make the split reconstructible rather than fragmentary:
+
+| Fact | Whose document it belongs in |
+|---|---|
+| a component | the service that contains it |
+| a table | the service that owns the writes |
+| **an edge `a -> b`** | **`a` — the caller. A dependency is a property of the thing that has it.** |
+| the contract behind that edge | `b` — the callee |
+
+Put the edge in both and you have two sources for one fact, which is what the ERD's
+derived cardinality and the component card's derived `role` both exist to avoid.
+
+The renderer merges the folder back into one §3: one component list, one data-flow
+graph, every ERD in document order, and each component card naming the document that
+declares it. Nothing is authored twice, so nothing can disagree.
+
+**Component names are reference keys and must be unique across the folder.**
+`data_flow` edges name components, and the rendered cards resolve upstream and
+downstream by name, so two documents declaring `store` make every edge touching it
+ambiguous. The validator reports that under `[ref]`, exactly as it reports a duplicate
+`id:`.
+
 A component entry is one flat line — the validator reads frontmatter with awk,
 so this grammar never nests:
 
@@ -165,7 +198,8 @@ Longer explanation goes in a `### <name>` section in the body, which the
 rendered card picks up as expandable detail.
 
 The body carries ```` ```flow ```` blocks for scenarios, an ```` ```erd ```` block
-for the data model, and a ```` ```class ```` block for the types (all in §10).
+for the data model this document's service owns, and a ```` ```class ```` block for
+its types (all in §10).
 Components answer *what exists* for services; the ERD answers the same question
 for stored data and the class diagram for the code's own contracts, which is why
 all three live here and not in folders of their own.
@@ -295,7 +329,7 @@ Checks:
 
 | Tag | Check |
 |---|---|
-| `[ref]` | Every `*_ref:` value resolves to an existing `id:` under docs/. Duplicate `id:` values are also reported here. |
+| `[ref]` | Every `*_ref:` value resolves to an existing `id:` under docs/. Keys that must be unique and are not — a duplicate `id:`, a component name declared in two architecture docs — are reported here too. |
 | `[backlog]` | Every Backlog item has a non-empty `source_ref:`. |
 | `[frontmatter]` | Required fields per type (§4) are present; `lane`/`status`/`outcome` enums are valid; `id:` prefixes match their folder; Proposals contain an "Alternatives considered" heading. |
 | `[audit-append]` | `92_audit/` files are append-only vs git HEAD (no deleted or rewritten lines). Skipped when git or HEAD is unavailable. |
@@ -540,9 +574,10 @@ Rules:
   Budget, warn-only as everywhere else: **12 states · 24 transitions**. The
   transition table prints under every machine, and the state-meaning table too when
   any `state:` line carried a meaning.
-- **Data model** (```` ```erd ```` fenced block in the *body* of the
+- **Data model** (```` ```erd ```` fenced block in the *body* of an
   `02_architecture/` doc, and only there — a data model filed under a product or
-  a business rule is misfiled, and rendering it anyway would hide that) renders as
+  a business rule is misfiled, and rendering it anyway would hide that; one fence
+  per document, holding the tables **that document's service owns**) renders as
   an entity-relationship diagram, in the **Data model** sub-section of §3 right
   after Components:
 
@@ -576,7 +611,7 @@ Rules:
   table · column · type · keys · relationship · note — prints under every ERD, and
   a schema with no foreign key at all prints only that table, because a picture of
   unconnected boxes says nothing the table does not.
-- **Types** (```` ```class ```` fenced block in the *body* of the
+- **Types** (```` ```class ```` fenced block in the *body* of an
   `02_architecture/` doc, and only there) renders as a class diagram, in the
   **Types & contracts** sub-section of §3 right after Data model. Data model is
   the data as stored; this is the code's own contracts:
