@@ -86,7 +86,7 @@ conventional layout.
 
    **Only `tech_stack:` may be filled from this report.** It states what a
    manifest declares, which is a fact. `components:` may not — a component's
-   description is a claim about behaviour, and item 3 below is the bar it has
+   description is a claim about behaviour, and item 4 below is the bar it has
    to meet.
 
 1. Ask with AskUserQuestion — question: "Đọc source của repo để điền
@@ -106,7 +106,7 @@ conventional layout.
    deployment manifests), then follow the calls outward. Read enough of each
    component to state what it *is* — not what its folder is called.
 
-2.5. **Decide how many Architecture documents this repo needs, before writing any.**
+3. **Decide how many Architecture documents this repo needs, before writing any.**
    `02_architecture/` is a folder. One deployable → keep `architecture.md`. Several
    (a monorepo of services, or one repo that ships more than one runnable thing) →
    one document per service, named after it: `orders.md`, `billing.md`. Each covers
@@ -121,7 +121,7 @@ conventional layout.
    The scaffold ships a single `architecture.md`. Splitting means renaming it and
    adding siblings — say what you are doing and why before you do it.
 
-3. Write `components`, one flat line each:
+4. Write `components`, one flat line each:
    `name [kind] `path/in/repo` — what it is, one sentence`. Rules:
    - the backticked path must be a path that **exists in this repo** — the
      reader will open it;
@@ -134,11 +134,11 @@ conventional layout.
    Longer explanation goes in a `### <name>` body section, which the rendered
    card picks up.
 
-4. Write `data_flow`, one edge per line, from real call sites and real
+5. Write `data_flow`, one edge per line, from real call sites and real
    queue/topic names: `a -> b : what moves`, `~>` when the caller does not wait.
    Only edges you can point at in the code.
 
-5. Write the **business flows** — one ```` ```flow ```` block per scenario, in the
+6. Write the **business flows** — one ```` ```flow ```` block per scenario, in the
    body of the product doc it belongs to (or of architecture for system-level
    ones). Pick the scenarios a newcomer would ask about first: the main
    write path, the main read path, and whatever the money or the data integrity
@@ -146,20 +146,21 @@ conventional layout.
    ordered steps, `outcome:`. Participant names must match `components` so the
    figure picks up their icons. See STANDARD §10.
 
-6. Write the **data model** — one ```` ```erd ```` block in the architecture
-   body, from the migrations or schema files that are actually in this repo.
+7. Write the **data model** — one ```` ```erd ```` block per architecture doc,
+   holding the tables **that doc's service owns**, from the migrations or schema
+   files that are actually in this repo.
    `table:` opens an entity, one column per line; a `fk -> other.id` flag is
    what draws a relationship, and cardinality is derived from it — never write
    cardinality by hand. Only tables and columns you read. See STANDARD §10.
 
-7. Write the **types** — one ```` ```class ```` block in the architecture body,
-   for the contract that matters most in this repo: the interface with more than
+8. Write the **types** — one ```` ```class ```` block per architecture doc,
+   for the contract that matters most in that service: the interface with more than
    one implementation, the one a constraint depends on. `interface:` / `class:`
    open a type, `implements` and `extends` are relation lines, a field whose
    type names another declared type draws its own edge. Do not transcribe the
    whole package — pick the boundary a newcomer needs.
 
-8. Write the **business logic** into `docs/03_business-logic/` when the code has
+9. Write the **business logic** into `docs/03_business-logic/` when the code has
    any: one ```` ```flowchart ```` per branching rule (`decide: node — câu hỏi?`
    makes a branch point) and one ```` ```state ```` per entity lifecycle
    (`initial:` / `final:` name real states). Each file needs `domain:` and
@@ -167,7 +168,7 @@ conventional layout.
    exactly what this folder is for — but only write the ones you read in the
    code.
 
-9. Set `verified_at:` in the Architecture (and Business logic) frontmatter to the
+10. Set `verified_at:` in the Architecture (and Business logic) frontmatter to the
    current rev — you just read that code, so record when:
 
    ```bash
@@ -178,7 +179,7 @@ conventional layout.
    which is what turns re-verification from "whenever someone remembers" into
    "when something actually changed". Leave it empty if the repo has no commit yet.
 
-10. State your confidence in the report. Anything inferred rather than read —
+11. State your confidence in the report. Anything inferred rather than read —
    say so, and leave it out rather than guess. An architecture doc that is
    confidently wrong is worse than an empty one.
 
