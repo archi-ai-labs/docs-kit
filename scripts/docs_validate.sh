@@ -346,6 +346,10 @@ anchor_paths() { # anchor_paths <file> → one repo-relative path per line
   # 1. the backticked path inside each components: entry
   fm_list "$1" components | awk '
     { n = split($0, part, "`"); if (n >= 3 && part[2] != "") print part[2] }'
+  # 1b. the generated artifact an API contract defers its volatile half to. It is
+  #     an anchor like any other: if it moves, the contract can no longer be
+  #     checked against reality, and the check going quiet is the danger.
+  fm_get "$1" generated_from
   # 2. the code: header of each figure fence in the body. Only a bare
   #    ```<type> line opens one, so a ```flow shown inside a ````markdown
   #    block is not a fence — same rule the renderer applies.

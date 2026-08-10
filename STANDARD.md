@@ -242,6 +242,7 @@ needs no grammar of its own.
 service: ""         # the component that publishes this contract
 protocol: http      # http | grpc | graphql | event
 base: ""            # optional. Base path, proto package, or topic prefix
+generated_from: ""  # optional. Path to the artifact holding the volatile half
 amended_by: []      # ONLY the Decision workflow appends entries here.
 rejected: []        # optional, same contract as Architecture's
 verified_at: ""     # optional, same contract as Architecture's
@@ -268,6 +269,49 @@ gate gets routed around.
 What lives here is the half no generator can state: which operations exist at the
 boundary, what each one means, and what the service deliberately does **not** expose.
 That changes rarely, which is exactly what makes it worth a Decision.
+
+#### `generated_from` — the volatile half, read rather than maintained
+
+Point it at the artifact the repo **already produces**: `openapi.json`, `*.proto`.
+The renderer reads it at render time and prints the real operation list beside the
+hand-written intent, marking each one:
+
+| state | meaning |
+|---|---|
+| matched | in both — nothing to do |
+| `artifact only` | **live and undocumented.** Per §6 adding it needed a Decision |
+| `documented only` | the contract describes an operation the artifact does not ship |
+
+The sync cost of that half is **zero**: nobody maintains it, it is re-read on every
+render. That is precisely what makes the intent half above worth a Decision gate — the
+part that changes often stopped being a document.
+
+Gate it in CI:
+
+```bash
+docs_render.sh --check-api .     # 0 = match · 1 = drift, or the artifact is unreadable
+```
+
+An unreadable artifact fails too. A gate that quietly does not run is the failure this
+gate exists to prevent.
+
+Three constraints, each a consequence rather than a preference:
+
+- **docs-kit consumes; it never generates.** Producing the artifact means knowing the
+  framework, and the detector's discipline (§ `docs_detect.py`) is to read declared
+  facts, never to infer them from a layout.
+- **OpenAPI must be JSON.** The portability floor is python 3.9 *stdlib*: it has a JSON
+  parser and no YAML one, and a hand-rolled YAML parser that misreads a contract is
+  worse than one that refuses to read it. A `.yaml` path fails with that message rather
+  than a guess.
+- **Events are excluded from the comparison.** OpenAPI describes no events, so counting
+  an `event` line as missing would make the check cry wolf on every correct contract.
+
+Path parameters are normalised before comparison — `{id}` and `:id` are the same
+operation, written by two tools neither of which is more correct — and `base` is
+stripped from both sides, so a spec that puts `/v1` in `servers` and one that puts it in
+every path describe the same API. The `generated_from` path is itself an anchor, so
+`[anchor]` reports it the moment the artifact moves.
 
 ### `20_issues/*.md` — Issue (id prefix `ISSUE-`)
 ```yaml
@@ -458,6 +502,13 @@ network) generates three self-contained pages into `docs/`, styled per
 | `docs/current.html` | Layer 1: product cards, roadmap board, component cards, data-flow figure, API contract tables, constraints, revision block, business-flow sequences |
 | `docs/changes.html` | Layer 2: issue/backlog boards, proposal & decision tables, trace chains, audit table |
 | `docs/INDEX.md` | **The read model for agents**, as the three pages are the read model for people: one line per document — id, status, refs, file, description |
+
+And two read-only gates, neither of which writes anything:
+
+| Command | Asks |
+|---|---|
+| `docs_render.sh --check .` | is `INDEX.md` current with the markdown? |
+| `docs_render.sh --check-api .` | do the API contracts match their generated artifacts? |
 
 ### `INDEX.md` — the rule that makes it worth generating
 

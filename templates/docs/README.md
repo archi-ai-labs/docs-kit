@@ -97,6 +97,12 @@ Mọi fact quan trọng ở layer 1 đều mang một **neo** vào source: compo
 Đọc lại code xong thì đẩy `verified_at` lên `git rev-parse --short HEAD`. Đây là thứ
 biến việc rà soát từ "nhớ thì làm" thành "có nguyên nhân mới làm".
 
+Riêng `04_api/` còn một neo mạnh hơn: `generated_from:` trỏ tới artifact repo tự sinh
+(`openapi.json`, `*.proto`). `docs_render.sh --check-api .` so contract với artifact và
+báo hai loại lệch — operation **đang chạy mà không ai mô tả** (đúng trigger §6, phát hiện
+sau khi việc đã rồi) và operation **mô tả rồi mà artifact không có**. Nửa sinh tự động
+không ai bảo trì, nên nó không thể cũ.
+
 ## 8 · Ngôn ngữ
 
 Khung tiếng Anh, giải thích tiếng Việt. Tên thư mục, tên trường frontmatter, giá

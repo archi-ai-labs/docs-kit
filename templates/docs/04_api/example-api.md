@@ -2,6 +2,7 @@
 service: ""         # tên component phát ra contract này — phải trùng một tên trong 02_architecture
 protocol: http      # http | grpc | graphql | event
 base: ""            # tuỳ chọn. Base path, package proto, hoặc tiền tố topic
+generated_from: ""  # tuỳ chọn. Đường dẫn tới artifact sinh tự động: openapi.json hoặc *.proto
 amended_by: []      # chỉ Decision workflow được ghi. "- YYYY-MM-DD DECISION-NNN <tóm tắt>"
 rejected: []        # tuỳ chọn. "- DECISION-NNN <đã loại cái gì>"
 verified_at: ""     # tuỳ chọn. git rev lúc đọc code lần cuối
@@ -50,6 +51,42 @@ khiến người ta tìm cách lách cổng.
 Thứ không generator nào nói được, nên nằm ở đây: **ranh giới có những operation nào, mỗi
 cái nghĩa là gì, và service này cố ý KHÔNG expose cái gì.** Nửa đó gần như không đổi —
 đúng thứ xứng đáng đi qua Decision.
+
+## Generated half
+
+`generated_from:` trỏ tới artifact mà repo **đã tự sinh** — `openapi.json`, `*.proto`.
+Renderer đọc nó lúc render và in danh sách operation thật bên cạnh phần intent ở trên,
+đánh dấu ba trạng thái:
+
+| Trạng thái | Nghĩa |
+|---|---|
+| khớp | Có ở cả hai — không phải làm gì |
+| `artifact only` | **Endpoint đang chạy mà không ai mô tả.** Theo STANDARD §6, thêm nó lẽ ra phải đi qua một Decision |
+| `documented only` | Contract mô tả nhưng artifact không có — tài liệu đang nói sai |
+
+Chi phí đồng bộ của nửa này bằng **0**: không ai bảo trì nó, nó được đọc lại mỗi lần
+render. Đó chính là điều khiến phần intent ở trên đáng đi qua cổng Decision — phần hay
+đổi đã không còn là tài liệu nữa.
+
+Chốt bằng CI:
+
+```bash
+docs_render.sh --check-api .
+```
+
+`0` = khớp · `1` = có operation lệch, hoặc không đọc được artifact. **Đọc không được
+cũng là lỗi** — một cổng âm thầm không chạy đúng là kiểu hỏng mà cổng này sinh ra để chặn.
+
+docs-kit **không sinh** artifact và sẽ không bao giờ sinh: làm việc đó nghĩa là phải biết
+framework (Gin khác Express khác FastAPI), trong khi kỷ luật của bộ detector là chỉ đọc
+sự thật đã được khai báo. Nó chỉ tiêu thụ một định dạng chuẩn.
+
+OpenAPI phải là **JSON**. Sàn portability là python 3.9 *stdlib* — có parser JSON, không
+có parser YAML, và một parser YAML tự viết đọc sai contract còn tệ hơn là từ chối đọc.
+Trỏ `generated_from` vào `openapi.json`; `.yaml` sẽ báo lỗi rõ ràng chứ không đoán bừa.
+
+Sự kiện (`event ...`) không nằm trong so sánh: OpenAPI không mô tả event, nên đếm nó là
+"thiếu" sẽ khiến check kêu oan ở mọi contract đúng.
 
 ## Không expose
 

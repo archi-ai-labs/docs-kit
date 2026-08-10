@@ -1696,6 +1696,137 @@ def parse_api(src):
     return (meta, ops) if ops else None
 
 
+PROTO_RPC_RE = re.compile(r"^\s*rpc\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(", re.M)
+
+
+def norm_op(verb, name, base=""):
+    """One spelling for an operation, so a hand-written line and a generated one
+    can be compared at all.
+
+    Path parameters are normalised (`{id}` and `:id` both become `{}`) because the
+    two halves are written by different tools and neither spelling is more correct.
+    The `base:` prefix is stripped from both sides for the same reason: a spec that
+    puts /v1 in `servers` and one that puts it in every path describe the same API.
+    """
+    n = name.strip()
+    if base and n.startswith(base):
+        n = n[len(base):] or "/"
+    n = re.sub(r"\{[^}]*\}", "{}", n)
+    n = re.sub(r":[A-Za-z_][A-Za-z0-9_]*", "{}", n)
+    if len(n) > 1:
+        n = n.rstrip("/")
+    return "%s %s" % (verb.upper(), n)
+
+
+def read_generated_ops(root, rel, base=""):
+    """The volatile half of an API contract, read from the artifact that owns it.
+
+    docs-kit does not generate this and never will: producing it means knowing the
+    framework (Gin is not Express is not FastAPI), and the detector's whole
+    discipline is to read declared facts rather than infer them. It consumes a
+    standard artifact the repo already produces instead.
+
+    OpenAPI must be **JSON**. The portability floor is python 3.9 *stdlib*, which
+    has a JSON parser and no YAML one, and a hand-rolled YAML parser that silently
+    misreads a contract is worse than refusing to read it. Say so and stop.
+
+    Returns (ops, error) — ops is a sorted list of normalised operations.
+    """
+    path = (root / rel).resolve()
+    if not path.is_file():
+        return [], "không tìm thấy %s" % rel
+    text = path.read_text(encoding="utf-8", errors="replace")
+    suffix = path.suffix.lower()
+
+    if suffix == ".proto":
+        return sorted({norm_op("RPC", m) for m in PROTO_RPC_RE.findall(text)}), ""
+
+    if suffix in (".yaml", ".yml"):
+        return [], ("%s là YAML — bộ đọc chỉ dùng python stdlib nên không có parser "
+                    "YAML. Xuất bản JSON (openapi.json) và trỏ generated_from vào đó; "
+                    "một parser YAML tự viết đọc sai contract còn tệ hơn là không đọc." % rel)
+
+    if suffix != ".json":
+        return [], "%s: chỉ đọc được .json (OpenAPI) hoặc .proto" % rel
+
+    try:
+        spec = json.loads(text)
+    except ValueError as exc:
+        return [], "%s không phải JSON hợp lệ (%s)" % (rel, exc)
+    paths = spec.get("paths") if isinstance(spec, dict) else None
+    if not isinstance(paths, dict):
+        return [], "%s không có object `paths` — đây có phải OpenAPI không?" % rel
+    ops = set()
+    for p, item in paths.items():
+        if not isinstance(item, dict):
+            continue
+        for verb in item:
+            if verb.lower() in ("get", "put", "post", "delete", "options",
+                                "head", "patch", "trace"):
+                ops.add(norm_op(verb, p, base))
+    return sorted(ops), ""
+
+
+def api_drift(doc, root):
+    """Compare the operations a contract *documents* against the ones its artifact
+    actually ships. Returns (both, doc_only, gen_only, error) or None when the doc
+    declares no artifact.
+
+    `gen_only` is the finding this whole item exists for: an operation that is live
+    and that nobody documented. STANDARD §6 has always said a code change touching
+    an API contract needs a Decision first; until now nothing could tell that the
+    change had happened.
+
+    Events are excluded from the comparison. OpenAPI describes no events, so an
+    `event` line can never appear in the artifact and counting it as missing would
+    make the check cry wolf on every correct contract.
+    """
+    rel = fm_str(doc, "generated_from")
+    if not rel or "<" in rel or ">" in rel:
+        return None
+    base = fm_str(doc, "base")
+    gen, err = read_generated_ops(root, rel, base)
+    if err:
+        return [], [], [], err
+    documented = set()
+    for block in extract_figures(doc["body"])[0]["api"]:
+        parsed = parse_api(block)
+        if not parsed:
+            continue
+        for op in parsed[1]:
+            if op["verb"] == "event":
+                continue
+            documented.add(norm_op(op["verb"], op["name"], base))
+    gen_set = set(gen)
+    return (sorted(documented & gen_set), sorted(documented - gen_set),
+            sorted(gen_set - documented), "")
+
+
+def api_drift_table(drift, rel, here):
+    both, doc_only, gen_only, err = drift
+    if err:
+        return ('<div class="note"><span class="lbl">Note</span>Không đọc được artifact '
+                "<code>%s</code>: %s</div>" % (esc(rel), esc(err)))
+    rows = []
+    for op in gen_only:
+        rows.append(('<tr><td class="mono">%s</td><td><span class="tag">artifact only</span></td>'
+                     "<td>Đang chạy nhưng không có trong contract — theo §6 việc thêm nó "
+                     "phải đi qua một Decision</td></tr>") % esc(op))
+    for op in doc_only:
+        rows.append(('<tr><td class="mono">%s</td><td><span class="tag">documented only</span></td>'
+                     "<td>Contract mô tả nhưng artifact không có — tài liệu đang nói sai</td></tr>")
+                    % esc(op))
+    head = ('<div class="seqline"><span class="lbl">Generated</span><code>%s</code> · '
+            "%d khớp · %d chỉ có ở artifact · %d chỉ có ở contract</div>"
+            % (esc(rel), len(both), len(gen_only), len(doc_only)))
+    if not rows:
+        return head + ('<div class="note"><span class="lbl">OK</span>Mọi operation trong '
+                       "artifact đều đã được mô tả, và ngược lại.</div>")
+    return head + ('<table class="data"><tr><th style="width:220px">operation</th>'
+                   '<th style="width:130px">state</th><th>nghĩa là gì</th></tr>%s</table>'
+                   % "".join(rows))
+
+
 def api_table(src, here):
     """An `api` fence renders as a table, never a figure — on purpose.
 
@@ -3215,6 +3346,11 @@ def build_current(ctx, docs, data):
             else:
                 parts.append(empty_state("NO OPERATIONS — thêm một khối <code>api</code> "
                                          "vào body: <code>GET /orders/{id} -&gt; Order</code>"))
+            # The generated half, read from the artifact the repo already produces.
+            # Nothing here is maintained by hand, so nothing here can go stale.
+            drift = api_drift(d, docs.parent)
+            if drift is not None:
+                parts.append(api_drift_table(drift, fm_str(d, "generated_from"), here))
             rest_html = md_to_html(rest_body, here, comps, figs)
             if rest_html.strip():
                 parts.append('<details class="more"><summary>Ghi chú contract</summary>'
@@ -3819,14 +3955,56 @@ def build_index_md(data):
 
 
 def main():
-    argv = [a for a in sys.argv[1:] if a != "--check"]
-    check_only = len(argv) != len(sys.argv) - 1
+    flags = set(a for a in sys.argv[1:] if a.startswith("-"))
+    argv = [a for a in sys.argv[1:] if not a.startswith("-")]
+    unknown = flags - {"--check", "--check-api"}
+    if unknown:
+        print("docs-render: unknown flag(s): %s" % " ".join(sorted(unknown)), file=sys.stderr)
+        return 2
+    check_only = "--check" in flags
+    check_api = "--check-api" in flags
     root = Path(argv[0]).resolve() if argv else Path.cwd()
     docs = root / "docs"
     if not docs.is_dir():
         print("docs-render: no docs/ directory under %s — run /docs-kit:docs-init first" % root,
               file=sys.stderr)
         return 2
+
+    if check_api:
+        # The enforcement STANDARD §6 always asked for and never had: it demands a
+        # Decision before a code change touches an API contract, but nothing could
+        # tell that the change had happened. Comparing the documented operations
+        # against the shipped artifact can, and deterministically.
+        declared, findings, errors = 0, [], []
+        for d in load_docs(docs)["api"]:
+            drift = api_drift(d, root)
+            if drift is None:
+                continue
+            declared += 1
+            _both, doc_only, gen_only, err = drift
+            name = d["path"].name
+            if err:
+                errors.append("%s: %s" % (name, err))
+                continue
+            for op in gen_only:
+                findings.append("%s: '%s' is live but undocumented — per STANDARD §6 "
+                                "adding it needed a Decision" % (name, op))
+            for op in doc_only:
+                findings.append("%s: '%s' is documented but absent from the artifact — "
+                                "the contract says something untrue" % (name, op))
+        if not declared:
+            print("API OK — no 04_api doc declares generated_from; nothing to compare")
+            return 0
+        for line in errors + findings:
+            print("DRIFT %s" % line, file=sys.stderr)
+        if errors or findings:
+            # An unreadable artifact fails too: a check that quietly does not run is
+            # the exact failure mode this whole gate exists to prevent.
+            print("docs-render --check-api: %d contract(s) checked, %d problem(s)"
+                  % (declared, len(errors) + len(findings)), file=sys.stderr)
+            return 1
+        print("API OK — %d contract(s) match their generated artifact" % declared)
+        return 0
 
     if check_only:
         want = build_index_md(load_docs(docs))

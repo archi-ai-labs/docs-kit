@@ -5,6 +5,63 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
+## [0.21.0] — 2026-08-10
+
+### Added — `generated_from:`, the volatile half read instead of maintained
+
+Item H, and it arrived much narrower than the proposal described it — deliberately.
+The proposal imagined docs-kit *generating* the volatile half of a contract from route
+tables. That was wrong: producing it means knowing the framework, Gin is not Express is
+not FastAPI, and `docs_detect.py`'s whole discipline is to read declared facts rather
+than infer them from a layout. **docs-kit consumes a standard artifact the repo already
+produces. It does not generate one, and it should not.**
+
+An `04_api/` doc may point `generated_from:` at `openapi.json` or a `*.proto`. The
+renderer reads it at render time and prints the real operation list beside the
+hand-written intent, marking each operation `matched`, `artifact only`, or
+`documented only`. The sync cost of that half is zero, because nobody maintains it.
+
+That is what makes the intent half worth a Decision gate: the part that changes often
+stopped being a document.
+
+### Added — `--check-api`: the enforcement §6 asked for and never had
+
+§6 has always said a code change touching an API contract needs a Decision first.
+Nothing could tell that the change had happened. Now something can:
+
+```bash
+docs_render.sh --check-api .     # 0 = match · 1 = drift, or the artifact is unreadable
+```
+
+Two findings, and they are not the same problem:
+
+- **live but undocumented** — the §6 trigger firing after the fact. An endpoint shipped
+  without going through the gate.
+- **documented but absent** — the contract states something untrue.
+
+An unreadable artifact fails too. A gate that quietly does not run is the failure this
+gate exists to prevent — the same reasoning that made `INDEX.md` staleness a hard exit
+in 0.18.1.
+
+### Three constraints, each a consequence rather than a preference
+
+- **OpenAPI must be JSON.** The floor is python 3.9 *stdlib*: it has a JSON parser and
+  no YAML one. A hand-rolled YAML parser that misreads a contract is worse than one that
+  refuses to read it, so a `.yaml` path fails with that sentence instead of a guess.
+- **Events are excluded from the comparison.** OpenAPI describes no events, so counting
+  an `event` line as missing would make the check cry wolf on every correct contract.
+- **Path parameters are normalised** — `{id}` and `:id` are the same operation written
+  by two tools, neither more correct — and `base` is stripped from both sides, so a spec
+  that puts `/v1` in `servers` and one that puts it in every path describe the same API.
+
+### Changed
+
+- `generated_from` is an anchor, so `[anchor]` reports a moved artifact for free. No new
+  check was needed; the mechanism added in 0.18.0 already covered it.
+- `docs-check` runs all three read-only gates now — validator, `--check`, `--check-api`
+  — and is explicit that these are more scripts, not more opinions.
+- An unknown flag exits 2 instead of being silently treated as a repo path.
+
 ## [0.20.0] — 2026-08-10
 
 ### Added — `04_api/`, because §6 contradicted itself

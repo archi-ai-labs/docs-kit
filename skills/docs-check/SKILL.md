@@ -11,7 +11,7 @@ the source of truth for form — do not eyeball-validate in its place, do not ad
 findings it did not report, and **do not fix anything**. Fixing belongs to
 `/docs-kit:docs-sync` or to the user.
 
-## Step 1 — Run the two deterministic checks
+## Step 1 — Run the three deterministic checks
 
 Resolve the plugin root (in order: `$CLAUDE_PLUGIN_ROOT` env var → two levels
 above this SKILL.md → `find ~/.claude/plugins -maxdepth 6 -type d -name docs-kit`
@@ -33,10 +33,23 @@ bash "$PLUGIN_ROOT/scripts/docs_render.sh" --check .
 Exit codes: `0` current · `1` `docs/INDEX.md` missing or stale · `2` no `docs/`
 · `3` no `python3` (say so and move on — it is not a docs problem).
 
-**This is a second script, not a second opinion.** It writes nothing and it
-rebuilds the index through the same code path the renderer uses, so it never
-disagrees with what a real render would produce. The rule below still holds
-exactly: report what the scripts said, add nothing, fix nothing.
+Then, when any `04_api/` doc declares `generated_from:`, check the contracts against
+the artifacts they defer their volatile half to:
+
+```bash
+bash "$PLUGIN_ROOT/scripts/docs_render.sh" --check-api .
+```
+
+Exit `0` match (or nothing declares an artifact) · `1` drift, or an artifact that
+could not be read. Two kinds of drift, and they mean different things — say which:
+an operation that is **live but undocumented** is the §6 trigger firing after the
+fact, and an operation **documented but absent** means the contract states something
+untrue.
+
+**These are more scripts, not more opinions.** Both `--check` modes write nothing
+and go through the same code paths a real render uses, so neither can disagree with
+one. The rule at the top still holds exactly: report what the scripts said, add
+nothing, fix nothing.
 
 ## Step 2 — Report
 

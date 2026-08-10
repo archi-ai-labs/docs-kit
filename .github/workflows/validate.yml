@@ -262,6 +262,68 @@ jobs:
           fi
           echo "OK — 04_api validated, joined and rendered"
 
+      # generated_from is the enforcement STANDARD 6 always asked for: it demands a
+      # Decision before an API contract changes, and until now nothing could tell
+      # that the change had happened. Both directions of drift must be caught, the
+      # path-parameter normalisation must hold, and a YAML spec must be refused with
+      # a message rather than guessed at.
+      - name: check-api catches drift in both directions
+        run: |
+          work="$(mktemp -d)"
+          git -C "$work" init -q
+          bash scripts/docs_scaffold.sh "$work" >/dev/null
+          mkdir -p "$work/internal/orders" && echo x > "$work/internal/orders/svc.go"
+          printf '{"openapi":"3.0.0","paths":{"/v1/orders/{id}":{"get":{}},"/v1/internal/debug":{"get":{}}}}' \
+            > "$work/openapi.json"
+          python3 - "$work" <<'PY'
+          import pathlib, re, sys
+          root = pathlib.Path(sys.argv[1])
+          a = root / "docs/02_architecture/architecture.md"
+          a.write_text(a.read_text().replace(
+              "components: []",
+              "components:\n  - orders `internal/orders/svc.go` — sở hữu đơn hàng"))
+          q = root / "docs/04_api/example-api.md"
+          t = q.read_text()
+          t = (t.replace('service: ""', 'service: "orders"')
+                .replace('base: ""', 'base: "/v1"')
+                .replace('generated_from: ""', 'generated_from: "openapi.json"'))
+          # `:id` here, `{id}` in the spec — normalisation must treat them as one.
+          t = re.sub(r"(?m)^(GET|POST|DELETE|event) .*\n", "", t)
+          t = t.replace("code: <thư mục chứa router/handler>",
+                        "code: <thư mục chứa router/handler>\n"
+                        "GET /orders/:id -> Order — đọc một đơn\n"
+                        "PATCH /orders/{id} -> Order — không tồn tại thật")
+          q.write_text(t)
+          PY
+          out="$(bash scripts/docs_render.sh --check-api "$work" 2>&1)" && {
+            echo "::error::check-api passed a contract with drift in both directions."
+            exit 1
+          }
+          echo "$out"
+          echo "$out" | grep -q "GET /internal/debug' is live but undocumented" \
+            || { echo "::error::an undocumented live operation was not reported."; exit 1; }
+          echo "$out" | grep -q "PATCH /orders/{}' is documented but absent" \
+            || { echo "::error::an operation documented but absent was not reported."; exit 1; }
+          echo "$out" | grep -q "GET /orders" && {
+            echo "::error::':id' vs '{id}' were treated as different operations."; exit 1; }
+          # Fix both sides; the check must go quiet.
+          printf '{"openapi":"3.0.0","paths":{"/v1/orders/{id}":{"get":{}}}}' > "$work/openapi.json"
+          sed -i '/^PATCH \/orders/d' "$work/docs/04_api/example-api.md"
+          bash scripts/docs_render.sh --check-api "$work" \
+            || { echo "::error::check-api reported drift on a matching contract."; exit 1; }
+          # YAML must be refused with a reason, never parsed by guesswork.
+          cp "$work/openapi.json" "$work/openapi.yaml"
+          sed -i 's|generated_from: "openapi.json"|generated_from: "openapi.yaml"|' \
+            "$work/docs/04_api/example-api.md"
+          bash scripts/docs_render.sh --check-api "$work" 2>&1 | grep -q "YAML" \
+            || { echo "::error::a YAML spec was not refused with an explanation."; exit 1; }
+          # A moved artifact is an anchor problem, and [anchor] must own it.
+          sed -i 's|generated_from: "openapi.yaml"|generated_from: "api/gone.json"|' \
+            "$work/docs/04_api/example-api.md"
+          bash scripts/docs_validate.sh "$work/docs" 2>&1 | grep -q "FAIL \[anchor\].*api/gone.json" \
+            || { echo "::error::a missing generated_from artifact was not caught by [anchor]."; exit 1; }
+          echo "OK — drift caught both ways, paths normalised, YAML refused"
+
       # Hooks are deterministic and warn-only: they must speak on a real
       # architecture edit and stay silent on anything else.
       - name: Hooks warn on architecture, silent elsewhere
