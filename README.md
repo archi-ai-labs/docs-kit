@@ -155,7 +155,7 @@ plugin on by default.
 |---|---|---|
 | `/docs-kit:docs-init` | Detect the stack from the repo's manifests, ask what the repo owns, scaffold the folders that profile calls for (11–16) + templates into `docs/`, read the repo's source to fill Architecture, and optionally wire the rules into `CLAUDE.md`. Refuses to touch an existing `docs/`; asks before every write outside the scaffold. | Yes |
 | `/docs-kit:docs-sync` | End-of-session reconcile: backlog statuses, audit entries, retroactive Issues, pending Architecture amendments, architecture-vs-code drift, and archiving what can no longer change. | Yes |
-| `/docs-kit:docs-check` | Run the deterministic validator and explain each failure. Never fixes. | No |
+| `/docs-kit:docs-check` | Run the three deterministic checks — the validator, a stale-`INDEX.md` gate, and API-contract drift against a generated artifact — and explain each failure. Never fixes. | No |
 | `/docs-kit:docs-render` | Generate/refresh the read models of `docs/` — three HTML pages and `INDEX.md`. Deterministic; never edits the source markdown. | Yes (generated files only) |
 | `/docs-kit:docs-upgrade` | Bring an existing `docs/` up to the current standard, and to its own profile: add folders and seeds it lacks, regenerate the read models, re-run the checks. Also the path when a repo grows — declare a new `owns` token, run this, get the folders it justifies. Adds only — never overwrites, edits, or deletes. | Yes (adds only) |
 | `/docs-kit:brief` | Turn settled decisions into a delegation prompt for a coding agent — gates on a decision-freeze check first. In a repo that has `docs/`, also records the work as an Issue and routes it through Layer 2 before writing the prompt. The one skill Claude may invoke on its own. | Yes (`docs/`, only after you confirm) |
@@ -178,6 +178,7 @@ $ /docs-kit:docs-sync
 ```
 LAYER 1 — FOUNDATION   Products → Roadmap → Architecture → API (state; only Decisions amend)
 LAYER 2 — CHANGE       Issue → [Proposal → Decision] → Backlog (process; traceable)
+                       terminal records move to _archive/ — still validated, no longer read
 LAYER 3 — REFERENCE    Conventions/Services/Runbooks/Deploy/FE/QA (edit directly)
 OVERSIGHT              92_audit — append-only audit log
 ```
@@ -206,7 +207,7 @@ input, same output bytes, no LLM and no network:
 | Page | Content |
 |---|---|
 | `docs/index.html` | Menu beside README: system map, sheet cards, Layer-3 listing, the one hard rule |
-| `docs/current.html` | Layer 1 — product cards, roadmap board, component cards, data-flow figure, business-flow sequences, revision block |
+| `docs/current.html` | Layer 1 — product cards, roadmap board, component cards, data-flow graph, ERD, class diagram, API contract tables, business-flow sequences, decision flowcharts, state machines, revision block. A section the repo has nothing for is omitted, and the rest renumber |
 | `docs/changes.html` | Layer 2 — issue/backlog boards, proposal & decision tables, trace chains, audit table |
 | `docs/INDEX.md` | The read model for **agents** — one line per document: id, status, refs, file, description |
 
@@ -298,10 +299,17 @@ claude plugin validate .    # manifest + skill frontmatter
 ```
 
 That, and the full test recipe, run automatically on every push and PR via
-[`.github/workflows/validate.yml`](.github/workflows/validate.yml): tag-vs-version,
-manifest JSON, script syntax on python 3.9 (the portability floor), a fresh
-scaffold validating clean, the validator still rejecting a dangling ref, both
-hooks, and `design/sample-*.html` matching a fresh render.
+[`.github/workflows/validate.yml`](.github/workflows/validate.yml) — 28 steps:
+tag-vs-version, manifest JSON, script syntax on python 3.9 (the portability
+floor), a fresh scaffold validating clean, every profile branch producing exactly
+its folder set, an unknown `owns` token being refused, `--sync` growing a tree and
+never shrinking one, `INDEX.md` being complete and byte-deterministic, both
+`--check` gates catching drift in both directions, the validator still rejecting a
+dangling ref and a moved path, both hooks, and `design/sample-*.html` matching a
+fresh render.
+
+Most of those are **mutation tests** — they break something on purpose and assert
+the check fails. A gate that has only ever been seen passing is not a gate.
 
 </details>
 
@@ -317,13 +325,20 @@ bash scripts/docs_validate.sh "$work/docs"     # arg is the DOCS dir, not the re
 # render, reproducibly
 DOCS_KIT_NOW=2026-07-31T09:30:00 python3 scripts/docs_render.py "$work"
 
+# the two read-only gates — write nothing, exit 1 on drift
+bash scripts/docs_render.sh --check "$work"        # is INDEX.md current?
+bash scripts/docs_render.sh --check-api "$work"    # does 04_api match the generated artifact?
+
+# scaffold a profile instead of the full tree — 12 folders here, not 16
+lib="$(mktemp -d)"; bash scripts/docs_scaffold.sh --owns data,endpoints "$lib"
+
 # regenerate the design samples — must produce no diff
 bash design/make-samples.sh && git diff --stat -- design/
 ```
 
-Mutating a ref, an enum, an audit line, or an `amended_by` entry must turn the
-validator's `OK` into `FAIL` lines — a validator that only ever passes is not a
-test.
+Mutating a ref, an enum, an audit line, an `amended_by` entry, or a path named in
+`components` must turn the validator's `OK` into `FAIL` lines — a validator that
+only ever passes is not a test.
 
 </details>
 
@@ -359,8 +374,9 @@ docs-kit/
 ├── .claude-plugin/plugin.json   # the plugin manifest (single source of version)
 ├── .github/workflows/validate.yml
 ├── STANDARD.md                  # source of truth for the model
-├── skills/                      # all five commands: docs-init (entry point),
-│                                #   docs-sync, docs-check, docs-render, brief
+├── skills/                      # all six commands: docs-init (entry point),
+│                                #   docs-sync, docs-check, docs-render,
+│                                #   docs-upgrade, brief
 ├── references/                  # mechanics shared by more than one skill
 │   └── issue-capture.md         #   creating an Issue — read by brief + docs-sync
 ├── hooks/hooks.json             # 2 deterministic warn-only hooks
@@ -412,9 +428,13 @@ of the same name, so those three never ran. The other two, `brief` and
 - **Blocking enforcement, once the triggers have earned it.** The hooks warn today
   because the rules are young. The path to blocking runs through false-positive
   data from real projects, not through confidence.
-- **More read models from the same markdown.** The renderer gained business-flow
-  sequences in 0.7.0; domain state machines (`order: new → open → filled`) are the
-  obvious next figure, since they answer a question no static component map can.
+- **A cross-repo view.** Every figure today is scoped to one repo, and per-service
+  architecture made that scoping sharper. In a system spread across many repos the
+  whole is now never visible in one picture — the one requirement the current model
+  provably does not meet ([DESIGN-NOTES §2.8](DESIGN-NOTES.md)).
+- **Evidence for the profile branch.** `owns` decides the folder set as of 0.23.0,
+  on one real repo's worth of evidence. Two more repos where `NOTE [profile]` never
+  cries wolf is what would turn that from a decision into a tested one.
 - **Beyond Claude Code.** The three-layer model, the lane test and the validator
   are plain markdown and POSIX scripts — none of that is Claude-specific. Only the
   packaging (skills, commands, hooks) is, so another agent would need a new

@@ -15,7 +15,9 @@
 #
 #         --owns names what this repo holds title to (STANDARD §9), and that is
 #         what decides which folders it gets: `--owns data,endpoints` scaffolds
-#         13 folders, not 16. Tokens: data · endpoints · screens · jobs · deploys.
+#         12 folders, not 16 — 11 core plus 04_api, since `data` unlocks nothing
+#         (see docs_profile.sh for the map). Tokens: data · endpoints · screens
+#         · jobs · deploys.
 #         `--owns ""` is legal and means "nothing conditional" — a library.
 #
 #         WITHOUT --owns the profile is read from `.docs-kit.json`, and a repo
