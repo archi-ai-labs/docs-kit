@@ -444,7 +444,7 @@ relationships) are never addressed concretely; and the scaffold should adapt to 
 product the repo holds. Splitting the lifetime cost of a docs set four ways — write, read,
 verify, repair — showed the first two were being paid at the read step and the larger two
 were not being addressed at all. This release lands the read-cost work and the first half of
-the verify work. The rest is written up in `briefs/proposal-scope-and-scale.md`, including a
+the verify work. The rest is written up in [DESIGN-NOTES.md](DESIGN-NOTES.md), including a
 self-assessment of what these changes still do not fix.
 
 ### Added — `docs/INDEX.md`, the read model for agents
@@ -671,8 +671,7 @@ this repo rather than assumed, shaped the rest —
   serially itself, and runs the validator and renderer exactly once at the end.
 
 Caps are never silent: the run reports what the ceiling dropped, what the guards rejected,
-what failed verification, and any file written outside its ownership. Full analysis in
-`briefs/proposal-parallel-gate.md`.
+what failed verification, and any file written outside its ownership.
 
 ### Fixed — the gate with the most to settle was the one that broke
 
@@ -694,8 +693,8 @@ call, and the rest go to the follow-up call step 2 already provided for. The rea
 written inline, per the skill's own technique (b) — without it, a future editor reads the
 reserved slot as timidity and takes it back.
 
-Found while analysing a proposed parallel-execution gate for the same skill; the analysis
-itself is in `briefs/proposal-parallel-gate.md` and shipped no behaviour change.
+Found while analysing a proposed parallel-execution gate for the same skill; that analysis
+shipped no behaviour change of its own.
 
 ## [0.15.0] — 2026-08-03
 

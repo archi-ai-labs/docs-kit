@@ -192,6 +192,10 @@ skill, hook, script, and template conforms to. Frontmatter contracts (§4), the
 validator contract (§7), the generated views and figure standard (§10), and the
 language split (§11) are specified there, not left to habit.
 
+What the model deliberately **cannot** do is written down too, in
+**[DESIGN-NOTES.md](DESIGN-NOTES.md)** — eight known limitations, and the reasoning
+behind keeping documentation as text in git rather than moving it into a database.
+
 ---
 
 ## 🖼 Generated views
@@ -373,6 +377,8 @@ docs-kit/
 ├── briefs/                      # gitignored — where `brief` writes its output, in
 │                                #   every repo. Never committed: CHANGELOG.md is
 │                                #   where reasoning lives once a change lands.
+├── DESIGN-NOTES.md              # reasoning that never became code — known limits,
+│                                #   and why docs are text in git, not a database
 ├── CHANGELOG.md
 ├── LICENSE
 └── README.md
