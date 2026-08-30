@@ -2216,6 +2216,43 @@ def erd_columns_table(order, tables, here):
             "<th>ghi chú</th></tr>%s</table>" % "".join(rows))
 
 
+def erd_dbml(meta, order, tables):
+    """The same parse, spelled as DBML so it can be pasted into dbdiagram.io for
+    a drag-and-drop view.
+
+    A third rendering, not a second source. It reads the tuple `parse_erd`
+    already produced — never the fence text — so it cannot describe a schema the
+    figure and the column table above it do not. Nothing writes this to a file:
+    a committed .dbml would be a second thing to edit, and the frozen copy is
+    always the one that goes stale.
+
+    Cardinality is still never written by hand. `>` is what a foreign key means;
+    `unique` is the only flag that changes it, exactly as in the figure."""
+    out = []
+    if meta.get("title"):
+        out.append("// %s" % meta["title"])
+    if meta.get("code"):
+        out.append("// code: %s" % meta["code"])
+    if out:
+        out.append("")
+    for t in order:
+        out.append("Table %s {" % t)
+        for cname, ctype, tags, gloss, ref in tables[t]:
+            attrs = [k for k in ("pk", "unique", "null") if k in tags]
+            if ref:
+                attrs.append("ref: %s %s.%s"
+                             % ("-" if "unique" in tags else ">", ref[0], ref[1]))
+            if gloss:
+                attrs.append("note: '%s'" % gloss.replace("\\", "\\\\").replace("'", "\\'"))
+            # DBML requires a type on every column; the fence does not, and
+            # inventing a plausible one would be inventing a fact.
+            out.append("  %s %s%s" % (cname, ctype or "unknown",
+                                      (" [%s]" % ", ".join(attrs)) if attrs else ""))
+        out.append("}")
+        out.append("")
+    return "\n".join(out).rstrip()
+
+
 def erd_figure(src, comps, figs, here):
     parsed = parse_erd(src)
     if parsed is None:
@@ -2272,7 +2309,10 @@ def erd_figure(src, comps, figs, here):
 
     body = ('<div class="plot flowfig">%s%s<p class="figcap">%s</p></div>'
             % ("".join(head), svg, caption)) if svg else ""
-    return "".join(notes) + body + erd_columns_table(order, tables, here)
+    dbml = ('<details class="more"><summary>DBML — dán vào dbdiagram.io</summary>'
+            "<pre><code>%s</code></pre></details>"
+            % esc(erd_dbml(meta, order, tables)))
+    return "".join(notes) + body + erd_columns_table(order, tables, here) + dbml
 
 
 # ---------------------------------------------------------------- types (class)

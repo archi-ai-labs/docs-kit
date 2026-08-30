@@ -5,6 +5,52 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
+## [0.24.0] — 2026-08-17
+
+### Added — the ERD prints itself as DBML, for dbdiagram.io
+
+Every ERD now ends with a collapsed **DBML** block. Copy it, paste it into
+dbdiagram.io, and you get the drag-and-drop view with PNG/PDF export that the
+static figure deliberately is not.
+
+The whole design question here was *where the schema lives*, not how to print it.
+Three tempting answers were rejected before this one:
+
+1. **An `<iframe>` to a dbdiagram.io embed.** Five lines, and the schema stops
+   living in the repo. A pull request that changes the data model would show an
+   empty diff, offline readers get a white box, and print gets nothing.
+2. **A `dbml` fence beside `erd`.** Cheap in code — `erd_figure` only wants the
+   tuple `parse_erd` returns, so a second parser producing that tuple would inherit
+   `svg_dag`, struct routing, crow's feet and the column table for free. Rejected
+   anyway: two ways to write one fact in one folder, and the author has to choose.
+   DBML also carries constructs with no home here — `Ref: a.id <> b.id` has no
+   foreign-key column to leave from, `<` runs backwards, and `Enum`/`TableGroup`/
+   indexes have no model at all.
+3. **A converter script writing `schema.dbml`.** This one *looks* clean and is the
+   actual trap: the moment the file is committed, somebody edits it instead of the
+   fence, and the frozen copy is the one that goes stale — the same reasoning
+   `.gitignore` already gives for `briefs/`.
+
+What landed instead adds no file and no syntax. `erd_dbml()` reads the tuple
+`parse_erd` already produced — never the fence text — and prints it beside the
+figure and the column table. **Three renderings, one parse**, which is what the
+column table has been since the ERD shipped. Cardinality stays underived-by-hand:
+`>` is what a foreign key means, `-` when the key is `unique`.
+
+**There is deliberately no reverse path.** Reading DBML back in is the same ~70
+lines, and it is the one direction that would create a second place to author a
+schema. One-way is a view; two-way is two sources.
+
+Verified against `@dbml/core`, not by eye: the orderhub fixture parses to 5 tables
+and 5 refs, and `refunds.order_id [unique]` comes back as `1 --- 1` while the other
+four come back `1 --- *`. Where the figure has to compromise, the DBML does not —
+`orders.parent_order_id` is nullable, but its `○` is lost to the converged trunk on
+`orders.id` (majority wins, as designed), and the `[null]` flag survives in both the
+column table and the DBML.
+
+Sample gate held: `design/sample-current.html` gained exactly one `<details>` block
+and all 12 SVGs are byte-identical to 0.23.0.
+
 ## [0.23.0] — 2026-08-11
 
 ### Added — item F: the docs tree follows what the repo actually owns

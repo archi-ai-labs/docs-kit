@@ -791,6 +791,16 @@ Rules:
   table · column · type · keys · relationship · note — prints under every ERD, and
   a schema with no foreign key at all prints only that table, because a picture of
   unconnected boxes says nothing the table does not.
+
+  A collapsed **DBML** block prints last, for pasting into dbdiagram.io when a
+  drag-and-drop view is wanted. It is a third rendering of the same parse, beside
+  the figure and the column table — not a second source: it reads the parsed
+  tables, never the fence text, so it cannot describe a schema the other two do
+  not. Cardinality is still never written by hand (`>` from the foreign key, `-`
+  when the key is `unique`). **Nothing writes it to a file, and a `.dbml` in the
+  repo would be the mistake it exists to avoid** — a second thing to edit, frozen
+  the moment it is written. There is deliberately no reverse path: reading DBML
+  back in would create a second place to author the schema.
 - **Types** (```` ```class ```` fenced block in the *body* of an
   `02_architecture/` doc, and only there) renders as a class diagram, in the
   **Types & contracts** sub-section of §3 right after Data model. Data model is
