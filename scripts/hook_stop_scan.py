@@ -1,4 +1,4 @@
-"""docs-kit Stop-hook worker: detect sensitive edits without docs traceability.
+"""docs-kit Stop-hook worker: report edits to code a document claims to describe.
 
 WHY WARN-ONLY (do not "fix" this into a block):
     These enforcement rules have not been battle-tested across real projects yet.
@@ -6,33 +6,105 @@ WHY WARN-ONLY (do not "fix" this into a block):
     which loses ALL enforcement. Warn now; promote to block only after the
     trigger rules have been tuned in practice. Deterministic — never calls an LLM.
 
+WHY THIS ASKS A DIFFERENT QUESTION THAN IT USED TO (0.25.0):
+    It used to ask "does this path look sensitive", matching `**/schema/**`,
+    `**/api/**`, `**/migrations/**` against every edit. Measured on a real
+    monorepo whose service directory is named `apps/api/`, that glob matched 57
+    of 57 edited files — every test, every changelog — because "a directory
+    called api" and "an API boundary" are not the same thing and a pattern cannot
+    tell them apart. The warning fired in 15 of 36 sessions and, in that repo,
+    could not be silenced at all: the engagement check looked for
+    `docs/22_decisions/` while the repo used `docs/20_decisions/`.
+
+    It now asks "does any document claim to describe this file", which is a fact
+    the docs already state — a component names its `path/in/repo`, a figure fence
+    takes a `code:` header — collected into `docs/MAP.tsv` by docs-render. A file
+    nobody documents produces silence, however sensitive its path looks.
+
 Logic:
   1. Read hook JSON from stdin (needs `cwd` and `transcript_path`).
-  2. Guard: only act in repos that actually use docs-kit (docs/ skeleton present).
-  3. Load sensitive path patterns from <cwd>/.docs-kit.json (`sensitive_paths`),
-     falling back to **/schema/**, **/api/**, **/migrations/**.
-  4. Scan the session transcript (JSONL):
-       - collect Edit/Write file paths matching a sensitive pattern
-         (paths under docs/ are never sensitive-zone code);
-       - mark the session "engaged" with the docs workflow if it edited files
-         under docs/20_issues|21_proposals|22_decisions, or if any transcript
-         line mentions a concrete ISSUE-NNN / DECISION-NNN id.
-         Known trade-off, accepted for a warn-only hook: merely READING a doc
-         that contains a numbered id also counts as engaged (false negative,
-         never a false positive). Tune after real-world use.
-  5. Sensitive edits + no engagement → emit a systemMessage reminder to run
-     /docs-kit:docs-sync. Otherwise stay silent. Always exit 0.
+  2. Guard: the repo declares itself a docs-kit repo (`.docs-kit.json` or
+     `docs/22_decisions/`). `docs/README.md` alone is NOT enough — that is what
+     made this fire in a repo using a different folder scheme entirely.
+  3. Load `docs/MAP.tsv` (path → doc, claim, verified_at).
+  4. Scan the transcript for Edit/Write paths, split into code edits and edits to
+     documents under docs/.
+  5. Report, grouped by DOCUMENT rather than by file:
+       - a document whose claimed paths this session edited, unless the session
+         also edited that document (it was already being kept up to date);
+       - a file sitting beside a claimed file in the same directory that nothing
+         claims — the "you added something next to a documented thing" signal.
+  6. Silence in every other case. Always exit 0.
 """
 import fnmatch
 import json
 import os
 import re
+import subprocess
 import sys
 
-DEFAULT_PATTERNS = ["**/schema/**", "**/api/**", "**/migrations/**"]
-ID_RE = re.compile(r"\b(?:ISSUE|DECISION)-[0-9]{3,}\b")
-DOCS_ENGAGE_RE = re.compile(r"(^|/)docs/(20_issues|21_proposals|22_decisions)/")
 EDIT_TOOLS = ("Edit", "Write", "MultiEdit", "NotebookEdit")
+MAX_DOCS_LISTED = 3
+MAX_FILES_PER_DOC = 3
+
+
+def load_map(docs_root):
+    """docs/MAP.tsv → [(path, doc, claim, verified_at)].
+
+    Comment lines carry the format; they are not data. A malformed line is
+    skipped rather than raising, because a hook that crashes on a stray line is
+    a hook the user turns off.
+    """
+    path = os.path.join(docs_root, "MAP.tsv")
+    if not os.path.isfile(path):
+        return None
+    rows = []
+    try:
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            for line in fh:
+                line = line.rstrip("\n")
+                if not line or line.startswith("#"):
+                    continue
+                parts = line.split("\t")
+                if len(parts) == 4:
+                    rows.append(tuple(parts))
+    except Exception:
+        return None
+    return rows
+
+
+def claims(rel, entry_path):
+    """Does this map entry claim this edited file?
+
+    Three shapes, all of them things authors actually write (STANDARD §7):
+    an exact path, a directory prefix (`lib/data/`), and a glob
+    (`lib/validators/*.schema.ts`).
+    """
+    if entry_path == rel:
+        return True
+    if entry_path.endswith("/") and rel.startswith(entry_path):
+        return True
+    if ("*" in entry_path or "?" in entry_path) and fnmatch.fnmatch(rel, entry_path):
+        return True
+    return False
+
+
+def changed_since(cwd, rev):
+    """Files changed between a rev and the WORKING TREE.
+
+    Against the working tree, not HEAD: this runs at the end of a session, before
+    the work is committed, and comparing against HEAD would hide exactly the
+    changes that session just made. Same rule as the validator's [stale] check.
+    """
+    try:
+        out = subprocess.run(["git", "-C", cwd, "diff", "--name-only", rev],
+                             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                             timeout=10)
+    except Exception:
+        return None
+    if out.returncode != 0:
+        return None
+    return set(out.stdout.decode("utf-8", "replace").split("\n"))
 
 
 def main():
@@ -45,59 +117,33 @@ def main():
     transcript_path = data.get("transcript_path") or ""
     docs_root = os.path.join(cwd, "docs")
 
-    # Repo doesn't use docs-kit → never nag.
-    if not (
-        os.path.isdir(os.path.join(docs_root, "22_decisions"))
-        or os.path.isfile(os.path.join(docs_root, "README.md"))
-    ):
+    # A repo that has not declared itself a docs-kit repo is never nagged. The old
+    # guard accepted a bare docs/README.md, which every documented project has.
+    if not (os.path.isfile(os.path.join(cwd, ".docs-kit.json"))
+            or os.path.isdir(os.path.join(docs_root, "22_decisions"))):
         return
     if not transcript_path or not os.path.isfile(transcript_path):
         return
 
-    patterns = list(DEFAULT_PATTERNS)
-    cfg_path = os.path.join(cwd, ".docs-kit.json")
-    if os.path.isfile(cfg_path):
-        try:
-            with open(cfg_path, encoding="utf-8") as fh:
-                cfg = json.load(fh)
-            loaded = cfg.get("sensitive_paths")
-            if isinstance(loaded, list) and all(isinstance(p, str) for p in loaded):
-                patterns = loaded
-        except Exception:
-            pass  # malformed config → keep defaults
+    rows = load_map(docs_root)
 
-    def is_sensitive(path):
-        rel = path
-        if os.path.isabs(path):
-            try:
-                rel = os.path.relpath(path, cwd)
-            except ValueError:
-                rel = path
-        rel = rel.replace(os.sep, "/").lstrip("./")
-        for pat in patterns:
-            if fnmatch.fnmatch(rel, pat):
-                return True
-            # "**/x/**" should also match at the repo root ("x/file").
-            if pat.startswith("**/") and fnmatch.fnmatch(rel, pat[3:]):
-                return True
-        return False
-
-    sensitive_edits = set()
-    engaged = [False]
+    code_edits = set()
+    doc_edits = set()
 
     def note_edit(path):
         rel = path.replace("\\", "/")
-        if DOCS_ENGAGE_RE.search(rel):
-            engaged[0] = True
-            return
-        if re.search(r"(^|/)docs/", rel):
-            return  # docs content itself is never sensitive-zone code
-        if is_sensitive(rel):
+        if os.path.isabs(rel):
             try:
-                shown = os.path.relpath(rel, cwd) if os.path.isabs(rel) else rel
+                rel = os.path.relpath(rel, cwd)
             except ValueError:
-                shown = rel
-            sensitive_edits.add(shown.replace(os.sep, "/"))
+                return
+        rel = rel.replace(os.sep, "/").lstrip("./")
+        if rel.startswith("../"):
+            return  # an edit outside this repo is not this repo's business
+        if re.match(r"^docs/", rel):
+            doc_edits.add(rel)
+        else:
+            code_edits.add(rel)
 
     def walk(node):
         if isinstance(node, dict):
@@ -119,10 +165,6 @@ def main():
                 line = line.strip()
                 if not line:
                     continue
-                # Any concrete id mention anywhere (text, tool input, file
-                # content, tool result) counts as referencing the docs workflow.
-                if not engaged[0] and ID_RE.search(line):
-                    engaged[0] = True
                 try:
                     obj = json.loads(line)
                 except Exception:
@@ -131,18 +173,97 @@ def main():
     except Exception:
         return
 
-    if sensitive_edits and not engaged[0]:
-        shown = sorted(sensitive_edits)
-        listed = ", ".join(shown[:3]) + (" …" if len(shown) > 3 else "")
+    if not code_edits:
+        return  # a docs-only session has nothing to reconcile
+
+    if rows is None:
+        # Said once, and only in a session that actually touched code: without the
+        # map this hook cannot tell a documented file from any other, and guessing
+        # from the path shape is the behaviour that was removed.
         print(json.dumps({
             "systemMessage": (
-                "docs-kit: this session edited sensitive paths ({}) but never "
-                "created or referenced an Issue/Decision. Per the trigger rules "
-                "(docs/README.md), schema/API/boundary changes need a Decision "
-                "and finished work needs Backlog + audit updates. Run "
-                "/docs-kit:docs-sync to reconcile docs/."
-            ).format(listed),
+                "docs-kit: docs/MAP.tsv is missing, so edits cannot be matched to the "
+                "documents that describe them. Run /docs-kit:docs-render to generate it."
+            ),
         }))
+        return
+
+    # doc → {"files": set, "rev": verified_at, "claims": set}
+    hit = {}
+    claimed_files = set()
+    for rel in sorted(code_edits):
+        for entry_path, doc, claim, rev in rows:
+            if not claims(rel, entry_path):
+                continue
+            claimed_files.add(rel)
+            slot = hit.setdefault(doc, {"files": set(), "rev": rev, "claims": set()})
+            slot["files"].add(rel)
+            slot["claims"].add(claim)
+
+    # A document the session also edited was already being kept current; saying so
+    # would be telling the user about work they just did. This replaces the old
+    # "any ISSUE-NNN mentioned anywhere counts as engaged" heuristic, which
+    # silenced the wrong sessions and could not be satisfied at all in a repo whose
+    # decisions are not numbered that way.
+    for doc in list(hit):
+        if ("docs/" + doc) in doc_edits:
+            del hit[doc]
+
+    # Of the documents left, keep those the code has actually moved out from under.
+    # An unverified document (no verified_at) cannot be proven stale — it is
+    # reported as never-checked instead, which is a different and honest claim.
+    stale, unverified = [], []
+    for doc in sorted(hit):
+        slot = hit[doc]
+        rev = slot["rev"]
+        files = sorted(slot["files"])
+        if rev and rev != "-" and "<" not in rev:
+            changed = changed_since(cwd, rev)
+            if changed is None:
+                unverified.append((doc, files, "verified_at '%s' is not a commit here" % rev))
+            elif any(f in changed for f in files):
+                stale.append((doc, files, "verified_at %s" % rev))
+        else:
+            unverified.append((doc, files, "no verified_at"))
+
+    # A file with no claim at all, sitting in a directory where something else IS
+    # claimed by name. That is the "added a sibling to a documented thing" case;
+    # a directory nothing documents stays silent, and so does a directory claimed
+    # as a whole (`lib/data/`), which already covers everything inside it.
+    named_dirs = set()
+    for entry_path, _doc, _claim, _rev in rows:
+        if not entry_path.endswith("/") and "*" not in entry_path and "?" not in entry_path:
+            named_dirs.add(os.path.dirname(entry_path))
+    gaps = sorted(f for f in code_edits
+                  if f not in claimed_files and os.path.dirname(f) in named_dirs)
+
+    if not stale and not unverified and not gaps:
+        return
+
+    def fmt(entries, headline):
+        out = []
+        for doc, files, why in entries[:MAX_DOCS_LISTED]:
+            shown = ", ".join(files[:MAX_FILES_PER_DOC])
+            if len(files) > MAX_FILES_PER_DOC:
+                shown += " (+%d more)" % (len(files) - MAX_FILES_PER_DOC)
+            out.append("  docs/%s — %s [%s]" % (doc, shown, why))
+        if len(entries) > MAX_DOCS_LISTED:
+            out.append("  … and %d more document(s)" % (len(entries) - MAX_DOCS_LISTED))
+        return [headline] + out
+
+    lines = ["docs-kit: this session edited code that documents claim to describe."]
+    if stale:
+        lines += fmt(stale, "Changed since the document was last verified:")
+    if unverified:
+        lines += fmt(unverified, "Claimed by a document that has never been verified:")
+    if gaps:
+        shown = ", ".join(gaps[:MAX_FILES_PER_DOC])
+        if len(gaps) > MAX_FILES_PER_DOC:
+            shown += " (+%d more)" % (len(gaps) - MAX_FILES_PER_DOC)
+        lines.append("Not claimed by any document, but beside files that are: " + shown)
+    lines.append("Run /docs-kit:docs-sync to reconcile — it re-reads only these documents.")
+
+    print(json.dumps({"systemMessage": "\n".join(lines)}))
 
 
 if __name__ == "__main__":

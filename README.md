@@ -155,8 +155,8 @@ plugin on by default.
 |---|---|---|
 | `/docs-kit:docs-init` | Detect the stack from the repo's manifests, ask what the repo owns, scaffold the folders that profile calls for (11–16) + templates into `docs/`, read the repo's source to fill Architecture, and optionally wire the rules into `CLAUDE.md`. Refuses to touch an existing `docs/`; asks before every write outside the scaffold. | Yes |
 | `/docs-kit:docs-sync` | End-of-session reconcile: backlog statuses, audit entries, retroactive Issues, pending Architecture amendments, architecture-vs-code drift, and archiving what can no longer change. | Yes |
-| `/docs-kit:docs-check` | Run the three deterministic checks — the validator, a stale-`INDEX.md` gate, and API-contract drift against a generated artifact — and explain each failure. Never fixes. | No |
-| `/docs-kit:docs-render` | Generate/refresh the read models of `docs/` — three HTML pages and `INDEX.md`. Deterministic; never edits the source markdown. | Yes (generated files only) |
+| `/docs-kit:docs-check` | Run the three deterministic checks — the validator, a stale-read-model gate (`INDEX.md` and `MAP.tsv`), and API-contract drift against a generated artifact — and explain each failure. Never fixes. | No |
+| `/docs-kit:docs-render` | Generate/refresh the read models of `docs/` — three HTML pages, `INDEX.md` for agents, and `MAP.tsv` for the hooks. Deterministic; never edits the source markdown. | Yes (generated files only) |
 | `/docs-kit:docs-upgrade` | Bring an existing `docs/` up to the current standard, and to its own profile: add folders and seeds it lacks, regenerate the read models, re-run the checks. Also the path when a repo grows — declare a new `owns` token, run this, get the folders it justifies. Adds only — never overwrites, edits, or deletes. | Yes (adds only) |
 | `/docs-kit:brief` | Turn settled decisions into a delegation prompt for a coding agent — gates on a decision-freeze check first. In a repo that has `docs/`, also records the work as an Issue and routes it through Layer 2 before writing the prompt. The one skill Claude may invoke on its own. | Yes (`docs/`, only after you confirm) |
 
@@ -252,10 +252,20 @@ skeleton**. No LLM runs inside a hook.
 - **PostToolUse** (Edit/Write) — editing `docs/02_architecture/`,
   `docs/03_business-logic/` or `docs/04_api/` prints a reminder that layer 1 is
   amended only via the Decision workflow. `templates/docs/` is exempt, so the plugin's own tree is quiet.
-- **Stop** — if the session edited sensitive paths (default `**/schema/**`,
-  `**/api/**`, `**/migrations/**`; override via `.docs-kit.json` in the repo root)
-  without creating or referencing any Issue or Decision, it suggests
-  `/docs-kit:docs-sync`.
+- **Stop** — looks every file the session edited up in `docs/MAP.tsv` and reports
+  **by document**: which documents describe code that moved past their
+  `verified_at`, and files added beside documented ones that nothing claims. A file
+  no document describes produces silence, however sensitive its path looks. A
+  document the session also edited is never reported.
+
+  Until 0.25.0 this matched path globs instead. On a real monorepo whose service
+  directory is named `apps/api/`, `**/api/**` matched 57 of 57 edited files — every
+  test, every changelog — and fired in 15 of 36 sessions with no way to silence it.
+  *A directory called api* and *an API boundary* are not the same thing, and no
+  pattern can tell them apart; a path a document claims is a fact the repo states.
+
+Both hooks now require the repo to **declare** itself: a `.docs-kit.json` or a
+`docs/22_decisions/` folder. A bare `docs/README.md` is not a declaration.
 
 Warn-only by design: these rules have not been battle-tested across enough real
 projects, and a false positive that *blocks* teaches people to disable hooks
@@ -381,9 +391,10 @@ docs-kit/
 │   └── issue-capture.md         #   creating an Issue — read by brief + docs-sync
 ├── hooks/hooks.json             # 2 deterministic warn-only hooks
 ├── scripts/                     # docs_validate.sh, docs_scaffold.sh, docs_render.{sh,py},
-│                                #   docs_profile.sh (which folders belong here — sourced
-│                                #   by both scaffold and validator), docs_detect.py
-│                                #   (read-only stack report), hook workers
+│                                #   docs_close.{sh,py} (Closes: trailers → status + audit
+│                                #   line; archiving), docs_profile.sh (which folders belong
+│                                #   here — sourced by both scaffold and validator),
+│                                #   docs_detect.py (read-only stack report), hook workers
 ├── design/                      # "change-control print" design system + generated samples
 │   ├── design-system.html       #   the design contract
 │   ├── sample-*.html            #   real renderer output — regenerate, never hand-edit

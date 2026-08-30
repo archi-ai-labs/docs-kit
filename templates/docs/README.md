@@ -60,7 +60,9 @@ Bốn file `*-000` đi kèm là một chuỗi ví dụ chạy được — xoá 
 giữ lại làm mẫu định dạng. Id thật bắt đầu từ `001`.
 
 Tài liệu không còn đổi được nữa thì chuyển vào `_archive/` ngay trong thư mục của nó
-(Backlog `done` đã có dòng audit, Issue `archived`, chuỗi đã khép). Dùng `git mv`.
+(Backlog `done` đã có dòng audit, Issue `archived`, chuỗi đã khép). Mọi điều kiện ở
+đây đều là vị từ trên frontmatter nên script quyết định được: chạy
+`docs_close.sh --archive --apply .`, và nó dùng `git mv` để lịch sử đi theo file.
 Việc này **chỉ giảm chi phí đọc, không giảm chuẩn**: validator vẫn kiểm đủ, ref vẫn
 phân giải, `INDEX.md` vẫn liệt kê kèm tiền tố `_archive/`.
 
@@ -71,18 +73,26 @@ status, ref, file, mô tả. Đọc nó trước rồi chỉ mở đúng id cầ
 `22_decisions/` hay `23_backlog/`** — cách đó tốn nguyên một file cho mỗi tài liệu và
 chỉ đắt thêm theo thời gian, trong khi câu trả lời thì không dài ra.
 
-Ba file HTML (`index.html`, `current.html`, `changes.html`) là read model cho người.
-Cả bốn đều sinh lại bằng `/docs-kit:docs-render`; markdown vẫn là nguồn sự thật.
+`MAP.tsv` (cũng sinh tự động) trả lời câu hỏi ngược lại: **file code này đang được
+tài liệu nào mô tả**. Mỗi dòng gồm đường dẫn, tài liệu, thứ trong tài liệu nhận nó, và
+`verified_at`. Không tài liệu nào khai thêm gì cho file này — nó gom lại đúng những
+neo vốn đã nằm trong markdown. Stop hook đọc nó để biết một file vừa sửa có ai mô tả
+không, nên file nào không ai nhận thì hook im lặng.
 
-**`INDEX.md` cũ nguy hiểm hơn `INDEX.md` không có**, vì agent tin nó. Nên nó là file
-sinh ra duy nhất cần một cổng chặn — đặt dòng này vào CI cạnh validator:
+Ba file HTML (`index.html`, `current.html`, `changes.html`) là read model cho người.
+Cả năm đều sinh lại bằng `/docs-kit:docs-render`; markdown vẫn là nguồn sự thật.
+
+**`INDEX.md` cũ nguy hiểm hơn `INDEX.md` không có**, vì agent tin nó. `MAP.tsv` cũ còn
+khó thấy hơn: nó không tạo cảnh báo sai mà làm cảnh báo **biến mất**, và một phiên
+lặng lẽ trông hệt như một phiên sạch. Vì vậy cả hai đều có cổng chặn — đặt dòng này
+vào CI cạnh validator:
 
 ```bash
 docs_render.sh --check .
 ```
 
-Không ghi gì, dựng lại index bằng đúng code path của render thật nên không thể lệch.
-`0` = đang khớp · `1` = thiếu hoặc cũ · `2` = không có `docs/`. Chỉ `INDEX.md` kiểm
+Không ghi gì, dựng lại cả hai bằng đúng code path của render thật nên không thể lệch.
+`0` = đang khớp · `1` = thiếu hoặc cũ · `2` = không có `docs/`. Chỉ hai file text kiểm
 được kiểu này; ba trang HTML có dấu thời gian nên lần render nào cũng khác.
 
 ## 7 · Đồng bộ với code
@@ -96,6 +106,16 @@ Mọi fact quan trọng ở layer 1 đều mang một **neo** vào source: compo
 
 Đọc lại code xong thì đẩy `verified_at` lên `git rev-parse --short HEAD`. Đây là thứ
 biến việc rà soát từ "nhớ thì làm" thành "có nguyên nhân mới làm".
+
+Một neo có thể là danh sách nhiều đường dẫn cách nhau bằng dấu phẩy (chỉ trong header
+`code:`), hoặc một glob như `lib/validators/*.schema.ts` — mười bốn schema anh em là
+một sự thật về codebase, không phải mười bốn sự thật. `*` và `?` là ký tự đại diện,
+còn `[` thì không: `app/users/[id]/page.tsx` là thư mục Next.js có thật.
+
+Khi commit hoàn thành một Backlog item, viết trailer `Closes: BACKLOG-012` vào thông
+điệp commit. `docs_close.sh --apply .` sẽ lật `status: done` và ghi dòng audit trích
+đúng sha. Dòng audit khi đó dẫn về một commit kiểm được nhiều năm sau, thay vì dẫn về
+một phiên chat đã biến mất.
 
 Riêng `04_api/` còn một neo mạnh hơn: `generated_from:` trỏ tới artifact repo tự sinh
 (`openapi.json`, `*.proto`). `docs_render.sh --check-api .` so contract với artifact và

@@ -400,9 +400,42 @@ Ask both. **Any "yes" → FULL lane. Both "no" → FAST lane.**
 |---|---|
 | Code change touches a schema, API contract, or component boundary | A Decision must already exist. If none exists: create an Issue, stop, and ask the user. The contract itself lives in `04_api/` — layer 1, so the same rule that demands the Decision now has somewhere to record its result. |
 | Code change alters a branching business rule | Same — the rule lives in `03_business-logic/`, which is layer 1. |
-| A Backlog item is completed | Set its `status: done` and append one line to `92_audit/`. |
+| A Backlog item is completed | Set its `status: done` and append one line to `92_audit/`. Preferably by writing `Closes: BACKLOG-NNN` in the commit — see §6.1. |
 | A Decision is approved | Amend `02_architecture/` in the SAME session (body + `amended_by` entry). |
 | Starting work that is not in the Backlog | Create an Issue before writing code. |
+
+### 6.1 `Closes:` — letting the commit record the completion
+
+A commit message may carry a git trailer naming what it finishes:
+
+```
+cache the roster lookup
+
+Closes: BACKLOG-012
+```
+
+`scripts/docs_close.sh --apply` then sets `status: done` and appends the audit line,
+citing the commit sha as the reason column.
+
+This is not merely automation of a manual step; it changes what the audit trail
+says. A line written from a session's own recollection cites the session, and the
+session is gone. A line written from a trailer cites a commit — checkable years
+later by anyone, including someone who was not there. The author also states the
+completion at the moment they complete it, rather than an agent inferring it
+afterwards from a diff.
+
+Rules that make it safe to run over the whole history on every invocation:
+
+- **Idempotent.** A completion already recorded — `status: done` *and* the id cited
+  in `92_audit/` — is skipped. No state is kept about where the last run stopped,
+  because state that can be wrong is worse than a scan that costs a second.
+- **First commit per id wins.** A later commit naming the same id is a follow-up
+  fix, not a second completion.
+- **A trailer naming an id no Backlog item has is reported, never invented.** The
+  script does not create documents.
+
+Writing the status and audit line by hand stays entirely valid. The trailer is the
+cheaper path, not a required one.
 
 ## 7. Validator contract (`scripts/docs_validate.sh`)
 
@@ -450,6 +483,30 @@ The comparison is `git diff --name-only <verified_at>` against the **working tre
 not against HEAD. `docs-sync` runs at the end of a session, before the work is
 committed; comparing against HEAD would hide exactly the changes that session made.
 
+#### What counts as one anchor
+
+An anchor is a **path expression**, not necessarily a single filename. Two forms are
+legal wherever a path is named, and both were already being written before anything
+accepted them:
+
+- **A comma-separated list**, in a `code:` header only: `code: app/page.tsx, lib/auth.ts`.
+  A scenario rarely lives in one file, and the alternative — one fence per file — would
+  split a flow that is genuinely one flow. Each item is checked separately. A
+  `components` entry stays exactly one path, because a component is one thing.
+- **A glob**, in either form: `lib/validators/*.schema.ts` resolves if it matches at
+  least one file. Fourteen sibling schemas are one fact about the codebase, not
+  fourteen facts, and listing them all is a list that goes stale on the next file added.
+
+`*` and `?` are the only metacharacters. `[` is **not** one: `app/users/[id]/page.tsx`
+is a real Next.js directory, and treating its name as a bracket expression would report
+a file that is sitting right there as missing. Existence is tested literally first, so
+any path that exists as written is settled before globbing is considered.
+
+Against `git diff` a glob is compared by its longest literal directory prefix, since no
+pattern will ever equal a filename git prints. That is coarser than the glob, and
+deliberately so: a `NOTE [stale]` that fires slightly too often costs one re-read, while
+one that never fires costs the whole check.
+
 Values containing `<` or `>` are treated as template placeholders and skipped — that
 is what lets a fresh scaffold pass clean.
 
@@ -473,30 +530,54 @@ Two hooks, both plain scripts, **no LLM calls**:
    ref exists." Paths under `templates/docs/` are exempt: the plugin ships its own
    template tree at exactly that shape, and firing on it would train docs-kit's
    own maintainers to switch the hook off.
-2. **Stop**: scan the session transcript. If files matching sensitive patterns
-   were edited but the session never created or referenced any Issue/Decision →
-   remind the user to run `/docs-kit:docs-sync`.
+2. **Stop**: scan the session transcript for edited files, look each one up in
+   `docs/MAP.tsv` (§10), and report **by document, not by file**:
+   - a document whose claimed paths this session edited and whose `verified_at`
+     the code has moved past → *changed since last verified*;
+   - the same, but the document has no `verified_at` at all → *never verified*,
+     which is a weaker and different claim, so it is worded differently;
+   - a file nothing claims, sitting in a directory where other files *are* claimed
+     by name → *added beside something documented*.
+
+   A document the session also edited is never reported: it was already being kept
+   current, and saying so would be describing the user's own work back to them.
+
+**Why it asks about documents and not about path shapes.** Until 0.25.0 this hook
+matched `sensitive_paths` globs against every edit. Measured on a real monorepo whose
+service directory is named `apps/api/`, `**/api/**` matched **57 of 57** edited files
+— every test, every changelog — because *a directory called api* and *an API
+boundary* are not the same thing and no pattern can tell them apart. It fired in 15
+of 36 sessions and could not be silenced: the engagement check looked for
+`docs/22_decisions/` in a repo that used `docs/20_decisions/`. A path a document
+claims is a fact the repo states; a path that looks sensitive is a guess.
 
 **Why warn-only:** these rules have not been battle-tested across real projects
 yet. Blocking on a false positive teaches users to disable the hook entirely,
 which loses all enforcement. Warn now; promote to block only after the trigger
 rules have been tuned in practice.
 
-Hooks are silent in repos that do not use docs-kit (no `docs/` skeleton).
+**Hooks are silent unless the repo declares itself a docs-kit repo** — a
+`.docs-kit.json` at the root, or a `docs/22_decisions/` folder. A bare
+`docs/README.md` is not a declaration; every documented project has one, and
+accepting it is what made the Stop hook fire in a repo using a different folder
+scheme entirely.
 
 ## 9. Configuration — `.docs-kit.json` (optional, in the target repo root)
 
 ```json
 {
-  "sensitive_paths": ["**/schema/**", "**/api/**", "**/migrations/**"],
   "owns": ["data", "endpoints", "screens", "jobs"]
 }
 ```
 
-`sensitive_paths` overrides the default patterns used by the Stop hook. Patterns
-are matched with fnmatch against the repo-relative path; a leading `**/` also
-matches at the repo root. Paths under `docs/` are never treated as sensitive-zone
-code.
+Its presence is also what tells the hooks this repo uses docs-kit (§8), so a repo
+with no conditional surface still benefits from writing `"owns": []`.
+
+**`sensitive_paths` is no longer read (0.25.0).** It configured the Stop hook's glob
+matching, and the glob is gone: the hook now asks `docs/MAP.tsv` which document
+claims an edited file. The key is ignored rather than rejected — an old config stays
+valid, it just no longer changes anything. Nothing replaces it, because the thing it
+was tuning is now derived from the documents instead of declared beside them.
 
 ### 9.1 `owns` — what this repo holds title to
 
@@ -595,12 +676,13 @@ network) generates three self-contained pages into `docs/`, styled per
 | `docs/current.html` | Layer 1: product cards, roadmap board, component cards, data-flow figure, API contract tables, constraints, revision block, business-flow sequences |
 | `docs/changes.html` | Layer 2: issue/backlog boards, proposal & decision tables, trace chains, audit table |
 | `docs/INDEX.md` | **The read model for agents**, as the three pages are the read model for people: one line per document — id, status, refs, file, description |
+| `docs/MAP.tsv` | **The reverse index**: one line per path a layer 1 document claims — `path`, `doc`, `claim`, `verified_at` |
 
 And two read-only gates, neither of which writes anything:
 
 | Command | Asks |
 |---|---|
-| `docs_render.sh --check .` | is `INDEX.md` current with the markdown? |
+| `docs_render.sh --check .` | are `INDEX.md` and `MAP.tsv` current with the markdown? |
 | `docs_render.sh --check-api .` | do the API contracts match their generated artifacts? |
 
 ### `INDEX.md` — the rule that makes it worth generating
@@ -623,10 +705,38 @@ docs_render.sh --check .     # 0 = current · 1 = missing or stale · 2 = no doc
 ```
 
 It writes nothing and rebuilds the index through the same code path a real render
-uses, so it cannot disagree with one. Only `INDEX.md` is checkable this way — the
-HTML pages embed a generated-at stamp and a git ref, so they differ every run by
-design. Repos that keep docs in review should run it in CI beside the validator;
-`/docs-kit:docs-check` runs it too.
+uses, so it cannot disagree with one. Only the two text read models are checkable
+this way — the HTML pages embed a generated-at stamp and a git ref, so they differ
+every run by design. Repos that keep docs in review should run it in CI beside the
+validator; `/docs-kit:docs-check` runs it too.
+
+### `MAP.tsv` — the same relation, read the other way
+
+`INDEX.md` answers *what documents exist*. `MAP.tsv` answers the question nothing
+could ask before it: **which document describes this file**.
+
+Nothing new is authored for it. The relation was always stated in the markdown —
+every component names its `path/in/repo`, every figure fence takes a `code:` header
+— but it existed only inside a validator run and vanished when the process exited.
+A hook firing on an edit therefore had no way to consult it, and guessed from path
+shape instead, which is not the same question and does not have the same answer.
+
+```
+path                          doc                              claim                    verified_at
+lib/comment.ts                02_architecture/architecture.md  component:comment-composer  a1b2c3d
+lib/validators/*.schema.ts    02_architecture/architecture.md  erd:1                       a1b2c3d
+```
+
+**It carries no staleness verdict, on purpose.** Whether a claim has gone out of
+date is a git question whose answer changes with every commit, while this file
+changes only when the markdown does; baking the verdict in would make it wrong
+within a minute of being written. `verified_at` is carried instead, and a reader
+joins it against `git diff --name-only` itself — which is what the Stop hook (§8)
+and `docs-sync` step 5 both do.
+
+A stale `MAP.tsv` fails in the more dangerous direction than a stale `INDEX.md`: it
+makes the hook **quieter** rather than wrong, and silence is the failure nobody
+notices. That is why `--check` gates both.
 
 Rules:
 

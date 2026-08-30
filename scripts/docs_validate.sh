@@ -383,11 +383,53 @@ anchor_paths() { # anchor_paths <file> → one repo-relative path per line
     fence && /^```[ \t]*\r?$/ { fence = 0; next }
     fence && index($0, "code:") == 1 {
       v = substr($0, 6)
-      sub(/^[ \t]+/, "", v); sub(/[ \t\r]+$/, "", v)
       sub(/^"/, "", v); sub(/"$/, "", v)
-      if (v != "") print v
+      # A scenario rarely lives in one file, so the header takes a comma-separated
+      # list. Reading the whole string as one path is what made every multi-path
+      # header a FAIL — the check reporting a doc unverifiable for the way it was
+      # punctuated, which is worse than not checking at all.
+      n = split(v, ps, ",")
+      for (j = 1; j <= n; j++) {
+        p = ps[j]
+        sub(/^[ \t]+/, "", p); sub(/[ \t\r]+$/, "", p)
+        if (p != "") print p
+      }
     }
   ' "$1"
+}
+
+# anchor_exists <root> <path> — does this anchor resolve to at least one file?
+#
+# Literal test first, and only then a glob. The order matters: a Next.js route
+# segment like `app/students/[id]/page.tsx` is a real directory whose name happens
+# to be a bracket expression, so expanding it as a pattern would report a file that
+# is sitting right there as missing. `-e` does not glob, so the literal test settles
+# every such path before the pattern branch is reached.
+anchor_exists() {
+  [ -e "$1/$2" ] && return 0
+  case "$2" in
+    *"*"*|*"?"*) ;;
+    *) return 1 ;;
+  esac
+  # A path may legitimately name a family — `lib/validators/*.schema.ts` is one
+  # fact about fourteen files, not fourteen facts. It resolves if anything matches.
+  ( cd "$1" 2>/dev/null || exit 1
+    for m in $2; do [ -e "$m" ] && exit 0; done
+    exit 1 )
+}
+
+# anchor_prefix <path> — the form used to compare against changed files.
+#
+# `git diff --name-only` prints real filenames, which no pattern will ever equal,
+# so a glob is reduced to its longest literal directory prefix. Coarser than the
+# glob, and deliberately so: a NOTE that fires slightly too often costs one re-read,
+# while one that never fires costs the whole check. `[` is not treated as a
+# metacharacter here for the same reason as above.
+anchor_prefix() {
+  case "$1" in
+    *"*"*|*"?"*) printf '%s\n' "${1%%[*?]*}" | sed 's|[^/]*$||' ;;
+    *) printf '%s\n' "$1" ;;
+  esac
 }
 
 # A component name IS a reference key: data_flow edges name components, and the
@@ -450,7 +492,7 @@ if [ -n "$ROOT" ]; then
       while IFS= read -r p; do
         [ -z "$p" ] && continue
         case "$p" in *"<"*|*">"*) continue ;; esac   # template placeholder
-        [ -e "$ROOT/$p" ] || \
+        anchor_exists "$ROOT" "$p" || \
           fail anchor "$f" "names '$p', which does not exist in the repo (a moved or deleted path makes this doc unverifiable)"
       done < "$TMP/anchors"
 
@@ -471,6 +513,8 @@ if [ -n "$ROOT" ]; then
       while IFS= read -r p; do
         [ -z "$p" ] && continue
         case "$p" in *"<"*|*">"*) continue ;; esac
+        p="$(anchor_prefix "$p")"
+        [ -z "$p" ] && continue
         if awk -v p="$p" 'index($0, p) == 1 { found = 1; exit } END { exit !found }' "$TMP/changed"; then
           hits=$((hits + 1))
         fi

@@ -22,6 +22,21 @@ model (STANDARD.md at the plugin root; digest in `docs/README.md`):
 
 If there is no `docs/` skeleton here, stop and suggest `/docs-kit:docs-init`.
 
+## Step 0 — Let the scripts do their half first
+
+Two of the steps below are decided entirely by facts already written in the repo,
+and running them first shrinks what you have to reason about (resolve the plugin
+root as in docs-init Step 0):
+
+```bash
+bash "$PLUGIN_ROOT/scripts/docs_close.sh" --archive .
+```
+
+Report mode: it writes nothing and prints what it *would* do — completions declared
+by `Closes: BACKLOG-NNN` commit trailers, and documents that have become terminal.
+Read that list before Step 1. Whatever it covers, you do not have to work out by
+hand; `--apply` in Steps 2 and 6 is what writes it.
+
 ## Step 1 — Inventory what the session did
 
 From the conversation context, list concretely: features/fixes completed, files
@@ -29,6 +44,10 @@ changed, decisions the user approved in chat. Corroborate with evidence where
 available: `git status --porcelain` and `git diff --stat HEAD` (or recent
 commits made this session). This inventory drives every step below — when the
 session did nothing code-related, say so and stop after Step 4.
+
+**Prefer the commit over the recollection.** Where a commit already says what it
+finished, that statement outlives this conversation and yours does not — which is
+the whole reason Step 0 runs first.
 
 ## Step 2 — Backlog statuses
 
@@ -41,15 +60,31 @@ costs a line (STANDARD §10).
 If `docs/INDEX.md` does not exist, the repo has not been rendered since the index
 was introduced — say so, and fall back to the folder for this one run.
 
-For each item whose work happened this session:
+**First, apply what the commits already declared:**
+
+```bash
+bash "$PLUGIN_ROOT/scripts/docs_close.sh" --apply .
+```
+
+That sets `status: done` and appends the audit line for every unrecorded
+`Closes: BACKLOG-NNN` trailer, citing the commit sha in the reason column
+(STANDARD §6.1). It is idempotent, so it is safe whether or not Step 0 already
+listed something.
+
+**Then handle by hand only what no trailer covered.** For each remaining item whose
+work happened this session:
 - work finished → `status: done`
 - work started but unfinished → `status: in-progress`
 
-For every item flipped to `done`, append one line to `docs/92_audit/LOG.md`
+For every item flipped to `done` by hand, append one line to `docs/92_audit/LOG.md`
 (format: `YYYY-MM-DD | what happened | ref | deviation ("-" if none) | why`).
 The ref column carries the Backlog id and its source Decision/Issue. If what
 was shipped deviates from what the Decision/Backlog described, state the
 deviation and why — honestly.
+
+When a completion had no trailer, say so in the report and suggest the trailer for
+next time: it is one line in a commit message, and it is what lets the audit trail
+cite a sha instead of a conversation.
 
 ## Step 3 — Work that had no Backlog item
 
@@ -91,8 +126,22 @@ Only when this session changed code. The Architecture doc describes the source;
 the source moves and the doc does not, so this step compares them and **reports**
 — it never edits `docs/02_architecture/` outside the Decision path in Step 4.
 
-**Let the validator scope this step first.** Run it (resolve the plugin root as in
-docs-init Step 0):
+**Let the map and the validator scope this step first — never your memory of the
+session.** `docs/MAP.tsv` lists every path a layer 1 document claims (STANDARD §10),
+so the documents in scope are exactly those claiming a file this session touched:
+
+```bash
+git diff --name-only HEAD | while read -r f; do
+  awk -F'\t' -v f="$f" '$1 == f || (substr($1, length($1)) == "/" && index(f, $1) == 1) { print $2 }' docs/MAP.tsv
+done | sort -u
+```
+
+An empty result is a real answer: this session touched nothing any document
+describes, and Step 5 is done. Say that rather than re-reading documents to
+confirm it.
+
+Then run the validator, which adds the git comparison the map deliberately leaves
+out (resolve the plugin root as in docs-init Step 0):
 
 ```bash
 bash "$PLUGIN_ROOT/scripts/docs_validate.sh" docs
@@ -163,6 +212,16 @@ Terminal documents leave the hot set (STANDARD §2). After the steps above, move
 - a Proposal or Decision whose chain has completed and whose Backlog item is done.
 
 ```bash
+bash "$PLUGIN_ROOT/scripts/docs_close.sh" --archive --apply .
+```
+
+Every one of those conditions is a predicate over frontmatter, so the script decides
+them — including the Decision/Proposal chain, which it derives from which Backlog
+items cite the Decision in `source_ref`. It refuses to archive a `done` item whose
+audit line is missing, for the reason below. Move a file by hand only for something
+the predicates do not cover, and then use `git mv` so history follows:
+
+```bash
 git mv docs/23_backlog/BACKLOG-NNN-slug.md docs/23_backlog/_archive/
 ```
 
@@ -196,13 +255,23 @@ bash "$PLUGIN_ROOT/scripts/docs_render.sh" "$(pwd)"
 ```
 
 **This is no longer optional, and it is not only about the HTML.** The same command
-writes `docs/INDEX.md`, which Step 2 and `brief` both read *instead of* the folders.
-A sync that creates an Issue without regenerating leaves an index that omits it —
-and a stale index is worse than no index, because the next agent trusts it. If the
-script exits 3 (`python3` missing), say plainly that `docs/INDEX.md` is now stale and
-that skills must fall back to reading the folders until it is regenerated.
+writes both text read models, and this sync has just invalidated both:
+
+- `docs/INDEX.md`, which Step 2 and `brief` read *instead of* the folders. A sync
+  that creates an Issue without regenerating leaves an index that omits it, and a
+  stale index is worse than no index because the next agent trusts it.
+- `docs/MAP.tsv`, which the Stop hook reads to decide whether an edited file is
+  described anywhere. A stale map does not produce wrong warnings — it produces
+  **missing** ones. If Step 4 or Step 5 changed which paths a document names, the
+  hook is silently wrong until this runs.
+
+If the script exits 3 (`python3` missing), say plainly that both are now stale, that
+skills must fall back to reading the folders, and that the Stop hook will under-report
+until they are regenerated.
 
 Then summarize:
+- **Recorded from commits**: what `docs_close.sh` applied from `Closes:` trailers,
+  and what you had to write by hand because no trailer named it.
 - **Updated**: backlog statuses changed, audit lines appended, amendments
   applied, `verified_at` moved forward, read models regenerated.
 - **Created**: retroactive Issues (+ fast-lane Backlog items).

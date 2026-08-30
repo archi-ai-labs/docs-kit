@@ -30,8 +30,8 @@ Then check that the agent read model is current:
 bash "$PLUGIN_ROOT/scripts/docs_render.sh" --check .
 ```
 
-Exit codes: `0` current · `1` `docs/INDEX.md` missing or stale · `2` no `docs/`
-· `3` no `python3` (say so and move on — it is not a docs problem).
+Exit codes: `0` current · `1` `docs/INDEX.md` or `docs/MAP.tsv` missing or stale ·
+`2` no `docs/` · `3` no `python3` (say so and move on — it is not a docs problem).
 
 Then, when any `04_api/` doc declares `generated_from:`, check the contracts against
 the artifacts they defer their volatile half to:
@@ -91,12 +91,19 @@ Remind the user the script checks form, not content quality.
    judgment calls (e.g. which Decision an amendment belongs to, whether audit
    history was rewritten intentionally) → the user.
 
-**Stale index (`--check` exit 1):** report it separately from the validator's
-findings — it is not a violation of the docs, it means the generated read model
-has fallen behind them. Say what it costs: `brief` and `docs-sync` read
-`docs/INDEX.md` instead of globbing folders, so until it is regenerated they are
-reading an answer that is out of date, and a wrong answer they trust is worse
-than no answer. The fix is one command, and it belongs to
-`/docs-kit:docs-render` or `/docs-kit:docs-sync` — not to this skill.
+**Stale read model (`--check` exit 1):** report it separately from the validator's
+findings — it is not a violation of the docs, it means a generated read model has
+fallen behind them. The script names which one, and they cost different things:
+
+- **`docs/INDEX.md`** — `brief` and `docs-sync` read it instead of globbing folders,
+  so until it is regenerated they are reading an answer that is out of date, and a
+  wrong answer they trust is worse than no answer.
+- **`docs/MAP.tsv`** — the Stop hook reads it to decide whether an edited file is
+  described by any document. A stale map does not produce wrong warnings; it
+  produces **missing** ones, which is the failure nobody notices. Say this
+  explicitly: a quiet hook looks exactly like a clean session.
+
+The fix is one command either way, and it belongs to `/docs-kit:docs-render` or
+`/docs-kit:docs-sync` — not to this skill.
 
 End with the script's summary count. Change nothing on disk.

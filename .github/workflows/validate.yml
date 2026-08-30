@@ -364,17 +364,180 @@ jobs:
           bash scripts/docs_render.sh "$work" >/dev/null
           bash scripts/docs_render.sh --check "$work" \
             || { echo "::error::--check called a freshly rendered index stale."; exit 1; }
-          before="$(cd "$work/docs" && cksum INDEX.md *.html | cksum)"
+          before="$(cd "$work/docs" && cksum INDEX.md MAP.tsv *.html | cksum)"
           printf -- '---\nid: ISSUE-001\ndescription: "x"\nwhy: "y"\nlane: fast\nstatus: open\n---\n\n# ISSUE-001\n' \
             > "$work/docs/20_issues/ISSUE-001-x.md"
           if bash scripts/docs_render.sh --check "$work"; then
             echo "::error::--check missed a document added without re-rendering."
             exit 1
           fi
-          after="$(cd "$work/docs" && cksum INDEX.md *.html | cksum)"
+          after="$(cd "$work/docs" && cksum INDEX.md MAP.tsv *.html | cksum)"
           [ "$before" = "$after" ] \
             || { echo "::error::--check modified files; it must be read-only."; exit 1; }
           echo "OK — stale index caught, nothing written"
+
+      # MAP.tsv is what the Stop hook reads to decide whether an edited file is
+      # described by any document. A stale one does not produce a wrong warning —
+      # it produces a MISSING one, so this asserts the relation is actually built
+      # (including both authored forms: a comma list and a glob) and that --check
+      # notices when it falls behind.
+      - name: MAP.tsv maps code to the documents that claim it
+        run: |
+          work="$(mktemp -d)"
+          git -C "$work" init -q
+          bash scripts/docs_scaffold.sh "$work" >/dev/null
+          mkdir -p "$work/lib"
+          : > "$work/lib/pricing.ts"; : > "$work/lib/a.schema.ts"
+          python3 - "$work" <<'EOF'
+          import re, sys, pathlib
+          p = pathlib.Path(sys.argv[1]) / "docs/02_architecture/architecture.md"
+          s = p.read_text()
+          s = re.sub(r"^components:.*?(?=\n[a-z_]+:)",
+                     "components:\n  - pricing `lib/pricing.ts` — x\n"
+                     "  - schemas `lib/*.schema.ts` — y\n", s, flags=re.S | re.M)
+          p.write_text(s)
+          EOF
+          python3 scripts/docs_render.py "$work" >/dev/null
+          grep -q '^lib/pricing\.ts	02_architecture/architecture\.md	component:pricing' \
+            "$work/docs/MAP.tsv" \
+            || { echo "::error::MAP.tsv lost a plain component path."; exit 1; }
+          grep -q '^lib/\*\.schema\.ts	02_architecture/architecture\.md	component:schemas' \
+            "$work/docs/MAP.tsv" \
+            || { echo "::error::MAP.tsv lost a glob anchor."; exit 1; }
+          bash scripts/docs_render.sh --check "$work" \
+            || { echo "::error::--check called a freshly rendered MAP.tsv stale."; exit 1; }
+          printf 'lib/extra.ts\n' >> "$work/docs/MAP.tsv"
+          bash scripts/docs_render.sh --check "$work" \
+            && { echo "::error::--check missed a hand-edited MAP.tsv."; exit 1; }
+          echo "OK — MAP.tsv built from both anchor forms and gated"
+
+      # The anchor check reports a path that is gone. It must NOT report a path
+      # that is merely punctuated as a list, or written as a glob, or named with a
+      # Next.js [id] segment — three forms a real repo produced within an hour, all
+      # of which used to FAIL and made the check untrustworthy.
+      - name: anchors accept lists, globs and bracket segments
+        run: |
+          work="$(mktemp -d)"
+          git -C "$work" init -q
+          bash scripts/docs_scaffold.sh "$work" >/dev/null
+          mkdir -p "$work/app/users/[id]" "$work/lib"
+          : > "$work/app/users/[id]/page.tsx"; : > "$work/lib/a.schema.ts"
+          : > "$work/lib/comment.ts"
+          python3 - "$work" <<'EOF'
+          import re, sys, pathlib
+          p = pathlib.Path(sys.argv[1]) / "docs/02_architecture/architecture.md"
+          s = p.read_text()
+          s = re.sub(r"^components:.*?(?=\n[a-z_]+:)",
+                     "components:\n  - ui `app/users/[id]/page.tsx` — x\n"
+                     "  - schemas `lib/*.schema.ts` — y\n"
+                     "  - gone `lib/deleted.ts` — z\n", s, flags=re.S | re.M)
+          s += ("\n```flow\ntitle: t\ncode: app/users/[id]/page.tsx, lib/comment.ts\n"
+                "a -> b : x\n```\n")
+          p.write_text(s)
+          EOF
+          out="$(bash scripts/docs_validate.sh "$work/docs" 2>&1 || true)"
+          echo "$out" | grep -q "lib/deleted.ts" \
+            || { echo "::error::a genuinely missing anchor stopped being reported."; exit 1; }
+          for good in "app/users/\[id\]/page.tsx" "lib/\*.schema.ts" "lib/comment.ts"; do
+            echo "$out" | grep -q "FAIL \[anchor\].*$good" \
+              && { echo "::error::anchor check false-positived on $good"; exit 1; }
+          done
+          [ "$(echo "$out" | grep -c 'FAIL \[anchor\]')" = "1" ] \
+            || { echo "::error::expected exactly one anchor failure."; exit 1; }
+          echo "OK — one real miss reported, three legal forms accepted"
+
+      # docs_close.sh turns a `Closes:` trailer into the two writes that used to be
+      # inferred from a session's own recollection. The properties that make it safe
+      # to run over the whole history every time are idempotence and refusing to
+      # invent: both are asserted here, not assumed.
+      - name: Closes trailers record completions, idempotently
+        run: |
+          work="$(mktemp -d)"
+          git -C "$work" init -q
+          git -C "$work" config user.email ci@example.com
+          git -C "$work" config user.name ci
+          bash scripts/docs_scaffold.sh "$work" >/dev/null
+          sed -e 's/^id: BACKLOG-000/id: BACKLOG-001/' -e 's/^status: .*/status: open/' \
+            "$work/docs/23_backlog/BACKLOG-000-example.md" \
+            > "$work/docs/23_backlog/BACKLOG-001-x.md"
+          git -C "$work" add -A && git -C "$work" commit -qm scaffold
+          : > "$work/feature.ts"
+          git -C "$work" add -A
+          git -C "$work" commit -qm "add the thing" -m "Closes: BACKLOG-001"
+          bash scripts/docs_close.sh "$work" && \
+            { echo "::error::report mode did not signal pending work."; exit 1; }
+          bash scripts/docs_close.sh --apply "$work" >/dev/null \
+            || { echo "::error::--apply failed."; exit 1; }
+          grep -q '^status: done' "$work/docs/23_backlog/BACKLOG-001-x.md" \
+            || { echo "::error::status was not flipped."; exit 1; }
+          grep -q 'BACKLOG-001 (DECISION-000).*commit' "$work/docs/92_audit/LOG.md" \
+            || { echo "::error::audit line missing or does not cite the commit."; exit 1; }
+          lines_before="$(wc -l < "$work/docs/92_audit/LOG.md")"
+          bash scripts/docs_close.sh --apply "$work" >/dev/null
+          lines_after="$(wc -l < "$work/docs/92_audit/LOG.md")"
+          [ "$lines_before" = "$lines_after" ] \
+            || { echo "::error::re-running appended a duplicate audit line."; exit 1; }
+          git -C "$work" commit -q --allow-empty -m "later" -m "Closes: BACKLOG-777"
+          bash scripts/docs_close.sh "$work" | grep -q 'SKIP  BACKLOG-777' \
+            || { echo "::error::a trailer with no Backlog item must be reported, not invented."; exit 1; }
+          [ -z "$(ls "$work/docs/23_backlog"/BACKLOG-777* 2>/dev/null)" ] \
+            || { echo "::error::docs_close created a document."; exit 1; }
+          bash scripts/docs_validate.sh "$work/docs" >/dev/null \
+            || { echo "::error::the tree docs_close wrote does not validate."; exit 1; }
+          echo "OK — trailer recorded once, nothing invented, tree still valid"
+
+      # The Stop hook's whole job changed in 0.25.0: it asks MAP.tsv which document
+      # claims an edited file instead of matching path-shape globs. The two cases
+      # that made the old one unusable are asserted first — a repo that only has a
+      # docs/README.md, and a file under a directory merely named `api`.
+      - name: Stop hook reports by document, not by path shape
+        run: |
+          work="$(mktemp -d)"
+          git -C "$work" init -q
+          git -C "$work" config user.email ci@example.com
+          git -C "$work" config user.name ci
+          mkdir -p "$work/apps/api/src" "$work/lib"
+          : > "$work/apps/api/src/thing.test.ts"; : > "$work/lib/pricing.ts"
+          printf '%s\n' '{"type":"tool_use","name":"Edit","input":{"file_path":"apps/api/src/thing.test.ts"}}' > "$work/t.jsonl"
+          # 1. Not a docs-kit repo: a bare docs/README.md is not a declaration.
+          mkdir -p "$work/docs"; : > "$work/docs/README.md"
+          out=$(printf '{"cwd":"%s","transcript_path":"%s"}' "$work" "$work/t.jsonl" \
+                | python3 scripts/hook_stop_scan.py | wc -c)
+          [ "$out" -eq 0 ] \
+            || { echo "::error::hook fired in a repo that never declared docs-kit."; exit 1; }
+          rm -rf "$work/docs"
+          bash scripts/docs_scaffold.sh "$work" >/dev/null
+          python3 - "$work" <<'EOF'
+          import re, sys, pathlib
+          p = pathlib.Path(sys.argv[1]) / "docs/02_architecture/architecture.md"
+          s = p.read_text()
+          p.write_text(re.sub(r"^components:.*?(?=\n[a-z_]+:)",
+                              "components:\n  - pricing `lib/pricing.ts` — x\n",
+                              s, flags=re.S | re.M))
+          EOF
+          python3 scripts/docs_render.py "$work" >/dev/null
+          # 2. A file under apps/api/ that no document claims: silent. This is the
+          #    exact edit the old glob reported in 15 of 36 real sessions.
+          out=$(printf '{"cwd":"%s","transcript_path":"%s"}' "$work" "$work/t.jsonl" \
+                | python3 scripts/hook_stop_scan.py | wc -c)
+          [ "$out" -eq 0 ] \
+            || { echo "::error::hook fired on an unclaimed file under a directory named api."; exit 1; }
+          # 3. A file a document does claim: reported, naming the document.
+          printf '%s\n' '{"type":"tool_use","name":"Edit","input":{"file_path":"lib/pricing.ts"}}' > "$work/t2.jsonl"
+          msg=$(printf '{"cwd":"%s","transcript_path":"%s"}' "$work" "$work/t2.jsonl" \
+                | python3 scripts/hook_stop_scan.py)
+          echo "$msg" | grep -q '02_architecture/architecture.md' \
+            || { echo "::error::hook did not name the document claiming the edited file."; exit 1; }
+          # 4. Same edit, but the session also updated that document: silent.
+          printf '%s\n%s\n' \
+            '{"type":"tool_use","name":"Edit","input":{"file_path":"lib/pricing.ts"}}' \
+            '{"type":"tool_use","name":"Edit","input":{"file_path":"docs/02_architecture/architecture.md"}}' \
+            > "$work/t3.jsonl"
+          out=$(printf '{"cwd":"%s","transcript_path":"%s"}' "$work" "$work/t3.jsonl" \
+                | python3 scripts/hook_stop_scan.py | wc -c)
+          [ "$out" -eq 0 ] \
+            || { echo "::error::hook reported a document the session had already updated."; exit 1; }
+          echo "OK — silent without a declaration, silent on unclaimed code, precise on claimed code"
 
       # 02_architecture/ is a folder. The renderer used to read architecture.md and
       # nothing else, so a per-service split was silently dropped from the sheet

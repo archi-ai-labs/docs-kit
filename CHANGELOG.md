@@ -5,6 +5,118 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
+## [0.25.0] — 2026-08-31
+
+### Changed — the Stop hook asks which document describes a file, not what the path looks like
+
+Measured before anything was written, on this machine's own history. In
+`savefee-be`, the Stop hook fired in **15 of 36 sessions**. The 57 distinct files it
+named were **57 of 57 under `apps/api/`** — matched by the default `**/api/**`
+pattern purely because the monorepo's service directory is called `api`. Fourteen
+were test files, eight were markdown and changelogs. At most 17 were the schema or
+route changes the rule was written for.
+
+And in that repo the warning **could not be silenced by doing the right thing**: the
+engagement check looked for `docs/22_decisions/` while the repo uses
+`docs/20_decisions/`, and its Decisions are named `001_*.md` with no
+`id: DECISION-NNN`. Editing code warned; opening a Decision to record it warned too.
+
+*A directory called api* and *an API boundary* are not the same thing, and no glob
+can tell them apart. So the hook stopped guessing from path shape and started asking
+a question the documents already answer.
+
+- **New `docs/MAP.tsv`**, written by `docs-render` beside `INDEX.md`: one line per
+  path a layer 1 document claims — `path`, `doc`, `claim`, `verified_at`. Nothing
+  new is authored for it. Every component already names its `path/in/repo` and every
+  figure fence already takes a `code:` header; that relation simply had nowhere to
+  live, existing only inside a validator run and vanishing when the process exited.
+- **It carries no staleness verdict, deliberately.** Whether a claim has gone stale
+  is a git question whose answer changes with every commit, while this file changes
+  only when the markdown does. Baking the verdict in would make it wrong within a
+  minute. `verified_at` is carried instead and readers run the comparison.
+- **The hook reports by document, not by file.** A session that edits twenty files
+  under one component now produces one line naming one document, instead of a list of
+  twenty paths and no indication of what to do with them.
+- **The engagement heuristic is gone.** "Any `ISSUE-NNN` mentioned anywhere in the
+  transcript" is replaced by an exact test: a document the session also edited is not
+  reported, because it was already being kept current. That is decidable, and it
+  cannot be satisfied by accident or impossible to satisfy by naming convention.
+- **Both hooks now require the repo to declare itself** — `.docs-kit.json` or
+  `docs/22_decisions/`. Accepting a bare `docs/README.md` is what let the old hook
+  run in a repo that uses a different folder scheme entirely and gets nothing from
+  the model.
+- `sensitive_paths` in `.docs-kit.json` is **no longer read**. Ignored, not rejected:
+  an old config stays valid, it just no longer changes anything. Nothing replaces it —
+  what it was tuning is now derived from the documents instead of declared beside them.
+
+`--check` gates `MAP.tsv` exactly as it gates `INDEX.md`, and the reason is sharper:
+a stale map does not produce a wrong warning, it produces a **missing** one, and a
+quiet session looks exactly like a clean one.
+
+### Fixed — `[anchor]` reported 8 false failures on a real repo, and 0 real ones
+
+`lop-hoc-zalo` produced 8 `FAIL [anchor]` lines. Every one was wrong: all 12 paths
+they named exist, and the glob among them matches 14 real files. The check that
+exists to say "this document can no longer be verified" was saying it about
+documents that were fine — which is how a check stops being read.
+
+Two authoring forms the standard never forbade and the parser never accepted:
+
+- **A comma-separated list in a `code:` header** — `code: app/page.tsx, lib/auth.ts`.
+  `anchor_paths()` took the whole string as one path, so every multi-path header
+  failed. A scenario rarely lives in one file, and one fence per file would split a
+  flow that is genuinely one flow. Now split; `components` stays one path, because a
+  component is one thing.
+- **A glob** — `lib/validators/*.schema.ts` resolves if it matches at least one file.
+  Fourteen sibling schemas are one fact about the codebase, not fourteen, and listing
+  them all is a list that goes stale on the next file added.
+
+`*` and `?` are the only metacharacters, and **`[` is not one**: `app/users/[id]/page.tsx`
+is a real Next.js directory, and reading its name as a bracket expression would report
+a file that is sitting right there as missing. Existence is tested **literally first**,
+so any path that exists as written is settled before globbing is considered — which is
+what makes the two rules coexist.
+
+Against `git diff` a glob is compared by its longest literal directory prefix, since
+no pattern will ever equal a filename git prints. Coarser than the glob, deliberately:
+a `NOTE [stale]` that fires slightly too often costs one re-read, one that never fires
+costs the whole check.
+
+STANDARD §7 now defines what counts as one anchor, instead of leaving it to an example.
+
+### Added — `Closes: BACKLOG-NNN`, and `docs_close.sh` for the half of docs-sync that was never a judgement
+
+Two of `docs-sync`'s seven steps never needed a model, and both were being done by
+re-reading a session's own history:
+
+- **Step 2** asked which Backlog items the session finished, then wrote an audit line
+  citing the session. The commit already knows. `Closes: BACKLOG-012` in the message
+  is the author saying it, at the moment they said it, in something that outlives the
+  chat — so the audit line now cites a **sha**, checkable years later by someone who
+  was not there.
+- **Step 6** asked what can leave the hot set. It is a pure predicate over
+  frontmatter, including the Decision/Proposal chain, which is derived from which
+  Backlog items cite the Decision in `source_ref`.
+
+`scripts/docs_close.sh [--apply] [--archive]` does both and nothing else. It scans the
+whole history every run rather than keeping state about where it stopped, which is safe
+because the write is idempotent: a completion already recorded is skipped. First commit
+per id wins — a later commit naming the same id is a follow-up fix, not a second
+completion. A trailer naming an id no Backlog item has is **reported, never invented**.
+
+It never writes into layer 1, never creates an Issue, and never writes an audit line
+for work no commit claims. Those are judgements and they stay in the skill. Writing
+the status and audit line by hand also stays entirely valid; the trailer is the
+cheaper path, not a required one.
+
+### Notes
+
+- The sample gate held: `design/sample-*.html` are byte-identical across this change.
+- CI gained four steps — `MAP.tsv` built from both anchor forms and gated, anchors
+  accepting lists/globs/`[id]` segments while still catching a real miss, `Closes:`
+  recorded once and inventing nothing, and the Stop hook staying silent in an
+  undeclared repo and on unclaimed code while naming the document for claimed code.
+
 ## [0.24.0] — 2026-08-17
 
 ### Added — the ERD prints itself as DBML, for dbdiagram.io
