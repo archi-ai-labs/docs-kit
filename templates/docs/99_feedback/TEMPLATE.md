@@ -8,12 +8,12 @@ fixed_in:                  # phiên bản kit đã sửa — điền khi nó v�
 
 # Bên dưới do docs_feedback.sh điền. Không sửa tay: một báo cáo không tái hiện
 # được thì bối cảnh là thứ duy nhất còn lại của nó.
-seen_on: {{FEEDBACK_DATE}}
+seen_on: "{{FEEDBACK_DATE}}"
 kit_version: "{{KIT_VERSION}}"
-crew: {{CREW_STATE}}
-repo: {{REPO_NAME}}
+crew: "{{CREW_STATE}}"
+repo: "{{REPO_NAME}}"
 profile: "{{REPO_PROFILE}}"
-rev: {{REPO_REV}}
+rev: "{{REPO_REV}}"
 platform: "{{PLATFORM}}"
 ---
 

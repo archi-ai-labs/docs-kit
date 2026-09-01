@@ -5,6 +5,33 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
+## [0.27.1] — 2026-09-01
+
+### Fixed — `skills/explain` loaded with no metadata at all
+
+Its `description:` was unquoted and contained `four-gates standard: at least one
+drawing`. YAML reads `": "` as a nested mapping, the whole block fails to parse,
+and the skill loads with **empty metadata** — no name, no description, nothing to
+trigger on. Present since 0.26.1 and invisible for four releases: the skill was
+listed, was invocable by hand, and simply never fired on its own. `claude plugin
+validate .` passes without `--strict`, which is how it survived local checks; the
+0.27.0 tag run is where it finally went red.
+
+`templates/docs/99_feedback/TEMPLATE.md` had the same class of defect from the
+other direction: `{{PLACEHOLDER}}` is YAML flow-mapping syntax, so the template
+itself did not parse even though every report generated from it did. Its
+script-filled values are quoted now.
+
+**A new gate, one rule wide.** Every frontmatter block in the repo is checked for
+an unquoted value containing `": "` — stdlib only, no YAML dependency, and it goes
+red on a mutation before it is trusted. A first version also flagged values opening
+with `[` or `{`; those are legitimate flow collections (`components: []` ships in
+six templates), and a gate with false positives gets switched off. One rule, and it
+is the failure that actually happened.
+
+`claude plugin validate . --strict` covers skills; this covers everything else that
+carries frontmatter, which is where the templates live.
+
 ## [0.27.0] — 2026-09-01
 
 ### Added — `99_feedback/`, the folder for problems with the kit itself

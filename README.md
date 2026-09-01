@@ -316,15 +316,15 @@ claude plugin validate .    # manifest + skill frontmatter
 ```
 
 That, and the full test recipe, run automatically on every push and PR via
-[`.github/workflows/validate.yml`](.github/workflows/validate.yml) — 31 steps:
+[`.github/workflows/validate.yml`](.github/workflows/validate.yml) — 32 steps:
 tag-vs-version, manifest JSON, script syntax on python 3.9 (the portability
 floor), a fresh scaffold validating clean, every profile branch producing exactly
 its folder set, an unknown `owns` token being refused, `--sync` growing a tree and
 never shrinking one, `INDEX.md` being complete and byte-deterministic, both
 `--check` gates catching drift in both directions, the validator still rejecting a
 dangling ref and a moved path, both hooks, `docs_feedback.sh` allocating ids and
-refusing a repo that predates `99_feedback/`, and `design/sample-*.html` matching a
-fresh render.
+refusing a repo that predates `99_feedback/`, every frontmatter value staying out of
+an accidental YAML mapping, and `design/sample-*.html` matching a fresh render.
 
 Most of those are **mutation tests** — they break something on purpose and assert
 the check fails. A gate that has only ever been seen passing is not a gate.

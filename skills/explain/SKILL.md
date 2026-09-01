@@ -1,6 +1,6 @@
 ---
 name: explain
-description: Explain a docs-kit layer-2 document or its chain — an Issue, Backlog item, Proposal, or Decision — or a mechanism this repo runs on, such as a script, a hook, a skill, a command or a config key, to the four-gates standard: at least one drawing, BEFORE/AFTER, trade-offs with numbers, ids as links, one level-2 check question to close. Trigger when the user asks what or why about an ISSUE-/BACKLOG-/PROPOSAL-/DECISION- id, a lane choice, the workflow between them, or how a piece of this repo's own tooling actually works; every other topic waits to be typed explicitly.
+description: "Explain a docs-kit layer-2 document or its chain — an Issue, Backlog item, Proposal, or Decision — or a mechanism this repo runs on, such as a script, a hook, a skill, a command or a config key, to the four-gates standard: at least one drawing, BEFORE/AFTER, trade-offs with numbers, ids as links, one level-2 check question to close. Trigger when the user asks what or why about an ISSUE-/BACKLOG-/PROPOSAL-/DECISION- id, a lane choice, the workflow between them, or how a piece of this repo's own tooling actually works; every other topic waits to be typed explicitly."
 arguments: topic
 argument-hint: "<điều chưa hiểu — một id, một tệp, một quyết định>"
 ---

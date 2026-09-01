@@ -193,10 +193,92 @@ jobs:
             || { echo "::error::a repo holding contracts while owns omits 'endpoints' went unreported"; cat "$work/val.txt"; exit 1; }
           echo "OK — sync grows with the profile, never shrinks the tree"
 
+      # A frontmatter value holding ": " is read as a nested mapping, and the whole
+      # block then fails to parse — the skill loads with EMPTY metadata, so it has
+      # no description to trigger on and nothing says a word. That is what happened
+      # to skills/explain (0.26.1 → 0.27.0), and `claude plugin validate --strict`
+      # below only looks at skills. Templates carry frontmatter too, so the trap is
+      # checked everywhere here.
+      #
+      # ONE rule, on purpose. A first pass also flagged values starting with `[` or
+      # `{`, and those are legitimate flow collections — `components: []` is in six
+      # shipped templates. A gate with false positives gets switched off, and this
+      # one rule is the failure that actually occurred.
+      - name: No frontmatter value opens a mapping it did not mean to
+        run: |
+          python3 - <<'PY'
+          import pathlib, re, sys
+          bad = []
+          for f in sorted(pathlib.Path(".").rglob("*.md")):
+              if ".git/" in str(f):
+                  continue
+              m = re.match(r"^---\n(.*?)\n---(\n|$)", f.read_text(errors="replace"), re.S)
+              if not m:
+                  continue
+              for n, line in enumerate(m.group(1).split("\n"), start=2):
+                  km = re.match(r"^([A-Za-z0-9_-]+):[ \t]+(.*)$", line)
+                  if not km:
+                      continue
+                  v = km.group(2).strip()
+                  if not v or v[0] in "\"'":
+                      continue                      # quoted values are safe by construction
+                  if ": " in re.sub(r"[ \t]#.*$", "", v):
+                      bad.append((f, n, km.group(1)))
+          for f, n, k in bad:
+              print("::error file=%s,line=%d::frontmatter '%s' is unquoted and contains "
+                    '\': \' — YAML reads that as a nested mapping and drops the whole '
+                    "block. Wrap the value in double quotes." % (f, n, k))
+          if bad:
+              sys.exit(1)
+          print("OK — no frontmatter value in the repo opens an accidental mapping")
+          PY
+
       # 99_feedback/ is the one folder that files itself: the script allocates the
       # id and stamps the context, so the two things a hand-written report gets
       # wrong are the two things nobody has to type. Assert both, plus the refusal
       # on a repo that predates the folder — that refusal is the whole upgrade hint.
+      # A frontmatter value holding ": " is read as a nested mapping, and the whole
+      # block then fails to parse — the skill loads with EMPTY metadata, so it has
+      # no description to trigger on and nothing says a word. That is what happened
+      # to skills/explain (0.26.1 → 0.27.0, caught by `--strict` on this very run),
+      # and `--strict` only looks at skills. Templates carry frontmatter too, so the
+      # same trap is checked everywhere, with the stdlib and no YAML dependency.
+      - name: Every frontmatter block is parseable, not just the skills
+        run: |
+          python3 - <<'PY'
+          import pathlib, re, sys
+          # A bare value is unsafe when it opens a mapping (": "), or starts with a
+          # character YAML reads as structure. Quoting is the fix in every case.
+          BAD_START = "{[*&!%@`>|"
+          bad = []
+          for f in sorted(pathlib.Path(".").rglob("*.md")):
+              if ".git/" in str(f):
+                  continue
+              text = f.read_text(errors="replace")
+              m = re.match(r"^---\n(.*?)\n---(\n|$)", text, re.S)
+              if not m:
+                  continue
+              for n, line in enumerate(m.group(1).split("\n"), start=2):
+                  km = re.match(r"^([A-Za-z0-9_-]+):[ \t]+(.*)$", line)
+                  if not km:
+                      continue
+                  v = km.group(2).strip()
+                  if not v or v[0] in "\"'":
+                      continue
+                  v = re.sub(r"[ \t]#.*$", "", v).strip()
+                  if not v:
+                      continue
+                  if ": " in v:
+                      bad.append((f, n, km.group(1), 'unquoted value contains ": "'))
+                  elif v[0] in BAD_START:
+                      bad.append((f, n, km.group(1), "unquoted value starts with %r" % v[0]))
+          for f, n, k, why in bad:
+              print("::error file=%s,line=%d::frontmatter '%s': %s — quote it" % (f, n, k, why))
+          if bad:
+              sys.exit(1)
+          print("OK — every frontmatter block in the repo parses")
+          PY
+
       # 99_feedback/ is the one folder that files itself: the script allocates the
       # id and stamps the context, so the two things a hand-written report gets
       # wrong are the two things nobody has to type. Assert both, plus the refusal
