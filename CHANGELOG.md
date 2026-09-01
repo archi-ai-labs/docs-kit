@@ -5,6 +5,39 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
+## [0.26.1] — 2026-09-01
+
+### Fixed — the explain skill could satisfy itself without drawing anything
+
+`/docs-kit:explain` opens by declaring that bare prose does not pass, then shipped two
+escape hatches back to prose and tables. A user who hit them read the result as the
+skill ignoring its own headline rule, which is exactly what it was. Both hatches were
+written as generosity toward a session with no drawing surface; in practice the session
+is the one deciding whether a surface exists, and the cheaper branch wins that call.
+
+- **The fast lane offered a choice.** "one table **or** one small diagram" meant three
+  "no" answers to the lane questions bought a table and no picture at all. What shrinks
+  in that lane is now the prose, never the drawing.
+- **The deep lane published a floor made of tables.** "If none exists, two adjacent
+  labelled tables are the floor" let a session declare, without checking anything, that
+  no surface existed. A table is now a supplement; if every surface genuinely fails, the
+  skill must name WHICH one failed and how, then draw the fallback in a fenced ASCII
+  block.
+- **One invariant now sits above both lanes**, so neither can be read alone: every run
+  leaves at least one picture, and the lanes differ in how much you draw, never in
+  whether you draw.
+
+### Still unenforced, on purpose
+
+The explain-gate hook from 0.26.0 fires only on `AskUserQuestion`, so an explanation
+that closes with its level-2 check question written as text is never inspected — the
+rule above is one the model follows, not one the harness checks. The hook and the skill
+also disagree about what counts as drawing: the hook accepts only a `tool_use` on a
+drawing tool, while the skill accepts a mermaid block in text. A `Stop`-time scan would
+close both, and it waits for a release that can first measure how often such a scan
+fires on a turn that did nothing wrong. §8's order is unchanged — evidence, then warn,
+then block.
+
 ## [0.26.0] — 2026-09-01
 
 ### Added — the crew execution layer

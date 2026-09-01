@@ -15,6 +15,11 @@ This is a **deliberate exception to "keep answers short"**: brevity applies to
 reports, never to the explanation standing before a decision. There, the more
 visual the better, and bare prose does not pass.
 
+**Every run of this skill leaves at least one picture on the table.** The two
+lanes below differ in how MUCH you draw, never in whether you draw: a reader
+who asks "what does this change?" is asking to be shown, and a paragraph that
+answers in words has answered a different question.
+
 ## Step 0 — Ground the topic
 
 `$ARGUMENTS` names the thing. Before explaining anything:
@@ -32,10 +37,11 @@ visual the better, and bare prose does not pass.
 3. Any irreversible side effect — deleted data, an outside publish, a one-way
    flag, something sent to a person? This one outranks the other two.
 
-All "no" → **shallow form**: one table or one small diagram plus a few
-sentences, and write the marker line `LANE: fast — <reason>` at line start so
-the reader sees which lane you chose (in a crew repo the explain-gate hook
-looks for exactly that line, or a drawing-tool call).
+All "no" → **shallow form**: one small diagram plus a few sentences — what
+shrinks in this lane is the prose, not the drawing — and write the marker line
+`LANE: fast — <reason>` at line start so the reader sees which lane you chose
+(in a crew repo the explain-gate hook looks for exactly that line, or a
+drawing-tool call).
 
 Any "yes" → **deep form**, everything below.
 
@@ -43,8 +49,10 @@ Any "yes" → **deep form**, everything below.
 
 - **BEFORE vs AFTER, side by side, as a real drawing.** Use whatever drawing
   surface the session has — the visualize widget, an Artifact page, a mermaid
-  block. If none exists, two adjacent labelled tables are the floor; prose
-  alone is not.
+  block. A table supplements the drawing, it never replaces it. If every
+  surface fails, name WHICH one failed and how, then draw the fallback in a
+  fenced ASCII block; a turn that explains a decision and shows no picture has
+  not run this skill.
 - **Trade-offs cut both ways, each side with its number.** A trade-off
   without a number is an opinion wearing a table.
 - **Every id you mention is a clickable link** to its file (repo-relative
