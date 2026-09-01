@@ -27,7 +27,7 @@
 #
 # Informational only (never affect the exit code):
 #   NOTE [layout]  a folder this repo's profile calls for is missing (STANDARD §9 —
-#                  the profile is `owns` in .docs-kit.json; no declaration = all 16)
+#                  the profile is `owns` in .docs-kit.json; no declaration = all 17)
 #   NOTE [stale]   a Layer 1 doc carries verified_at: <rev> and files it names have
 #                  changed since that rev. Changed is not the same as wrong, which is
 #                  why this warns instead of failing (same rationale as STANDARD §8).
@@ -56,7 +56,7 @@ ROOT="$(cd "$DOCS/.." 2>/dev/null && pwd)"
 
 # Which folders belong here is one question with one answer, and the scaffold has
 # to ask it too — so the map lives in one file that both source (STANDARD §9). A
-# broken install leaves the lib missing; degrade to "all 16", which is what every
+# broken install leaves the lib missing; degrade to "all 17", which is what every
 # version before the profile existed did, rather than inventing findings.
 VLIB="$(dirname "${BASH_SOURCE[0]:-$0}")/docs_profile.sh"
 if [ -f "$VLIB" ]; then
@@ -622,7 +622,7 @@ fi
 #
 # What counts as missing depends on the profile: a repo that declares
 # `owns: ["data"]` is not missing 04_api/, it never asked for one. A repo that
-# declares nothing is held to all 16, exactly as before profiles existed.
+# declares nothing is held to all 17, exactly as before profiles existed.
 #
 # A folder present but *outside* the profile is never reported. Repos grow, docs
 # are not deleted for a config change, and "extra folder" is not a finding
@@ -633,8 +633,8 @@ if [ "$HAVE_PROFILE" -eq 1 ]; then
 else
   LAYOUT_WANT="$(printf '%s\n' 00_roadmap 01_products 02_architecture 03_business-logic 04_api \
     20_issues 21_proposals 22_decisions 23_backlog 30_conventions \
-    40_services 50_runbooks 60_fe-integration 70_deploy 92_audit 93_qa)"
-  LAYOUT_WHY="docs_profile.sh not found — held to all 16"
+    40_services 50_runbooks 60_fe-integration 70_deploy 92_audit 93_qa 99_feedback)"
+  LAYOUT_WHY="docs_profile.sh not found — held to all 17"
 fi
 for dir in $LAYOUT_WANT; do
   [ -d "$DOCS/$dir" ] || echo "NOTE [layout] $DOCS/$dir: folder missing — this repo's profile calls for it ($LAYOUT_WHY)"

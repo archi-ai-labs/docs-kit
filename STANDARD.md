@@ -42,10 +42,10 @@ Layer rules:
   No traceability fields, no Decision needed.
 - **Review (`92_audit/`)** observes layers 1–2 and appends findings. It never edits them.
 
-## 2. Folder layout (up to 16 folders under `docs/`)
+## 2. Folder layout (up to 17 folders under `docs/`)
 
-Eleven of these are **core** and every repo gets them. Five are conditional on what
-the repo declares it owns, and a repo that declares nothing gets all sixteen — the
+Twelve of these are **core** and every repo gets them. Five are conditional on what
+the repo declares it owns, and a repo that declares nothing gets all seventeen — the
 full map, and the reasoning for it, is §9.1.
 
 | # | Folder | Type | Layer | Present when |
@@ -66,6 +66,7 @@ full map, and the reasoning for it, is §9.1.
 | 70 | `70_deploy` | Deploy | 3 | `owns: deploys` |
 | 92 | `92_audit` | Review | oversight | always |
 | 93 | `93_qa` | QA | 3 | always |
+| 99 | `99_feedback` | Kit feedback | oversight | always |
 
 ### `_archive/` — terminal documents leave the hot set
 
@@ -388,6 +389,18 @@ folder's topic. The validator does not check these folders.
 `00_roadmap/` has no required frontmatter either; keep it aligned with
 approved Decisions.
 
+### `99_feedback/*.md` — a problem with the kit itself (id prefix `FEEDBACK-`)
+One file per problem, and **the file is the prompt**: copy it whole into a
+docs-kit session and the maintainer has everything. Fields are conventional, not
+validated — `about` (`docs-kit` · `crew`), `kind` (`bug` · `doc` · `gap` ·
+`friction`), `severity` (`silent` · `blocks` · `friction`), `status` (`open` ·
+`sent` · `fixed`), plus the context `docs_feedback.sh` stamps in. Not indexed in
+`INDEX.md`; not checked by the validator. Full rule in §12.
+
+**No field here ends in `_ref`, deliberately.** A `*_ref` must resolve (§7), and a
+report has to outlive the ticket that surfaced it — including the case where that
+ticket is deleted. Mention an id in the body as ordinary prose instead.
+
 ## 5. Lane rule — three questions
 
 Ask all three. **Any "yes" → FULL lane. All "no" → FAST lane.**
@@ -416,6 +429,7 @@ the marker line and the gates around it live in `EXECUTION.md` §7.
 | A Backlog item is completed | Set its `status: done` and append one line to `92_audit/`. Preferably by writing `Closes: BACKLOG-NNN` in the commit — see §6.1. In a crew repo, `crew done` performs the merge, the status flip and the worktree cleanup in one command (EXECUTION §6). |
 | A Decision is approved | Amend `02_architecture/` in the SAME session (body + `amended_by` entry). |
 | Starting work that is not in the Backlog | Create an Issue before writing code. |
+| docs-kit or crew got it wrong — a script contradicted the standard, or finishing an ordinary task needed a workaround | File one report in `99_feedback/` (`docs_feedback.sh new <slug>`). §12 has the four cases that qualify and the four that do not. |
 
 ### 6.1 `Closes:` — letting the commit record the completion
 
@@ -603,7 +617,7 @@ was tuning is now derived from the documents instead of declared beside them.
 `owns` declares what this repo holds title to — `data` (tables), `endpoints` (a
 contract it publishes), `screens` (routes), `jobs` (consumers, schedules),
 `deploys` (something that gets shipped and operated). **It is optional; a repo
-that omits it gets all 16 folders and behaves exactly as it did before profiles
+that omits it gets all 17 folders and behaves exactly as it did before profiles
 existed.**
 
 It is also what decides the shape of `docs/`:
@@ -616,9 +630,10 @@ It is also what decides the shape of `docs/`:
 | `data` | — |
 | `jobs` | — |
 
-The other eleven folders are **core**: every repo gets them, because the questions
+The other twelve folders are **core**: every repo gets them, because the questions
 they answer — what are we building, what is it made of, how does it change, what
-happened — have no profile in which they stop applying.
+happened, and what the kit itself got wrong here — have no profile in which they
+stop applying.
 
 `data` and `jobs` open no folder on purpose. A repo's tables live in the ```` ```erd ````
 block inside `02_architecture/`, and its workers are `[queue]` components in the same
@@ -631,7 +646,7 @@ kit does not get to hold it in two places.
 
 **Three rules keep a profile from becoming state that rots:**
 
-1. **No declaration means no branching.** Absent `owns` → all 16, exactly as before.
+1. **No declaration means no branching.** Absent `owns` → all 17, exactly as before.
    Nothing a previous version scaffolded changes shape until somebody declares
    something. `"owns": []` *is* a declaration — a library that owns nothing
    conditional — and is not the same as saying nothing.
@@ -1091,3 +1106,77 @@ Rules:
   a plain `[^a-z0-9]` filter would collapse both `phân-quyền` and `phần-quyền`
   to one HTML id, so the sidebar link would open the wrong document.
 - `<html lang="vi">`, since the prose dominates the page.
+
+## 12. Feedback on the kit itself — `99_feedback/`
+
+Everything else under `docs/` describes the product. This folder describes **the
+kit**, and it exists because the previous arrangement had no place to put a
+problem: an agent that hit a wrong `FAIL`, a hook that stayed quiet, or a rule
+that could not be followed said so once in a chat session, and the session ended.
+The report reached nobody, and the next repo hit the same thing.
+
+**One problem, one file, and the file is the prompt.** No summary step, no
+rewriting into a bug tracker's fields — `docs_feedback.sh show <id>` prints
+something that can be pasted into a docs-kit session as it stands. That is the
+whole delivery mechanism, and it is deliberately the cheapest one available:
+a report that costs a paragraph of re-explaining is a report that does not get
+sent.
+
+### 12.1 What qualifies
+
+| Case | Example |
+|---|---|
+| A script or hook contradicts the standard | validator `FAIL`s something §4 permits; a hook silent where §8 says it warns |
+| Finishing an ordinary task needed a workaround | hand-editing a generated file, skipping a gate, running an undocumented step |
+| A document states something this repo proved untrue | `STANDARD.md`, `EXECUTION.md`, or a `SKILL.md` describing behaviour that does not happen |
+| A real fact has no field to live in | the model covers nothing that fits, so it was recorded nowhere |
+
+The second row is the highest-signal one. A workaround is a cost already paid,
+which is different in kind from a cost imagined — it needs no argument about
+whether the friction is real.
+
+### 12.2 What does not
+
+- **Your own mistake, correctly caught.** A rejected bad ref is the validator
+  working.
+- **A problem with *this* repo** — its code, its content, its conventions. That
+  is an Issue in `20_issues/`.
+- **A preference with no named cost.** "I would call it something else" is not
+  a report.
+- **A problem already filed.** Append one line to that file's *Seen again*
+  section. Recurrence is evidence; a second file is noise.
+
+One test before writing anything: **if you cannot say what the kit should do
+differently, it is not ready to file.** Say it to the user instead.
+
+### 12.3 Why the folder is core, and why it stays
+
+Core, in every profile, for the same reason `92_audit/` is: a repo with nowhere
+to record the problem records nothing, and "we will remember to mention it"
+is exactly the mechanism that has already failed.
+
+A report stays after it is fixed, with `status: fixed` and `fixed_in:` naming the
+version. It then answers the question a future reader actually asks — *why did
+this repo do that strange thing for a while* — and one line of history is far
+cheaper than the investigation it replaces.
+
+### 12.4 The script (`scripts/docs_feedback.sh`)
+
+Deterministic, read-only except for the one file it writes.
+
+```bash
+docs_feedback.sh new  <slug>   # next id + the template + the context, filled in
+docs_feedback.sh list          # id · status · severity · about · title
+docs_feedback.sh show <id>     # the report verbatim — this is "send it"
+```
+
+`new` stamps the kit version, this repo's profile, the git rev, whether crew is
+stamped, and the platform. **These are the fields a writer gets wrong**, and a
+problem that will not reproduce is nothing but its context — which is the same
+reason §6.1 prefers a commit trailer to a session's recollection.
+
+The template is `docs/99_feedback/TEMPLATE.md` in the repo when present, and the
+kit's copy otherwise, so a team may adapt the form without losing the command.
+
+Exit: `0` done · `2` setup error · `3` no `99_feedback/` — the repo predates the
+folder, so `/docs-kit:docs-upgrade` adds it.

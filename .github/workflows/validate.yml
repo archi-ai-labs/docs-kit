@@ -67,7 +67,7 @@ jobs:
         run: |
           CORE="00_roadmap 01_products 02_architecture 03_business-logic
                 20_issues 21_proposals 22_decisions 23_backlog 30_conventions
-                92_audit 93_qa"
+                92_audit 93_qa 99_feedback"
           fails=0
           check() { # check <label> <owns> <expected folders>
             work="$(mktemp -d)"; git -C "$work" init -q
@@ -122,13 +122,13 @@ jobs:
       # The migration guarantee, and the only thing standing between this feature
       # and every repo scaffolded by an older docs-kit: without a declaration
       # nothing branches. `owns: []` is a different thing — it IS a declaration.
-      - name: A repo that declares nothing still gets all 16
+      - name: A repo that declares nothing still gets all 17
         run: |
           work="$(mktemp -d)"; git -C "$work" init -q
           printf '{\n  "sensitive_paths": ["**/schema/**"]\n}\n' > "$work/.docs-kit.json"
           bash scripts/docs_scaffold.sh "$work" > "$work/out.txt"
           n="$(cd "$work/docs" && ls -1 | grep -cv '\.md$')"
-          [ "$n" -eq 16 ] || { echo "::error::a repo with no owns got $n folders, not 16"; exit 1; }
+          [ "$n" -eq 17 ] || { echo "::error::a repo with no owns got $n folders, not 17"; exit 1; }
           grep -q 'no owns declared' "$work/out.txt" \
             || { echo "::error::scaffold did not say the profile was undeclared"; cat "$work/out.txt"; exit 1; }
           bash scripts/docs_validate.sh "$work/docs" > "$work/val.txt"
@@ -140,8 +140,8 @@ jobs:
           printf '{\n  "owns": []\n}\n' > "$empty/.docs-kit.json"
           bash scripts/docs_scaffold.sh "$empty" >/dev/null
           m="$(cd "$empty/docs" && ls -1 | grep -cv '\.md$')"
-          [ "$m" -eq 11 ] || { echo "::error::'owns: []' got $m folders, not 11 — it was read as silence"; exit 1; }
-          echo "OK — no declaration means all 16; an empty declaration means core only"
+          [ "$m" -eq 12 ] || { echo "::error::'owns: []' got $m folders, not 12 — it was read as silence"; exit 1; }
+          echo "OK — no declaration means all 17; an empty declaration means core only"
 
       # `owns` is a closed enum and now decides folders, so a typo costs a folder
       # silently. Both ends have to refuse it: the scaffold before writing anything,
@@ -192,6 +192,85 @@ jobs:
           grep -q "NOTE \[profile\].*endpoints" "$work/val.txt" \
             || { echo "::error::a repo holding contracts while owns omits 'endpoints' went unreported"; cat "$work/val.txt"; exit 1; }
           echo "OK — sync grows with the profile, never shrinks the tree"
+
+      # 99_feedback/ is the one folder that files itself: the script allocates the
+      # id and stamps the context, so the two things a hand-written report gets
+      # wrong are the two things nobody has to type. Assert both, plus the refusal
+      # on a repo that predates the folder — that refusal is the whole upgrade hint.
+      # 99_feedback/ is the one folder that files itself: the script allocates the
+      # id and stamps the context, so the two things a hand-written report gets
+      # wrong are the two things nobody has to type. Assert both, plus the refusal
+      # on a repo that predates the folder — that refusal is the whole upgrade hint.
+      #
+      # Every check below reads a FILE, never a pipe into `grep -q`: this job runs
+      # under `pipefail`, and a `grep -q` that matches early closes the pipe, kills
+      # the producing script with SIGPIPE, and fails the step on a passing case.
+      - name: docs_feedback.sh allocates ids, stamps context, and refuses a repo without the folder
+        run: |
+          work="$(mktemp -d)"; git -C "$work" init -q
+          bash scripts/docs_scaffold.sh "$work" >/dev/null
+          [ -f "$work/docs/99_feedback/TEMPLATE.md" ] \
+            || { echo "::error::scaffold produced no 99_feedback/TEMPLATE.md"; exit 1; }
+
+          bash scripts/docs_feedback.sh new "Hook Stayed QUIET!!" "$work" > "$work/new1.txt"
+          f1="$work/docs/99_feedback/FEEDBACK-001-hook-stayed-quiet.md"
+          [ -f "$f1" ] || { echo "::error::slug was not normalised into a filename"; cat "$work/new1.txt"; exit 1; }
+          ver="$(node -p "require('./.claude-plugin/plugin.json').version")"
+          grep -q "kit_version: \"$ver\"" "$f1" \
+            || { echo "::error::report does not carry the kit version $ver"; sed -n 1,20p "$f1"; exit 1; }
+          ! grep -q '{{' "$f1" \
+            || { echo "::error::a template placeholder survived substitution"; grep -n '{{' "$f1"; exit 1; }
+
+          # The second report takes the next id, read from `id:` and not from the filename.
+          bash scripts/docs_feedback.sh new second-thing "$work" >/dev/null
+          grep -q '^id: FEEDBACK-002' "$work/docs/99_feedback/FEEDBACK-002-second-thing.md" \
+            || { echo "::error::the second report did not get FEEDBACK-002"; exit 1; }
+
+          bash scripts/docs_feedback.sh show 002 "$work" > "$work/shown.txt"
+          grep -q '^id: FEEDBACK-002' "$work/shown.txt" \
+            || { echo "::error::show did not print the report it was asked for"; exit 1; }
+          bash scripts/docs_feedback.sh list "$work" > "$work/list1.txt"
+          [ "$(grep -c '^FEEDBACK-' "$work/list1.txt")" -eq 2 ] \
+            || { echo "::error::list did not report both files"; cat "$work/list1.txt"; exit 1; }
+
+          # A zero-padded id is not octal. `printf '%03d' 077` reads it as 63 and
+          # hunts for a report nobody filed — found by testing, kept as a gate.
+          sed -e 's/^id: FEEDBACK-NNN/id: FEEDBACK-077/' \
+              -e 's/^# <.*/# a real title in the body/' \
+              "$work/docs/99_feedback/TEMPLATE.md" > "$work/docs/99_feedback/FEEDBACK-077-octal.md"
+          bash scripts/docs_feedback.sh show 077 "$work" > "$work/shown77.txt"
+          grep -q '^id: FEEDBACK-077' "$work/shown77.txt" \
+            || { echo "::error::show read a zero-padded id as octal"; exit 1; }
+          bash scripts/docs_feedback.sh new after-octal "$work" >/dev/null
+          [ -f "$work/docs/99_feedback/FEEDBACK-078-after-octal.md" ] \
+            || { echo "::error::the next id after 077 was not 078"; exit 1; }
+
+          # The title column reads the BODY heading. The frontmatter carries `#`
+          # comment lines of its own, and one of them read as every report's title.
+          bash scripts/docs_feedback.sh list "$work" > "$work/list2.txt"
+          grep -q 'a real title in the body' "$work/list2.txt" \
+            || { echo "::error::list did not take the title from the body heading"; cat "$work/list2.txt"; exit 1; }
+          grep '^FEEDBACK-' "$work/list2.txt" > "$work/rows.txt"
+          ! grep -q 'Bên dưới do' "$work/rows.txt" \
+            || { echo "::error::list took a frontmatter comment as a title"; cat "$work/rows.txt"; exit 1; }
+
+          # Reports are markdown under docs/ — they must not cost the repo a FAIL.
+          bash scripts/docs_validate.sh "$work/docs" \
+            || { echo "::error::filed reports broke the validator"; exit 1; }
+
+          # A repo scaffolded before 0.27.0 gets exit 3 and the upgrade path, never
+          # a silently created folder.
+          old="$(mktemp -d)"; git -C "$old" init -q
+          bash scripts/docs_scaffold.sh "$old" >/dev/null
+          rm -rf "$old/docs/99_feedback"
+          if bash scripts/docs_feedback.sh new anything "$old" > "$old/out.txt" 2>&1; then
+            echo "::error::the script wrote a report into a repo with no 99_feedback/"; exit 1
+          fi
+          grep -q 'docs-upgrade' "$old/out.txt" \
+            || { echo "::error::the refusal did not name the upgrade path"; cat "$old/out.txt"; exit 1; }
+          [ ! -d "$old/docs/99_feedback" ] \
+            || { echo "::error::the refusal created the folder anyway"; exit 1; }
+          echo "OK — reports file themselves, and a pre-0.27.0 repo is told how to catch up"
 
       # The read model has to follow the profile too, or the saving is undone by a
       # page nagging about a section the repo deliberately does not have. Section

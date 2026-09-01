@@ -29,6 +29,19 @@ Không có phiếu thì không có cây: `crew new` từ chối id chưa tồn t
 | `setup.md` | dựng lại hệ từ số 0, chỉnh ngưỡng |
 | `README.md` | tệp này |
 
+## Khi crew làm sai
+
+Không ghi vào bảy tệp này, mà tạo một file trong `docs/99_feedback/` với
+`about: crew`:
+
+```bash
+bash "$PLUGIN_ROOT/scripts/docs_feedback.sh" new <slug>
+```
+
+File đó copy nguyên văn là gửi được cho docs-kit. Luật đầy đủ ở EXECUTION §12;
+điều đáng nhớ nhất là **một cách lách đã dùng có giá trị hơn một ý kiến**, vì
+ngưỡng trong `resources.md` và `tickets.md` mới chỉ đo trên vài phiếu.
+
 ## Trạng thái nằm ở đâu
 
 `../<repo>-crew/` — ngoài mọi bản checkout, nên mọi phiên nhìn chung một bảng

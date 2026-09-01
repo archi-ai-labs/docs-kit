@@ -24,4 +24,9 @@ câu kiểm mức 2 — luật trong `.claude/crew/gates.md`; user cần bản g
 chuẩn cho bất kỳ vấn đề nào thì gõ `/docs-kit:explain <vấn đề>`.
 
 **Commit đóng phiếu mang trailer** `Closes: BACKLOG-<nnn>` để audit dẫn sha.
+
+**Crew làm sai thì ghi lại, đừng chỉ nói.** `scripts/crew` hoặc một cổng bắt lách
+mới xong việc thì tạo một file trong `docs/99_feedback/` (`docs_feedback.sh new
+<slug>`, `about: crew`). File đó copy nguyên văn là gửi được cho docs-kit; phiên
+chat thì hết phiên là mất.
 <!-- docs-kit:crew:end -->

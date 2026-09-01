@@ -5,6 +5,77 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
+## [0.27.0] — 2026-09-01
+
+### Added — `99_feedback/`, the folder for problems with the kit itself
+
+Every folder under `docs/` described the product. None of them described **the
+kit**, so a problem with docs-kit had nowhere to go: an agent that hit a wrong
+`FAIL`, a hook that stayed silent, or a rule that could not be followed said so
+once in a chat session, the session ended, and the report reached nobody. The next
+repo hit the same thing. This is the only failure mode in the kit whose cost grows
+with the number of repos using it.
+
+`99_feedback/` is **core in every profile** — twelve core folders now, seventeen in
+total — for the same reason `92_audit/` is: a repo with nowhere to record the
+problem records nothing, and "we will remember to mention it" is the mechanism that
+has already failed.
+
+**One problem, one file, and the file is the prompt.** `docs_feedback.sh show <id>`
+prints something that pastes into a docs-kit session as it stands — no summary
+step, no re-entering the same facts into a tracker's fields. That is deliberately
+the cheapest delivery available, because a report that costs a paragraph of
+re-explaining is a report that does not get sent.
+
+- **`scripts/docs_feedback.sh`** — `new <slug>` allocates the next `FEEDBACK-NNN`
+  (read from `id:`, never from a filename — §3 has no exceptions) and stamps in the
+  kit version, this repo's `owns` profile, the git rev, whether crew is stamped, and
+  the platform. **Those are the fields a writer gets wrong**, and a problem that will
+  not reproduce is nothing but its context — the same reason §6.1 prefers a commit
+  trailer to a session's recollection. `list` is the dedupe check; `show` is "send
+  it". Exit `3` on a repo scaffolded before the folder existed, naming
+  `/docs-kit:docs-upgrade` rather than silently creating anything.
+- **`TEMPLATE.md` is the single source of the form**, taken from the repo's copy when
+  present and the kit's otherwise, so a team can adapt it without losing the command.
+- **No field ends in `_ref`, deliberately.** A `*_ref` must resolve (§7), and a report
+  has to outlive the ticket that surfaced it — including the case where that ticket is
+  deleted. Ids get mentioned in the body as ordinary prose.
+- **Validator and `INDEX.md` ignore the folder.** It records what the checks do not
+  yet know how to catch; making it check itself would be a loop that answers nothing.
+
+**Where the rule lives, so it fires without being asked.** STANDARD §12 defines the
+four cases that qualify and the four that do not; §6 carries the trigger row; both
+CLAUDE.md snippets carry one line each, which is what an agent actually has in
+context. `docs-sync` gained Step 8 — one question at the end of a session, *did
+anything here need a workaround*, filed while the command and its output are still
+on screen. That placement is the point: the workaround was paid for an hour ago and
+by the next session it is gone.
+
+**The highest-signal case is a workaround already performed**, not an opinion about
+friction. Hand-editing a generated file or skipping a gate is a cost that has been
+paid, which needs no argument about whether it is real. `severity: silent` outranks
+`blocks` for the reason §8 is built on: a gate that refuses is visible and gets
+fixed, while a hook that stays quiet produces a session indistinguishable from a
+clean one.
+
+Reports stay after they are fixed, with `fixed_in:` naming the version. They then
+answer the question a future reader actually asks — *why did this repo do that
+strange thing for a while* — and one line of history costs less than the
+investigation it replaces.
+
+Crew gets EXECUTION §12 pointing at the same folder with `about: crew`. §5's pacing
+and §6's merge procedure are calibrated on a handful of measurements from two days
+in one repo (§11); the first thing that will be wrong about them is a threshold, and
+the evidence for that is somebody quietly working around it.
+
+Migration: existing repos run `/docs-kit:docs-upgrade`. Nothing else changes shape —
+`--sync` adds the folder with its two seeds and touches nothing that is already there.
+
+CI gained a step that files two reports, asserts the second gets `FEEDBACK-002`,
+that no `{{placeholder}}` survives, that filed reports do not cost the repo a
+validator `FAIL`, and that a pre-0.27.0 repo is refused with the upgrade path named.
+The three folder-count assertions moved 16 → 17 and 11 → 12.
+
 ## [0.26.3] — 2026-09-01
 
 ### Fixed — the naming check was reading the wrong label

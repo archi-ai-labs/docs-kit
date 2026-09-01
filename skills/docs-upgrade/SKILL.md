@@ -7,8 +7,8 @@ disable-model-invocation: true
 # docs-upgrade — reconcile an existing `docs/` with the current standard
 
 `docs-init` scaffolds a repo once. The standard then moves on: `04_api/` arrived in
-0.20.0, `_archive/` and `INDEX.md` in 0.18.0, and a repo scaffolded before those has
-no idea they exist. This skill closes that gap.
+0.20.0, `_archive/` and `INDEX.md` in 0.18.0, `99_feedback/` in 0.27.0, and a repo
+scaffolded before those has no idea they exist. This skill closes that gap.
 
 **Adds only.** It never overwrites a file, never edits one, never deletes one. An
 existing file is the repo's content, and nothing here can tell an edited template
@@ -34,7 +34,7 @@ It prints the repo's profile, one `added docs/…` line per item, and ends with
 `SYNC OK`. Exit `3` means `docs/` does not exist — go back to the top. Relay the
 added list verbatim; that is the whole answer to "what did this version bring".
 
-**It syncs toward the profile, not toward all 16.** The first line of output says
+**It syncs toward the profile, not toward all 17.** The first line of output says
 which: `no owns declared` means this repo is held to the full tree exactly as it
 always was, and `owns: data, endpoints` means it gets those folders and no others
 (STANDARD §9.1). Nothing is ever removed — a folder the profile does not call for
@@ -75,6 +75,9 @@ may now have findings. **That is the point, not a regression — say so.** Group
 - **New folders and seeds** — from Step 2, with one line each on what the folder is
   for. `04_api/` in particular: an API contract is layer 1 now, which is what closes
   §6's old contradiction (it demanded a Decision for a thing it gave nowhere to record).
+  `99_feedback/` is the other one worth a sentence: it is the first folder under
+  `docs/` that is not about the product, and it is where a problem with the kit gets
+  written down instead of said once in a session that then ends (STANDARD §12).
 - **`FAIL [anchor]`** — paths a doc names that no longer exist. These were never
   checked before this version; they are pre-existing drift being surfaced, not damage
   the upgrade did. Say that plainly or it reads as breakage.

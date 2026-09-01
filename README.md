@@ -153,7 +153,7 @@ plugin on by default.
 
 | Command | What it does | Writes files |
 |---|---|---|
-| `/docs-kit:docs-init` | Detect the stack from the repo's manifests, ask what the repo owns, scaffold the folders that profile calls for (11–16) + templates into `docs/`, read the repo's source to fill Architecture, and optionally wire the rules into `CLAUDE.md`. Refuses to touch an existing `docs/`; asks before every write outside the scaffold. | Yes |
+| `/docs-kit:docs-init` | Detect the stack from the repo's manifests, ask what the repo owns, scaffold the folders that profile calls for (12–17) + templates into `docs/`, read the repo's source to fill Architecture, and optionally wire the rules into `CLAUDE.md`. Refuses to touch an existing `docs/`; asks before every write outside the scaffold. | Yes |
 | `/docs-kit:docs-sync` | End-of-session reconcile: backlog statuses, audit entries, retroactive Issues, pending Architecture amendments, architecture-vs-code drift, and archiving what can no longer change. | Yes |
 | `/docs-kit:docs-check` | Run the three deterministic checks — the validator, a stale-read-model gate (`INDEX.md` and `MAP.tsv`), and API-contract drift against a generated artifact — and explain each failure. Never fixes. | No |
 | `/docs-kit:docs-render` | Generate/refresh the read models of `docs/` — three HTML pages, `INDEX.md` for agents, and `MAP.tsv` for the hooks. Deterministic; never edits the source markdown. | Yes (generated files only) |
@@ -185,6 +185,7 @@ LAYER 2 — CHANGE       Issue → [Proposal → Decision] → Backlog (process;
                        terminal records move to _archive/ — still validated, no longer read
 LAYER 3 — REFERENCE    Conventions/Services/Runbooks/Deploy/FE/QA (edit directly)
 OVERSIGHT              92_audit — append-only audit log
+                       99_feedback — problems with the kit itself, one prompt per file
 ```
 
 Two lanes run through Layer 2. The **fast lane** goes `Issue → Backlog` directly;
@@ -315,13 +316,14 @@ claude plugin validate .    # manifest + skill frontmatter
 ```
 
 That, and the full test recipe, run automatically on every push and PR via
-[`.github/workflows/validate.yml`](.github/workflows/validate.yml) — 28 steps:
+[`.github/workflows/validate.yml`](.github/workflows/validate.yml) — 31 steps:
 tag-vs-version, manifest JSON, script syntax on python 3.9 (the portability
 floor), a fresh scaffold validating clean, every profile branch producing exactly
 its folder set, an unknown `owns` token being refused, `--sync` growing a tree and
 never shrinking one, `INDEX.md` being complete and byte-deterministic, both
 `--check` gates catching drift in both directions, the validator still rejecting a
-dangling ref and a moved path, both hooks, and `design/sample-*.html` matching a
+dangling ref and a moved path, both hooks, `docs_feedback.sh` allocating ids and
+refusing a repo that predates `99_feedback/`, and `design/sample-*.html` matching a
 fresh render.
 
 Most of those are **mutation tests** — they break something on purpose and assert
@@ -345,8 +347,13 @@ DOCS_KIT_NOW=2026-07-31T09:30:00 python3 scripts/docs_render.py "$work"
 bash scripts/docs_render.sh --check "$work"        # is INDEX.md current?
 bash scripts/docs_render.sh --check-api "$work"    # does 04_api match the generated artifact?
 
-# scaffold a profile instead of the full tree — 12 folders here, not 16
+# scaffold a profile instead of the full tree — 13 folders here, not 17
 lib="$(mktemp -d)"; bash scripts/docs_scaffold.sh --owns data,endpoints "$lib"
+
+# file a problem with the kit itself — the created file IS the prompt to send
+bash scripts/docs_feedback.sh new hook-stayed-quiet "$work"
+bash scripts/docs_feedback.sh list "$work"
+bash scripts/docs_feedback.sh show FEEDBACK-001 "$work"
 
 # regenerate the design samples — must produce no diff
 bash design/make-samples.sh && git diff --stat -- design/
@@ -390,9 +397,9 @@ docs-kit/
 ├── .claude-plugin/plugin.json   # the plugin manifest (single source of version)
 ├── .github/workflows/validate.yml
 ├── STANDARD.md                  # source of truth for the model
-├── skills/                      # all six commands: docs-init (entry point),
-│                                #   docs-sync, docs-check, docs-render,
-│                                #   docs-upgrade, brief
+├── skills/                      # every command: docs-init (entry point), docs-sync,
+│                                #   docs-check, docs-render, docs-upgrade, brief,
+│                                #   explain, crew-init, crew-status, crew-update
 ├── references/                  # mechanics shared by more than one skill
 │   └── issue-capture.md         #   creating an Issue — read by brief + docs-sync
 ├── hooks/hooks.json             # 2 deterministic warn-only hooks
@@ -400,12 +407,13 @@ docs-kit/
 │                                #   docs_close.{sh,py} (Closes: trailers → status + audit
 │                                #   line; archiving), docs_profile.sh (which folders belong
 │                                #   here — sourced by both scaffold and validator),
+│                                #   docs_feedback.sh (file a problem with the kit itself),
 │                                #   docs_detect.py (read-only stack report), hook workers
 ├── design/                      # "change-control print" design system + generated samples
 │   ├── design-system.html       #   the design contract
 │   ├── sample-*.html            #   real renderer output — regenerate, never hand-edit
 │   └── fixture/ + make-samples.sh
-├── templates/                   # the full 16-folder docs tree + CLAUDE.md snippet
+├── templates/                   # the full 17-folder docs tree + CLAUDE.md snippet
 │                                #   (a scaffold takes the subset its profile calls for)
 ├── briefs/                      # gitignored — where `brief` writes its output, in
 │                                #   every repo. Never committed: CHANGELOG.md is

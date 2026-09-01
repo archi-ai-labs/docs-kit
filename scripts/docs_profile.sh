@@ -23,7 +23,7 @@
 # both are evidence for `NOTE [profile]`, and both are read by anyone deciding
 # what a repo is. A token is not required to open a folder to be worth declaring.
 #
-# **A repo that does not declare `owns` gets all 16 folders** — exactly what
+# **A repo that does not declare `owns` gets all 17 folders** — exactly what
 # every version before this one did. That is the migration guarantee: no repo
 # scaffolded by an older docs-kit changes shape, ever, without someone declaring
 # something first.
@@ -31,10 +31,13 @@
 # Portability: bash 3.2, BSD sed/grep. No associative arrays.
 
 # Core — every repo, every profile. These answer the questions no repo escapes:
-# what are we building, what is it made of, how does it change, what happened.
+# what are we building, what is it made of, how does it change, what happened —
+# and, since 0.27.0, what the kit itself got wrong here (99_feedback). That last
+# one is core for the same reason 92_audit is: a repo that cannot record the
+# problem records nothing, and the problem then reaches nobody.
 DK_CORE="00_roadmap 01_products 02_architecture 03_business-logic
 20_issues 21_proposals 22_decisions 23_backlog 30_conventions
-92_audit 93_qa"
+92_audit 93_qa 99_feedback"
 
 # Conditional — "<folder>:<the owns token that justifies it>".
 DK_CONDITIONAL="04_api:endpoints
@@ -56,7 +59,7 @@ DK_TOKENS="data endpoints screens jobs deploys"
 #
 # Present-but-empty (`"owns": []`) is a declaration: a library that owns nothing
 # conditional. Only an absent key means "this repo never said", which is the case
-# that falls back to all 16.
+# that falls back to all 17.
 dk_owns_declared() {
   [ "${DK_OWNS_OVERRIDE+set}" = set ] && return 0
   [ -f "$1/.docs-kit.json" ] || return 1
@@ -103,7 +106,7 @@ dk_folders() {
   return 0
 }
 
-# dk_folders_all — all 16, sorted. The union of every profile; nothing may fall
+# dk_folders_all — all 17, sorted. The union of every profile; nothing may fall
 # outside it or the template tree ships a folder no repo can ever receive.
 dk_folders_all() {
   printf '%s\n' $DK_CORE
@@ -119,7 +122,7 @@ dk_token_for() {
 }
 
 # dk_profile_label <root> — one line naming the profile, for a human reading a
-# script's output. "all 16 folders (no owns declared)" or "owns: a, b".
+# script's output. "all 17 folders (no owns declared)" or "owns: a, b".
 dk_profile_label() {
   if dk_owns_declared "$1"; then
     set -- "$(dk_owns "$1" | LC_ALL=C sort | tr '\n' ',' | sed 's/,$//; s/,/, /g')"
@@ -129,6 +132,6 @@ dk_profile_label() {
       printf 'owns: %s\n' "$1"
     fi
   else
-    printf 'no owns declared in .docs-kit.json — all 16 folders\n'
+    printf 'no owns declared in .docs-kit.json — all 17 folders\n'
   fi
 }

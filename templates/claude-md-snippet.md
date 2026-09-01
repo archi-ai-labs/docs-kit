@@ -27,6 +27,7 @@ Backlog); "không" cả ba → fast lane (Issue → Backlog):
 | Một Backlog item hoàn thành | Đặt `status: done` + nối một dòng vào `docs/92_audit/`. |
 | Một Decision được duyệt | Sửa `docs/02_architecture/` (và `docs/03_business-logic/` / `docs/04_api/` nếu Decision đụng quy tắc nghiệp vụ hoặc contract) NGAY trong phiên đó. |
 | Bắt đầu việc không có trong Backlog | Tạo Issue trước khi viết code. |
+| docs-kit hoặc crew làm sai — script trái với chuẩn, hoặc phải lách mới xong việc thường | Ghi một file vào `docs/99_feedback/` (`docs_feedback.sh new <slug>`). File đó là prompt gửi thẳng cho docs-kit. Lỗi của **repo này** thì vẫn là Issue. |
 
 **Đọc docs cho rẻ:** `docs/INDEX.md` (sinh tự động) là read model cho agent — mỗi tài liệu
 một dòng. Đọc nó trước rồi chỉ mở đúng id cần; **đừng glob cả `22_decisions/` hay

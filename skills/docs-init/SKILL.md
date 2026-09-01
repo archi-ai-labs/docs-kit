@@ -94,7 +94,7 @@ Mark the hinted tokens "(Recommended)". Nothing is preselected by the script —
 the detector proposes, the user decides.
 
 If AskUserQuestion fails or returns empty, ask in plain text and **end the turn**.
-Do not fall back to "all 16 because it is safe": a profile nobody chose is the
+Do not fall back to "all 17 because it is safe": a profile nobody chose is the
 state that rots, which is exactly what §9.1's three rules exist to prevent. Waiting
 for an answer costs one turn; a wrong declaration costs every session after it.
 
@@ -106,7 +106,7 @@ bash "$PLUGIN_ROOT/scripts/docs_scaffold.sh" --owns data,endpoints,deploys .
 
 Pass the confirmed tokens, comma-separated. `--owns ''` is correct for a repo that
 owns nothing conditional (a library) — 11 core folders and no more. Omitting the
-flag entirely is a different thing: it means "nobody declared", and yields all 16.
+flag entirely is a different thing: it means "nobody declared", and yields all 17.
 
 The script copies the folders that profile calls for (every folder ships a seed
 file — templates are never empty), stamps today's date into `docs/92_audit/LOG.md`,
@@ -310,6 +310,10 @@ validation result, CLAUDE.md action taken (or skipped and why), and next steps �
   them as a format reference. Real IDs start at `001`.
 - `/docs-kit:docs-sync` reconciles docs after a working session;
   `/docs-kit:docs-check` validates structure anytime.
+- `docs/99_feedback/` is the one folder that is not about this product: when
+  docs-kit or crew gets something wrong here, one file goes in there
+  (`docs_feedback.sh new <slug>`) and that file is a prompt the maintainer can
+  act on as-is. Read `docs/99_feedback/README.md` for the four cases that qualify.
 - The plugin's hooks now warn (never block) on direct `docs/02_architecture/` or `docs/03_business-logic/`
   edits and on sensitive-zone changes without an Issue/Decision. Sensitive
   patterns are configurable via `.docs-kit.json` (see STANDARD.md §9).

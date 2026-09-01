@@ -486,6 +486,70 @@ Thêm field thì được, đổi nghĩa field cũ thì không. Bỏ một opera
 Decision và một mùa deprecation.
 """
 FILES["93_qa/test-matrix.md"] = "# Test matrix\n\nNhận đơn, capture, hoàn tiền, webhook.\n"
+
+# One filed report, so the sample shows the oversight row carrying a count rather
+# than the empty state. Deliberately a `silent` one: that is the severity the
+# folder exists for, and the row should not read as a bug tracker.
+FILES["99_feedback/FEEDBACK-001-map-tsv-stale-after-rename.md"] = """\
+---
+id: FEEDBACK-001
+about: docs-kit
+kind: bug
+severity: silent
+status: sent
+fixed_in:
+
+seen_on: 2026-07-30
+kit_version: "0.26.3"
+crew: absent
+repo: orderhub
+profile: "owns: data, deploys, endpoints"
+rev: 4f2a91c
+platform: "Linux 6.8 · bash 5.2 · python 3.11"
+---
+
+# Đổi tên file trong 02_architecture/ làm MAP.tsv cũ đi mà không ai báo
+
+## What I ran
+
+```bash
+git mv docs/02_architecture/architecture.md docs/02_architecture/gateway.md
+# rồi làm việc bình thường, sửa internal/psp/client.go
+```
+
+## What happened
+
+Stop hook im lặng. `docs_render.sh --check .` vẫn báo `INDEX OK` ở lần chạy
+trước đó nên không ai nghĩ tới việc render lại.
+
+## What I expected — and what says so
+
+STANDARD §10 nói `MAP.tsv` cũ "làm cảnh báo biến mất". Đúng như vậy, nhưng chỗ
+duy nhất phát hiện được là một lệnh phải tự nhớ mà chạy.
+
+## Why it costs something
+
+Ba phiên liền sửa `internal/psp/client.go` mà không phiên nào được nhắc rằng
+component `psp-client` mô tả file đó. Một phiên lặng lẽ trông y hệt một phiên sạch.
+
+## Smallest repro
+
+Scaffold, render, `git mv` một file trong `02_architecture/`, sửa file mà nó
+neo tới, kết thúc phiên. Hook không nói gì.
+
+## What I did instead
+
+Đưa `docs_render.sh --check .` vào pre-commit của repo này.
+
+## The ask
+
+Stop hook nên tự so `MAP.tsv` với thời điểm sửa cuối của `docs/`, và nói một câu
+khi nó cũ — thay vì để việc phát hiện phụ thuộc vào trí nhớ.
+
+## Seen again
+
+2026-07-31 | worktree b012 | lần này là `03_business-logic/`, cùng kiểu
+"""
 FILES["README.md"] = "# docs\n\nTài liệu ba lớp. Bản hướng dẫn 30 giây nằm ở đây trong scaffold thật.\n"
 
 for folder in ["60_fe-integration"]:

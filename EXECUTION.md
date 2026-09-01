@@ -425,3 +425,33 @@ command detection tuned on Node manifests.
 | One manual pass playing the customer | 12 findings, suite green | tester explores, patches nothing (§3) |
 | 93 commits in 2 days | 26 code · 46 docs · 21 rules | the execution layer deserves a standard (this file) |
 | "A string match is not a measurement" | 5 bites in 1 day | procedures are commands (§6); hooks read events (§8) |
+
+## 12. When crew itself is wrong
+
+Everything above tells an executor what to do. This section covers the case where
+following it does not work: `crew done` merges in the wrong order, a lock is held
+by a tree that no longer exists, a gate cannot be satisfied by any honest answer.
+
+**Write it down in the repo that hit it, not in the reply.** One file per problem
+in `docs/99_feedback/`, `about: crew`, created with:
+
+```bash
+bash "$PLUGIN_ROOT/scripts/docs_feedback.sh" new <slug>
+```
+
+The rule — which four cases qualify, which four do not, and why no field in it
+ends in `_ref` — is STANDARD §12. Two things about it matter here specifically:
+
+- **A workaround is the report.** §5's pacing and §6's merge procedure are both
+  calibrated on a handful of measurements (§11), so the first thing that will be
+  wrong about them is a threshold. The evidence that a threshold is wrong is
+  somebody quietly working around it, and that evidence is worth more than an
+  opinion about the number.
+- **`severity: silent` outranks `blocks`.** A gate that refuses is visible and
+  gets fixed. A hook that stays quiet when it should speak produces a session that
+  looks exactly like a clean one — the same asymmetry §8 is built on, applied to
+  the kit itself.
+
+The reports stay in the repo after they are fixed. §10's list of what 0.26.0
+deliberately left out was written from measurements taken in one repo over two
+days; the next revision of it should be written from these.

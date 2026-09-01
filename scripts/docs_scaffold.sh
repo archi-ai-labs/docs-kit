@@ -15,13 +15,13 @@
 #
 #         --owns names what this repo holds title to (STANDARD §9), and that is
 #         what decides which folders it gets: `--owns data,endpoints` scaffolds
-#         12 folders, not 16 — 11 core plus 04_api, since `data` unlocks nothing
+#         13 folders, not 17 — 12 core plus 04_api, since `data` unlocks nothing
 #         (see docs_profile.sh for the map). Tokens: data · endpoints · screens
 #         · jobs · deploys.
 #         `--owns ""` is legal and means "nothing conditional" — a library.
 #
 #         WITHOUT --owns the profile is read from `.docs-kit.json`, and a repo
-#         that declares nothing there gets all 16 folders, exactly as before this
+#         that declares nothing there gets all 17 folders, exactly as before this
 #         flag existed. Nothing changes shape until somebody declares something.
 #
 # Exit:   0 = created / synced · 2 = setup error (templates missing, bad --owns)
@@ -86,7 +86,7 @@ fi
 #
 # Resolve it once, here, so every path below asks the same question of the same
 # answer. --owns wins for this run; otherwise .docs-kit.json speaks; otherwise
-# nobody has declared anything and the answer is all 16.
+# nobody has declared anything and the answer is all 17.
 if [ "$OWNS_SET" -eq 1 ]; then
   OWNS_NORM="$(printf '%s\n' "$OWNS_ARG" | tr ', ' '\n\n' | grep -v '^$' | LC_ALL=C sort -u || true)"
   BAD=""

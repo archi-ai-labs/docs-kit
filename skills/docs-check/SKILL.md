@@ -57,7 +57,7 @@ nothing, fix nothing.
 (file count). Relay `NOTE` lines as informational — they never affect the exit code:
 - `NOTE [layout]` — a folder this repo's profile calls for is missing. Which folders
   those are comes from `owns` in `.docs-kit.json` (STANDARD §9.1); a repo that
-  declares nothing is held to all 16. A folder *outside* the profile is never
+  declares nothing is held to all 17. A folder *outside* the profile is never
   reported, so this line always means something is genuinely absent.
 - `NOTE [profile]` — the repo shows a surface `owns` does not account for. Only the
   growth direction is checked, so this means "declare more", never "declare less".
@@ -105,5 +105,12 @@ fallen behind them. The script names which one, and they cost different things:
 
 The fix is one command either way, and it belongs to `/docs-kit:docs-render` or
 `/docs-kit:docs-sync` — not to this skill.
+
+**When the finding is against the kit, not the repo.** Exit 2 from a script that
+should have run, or a `FAIL` the user demonstrates is wrong about a document the
+standard permits, is a problem with docs-kit — STANDARD §12. Say so, and offer
+`docs_feedback.sh new <slug>`; the user decides whether to file. Do not soften a
+finding into "probably a kit bug" to avoid reporting it: the script's output is
+relayed verbatim either way, and only the interpretation changes.
 
 End with the script's summary count. Change nothing on disk.

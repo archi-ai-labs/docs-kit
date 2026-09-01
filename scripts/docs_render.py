@@ -3870,6 +3870,19 @@ def build_index(ctx, docs, data, audit, latest_rev, check_result):
                  '<span class="rd">Ghi chú QA và ma trận test</span><span class="rn">%s</span></div>'
                  % (audit_count, " is-empty" if qa_n == 0 else "",
                     "empty" if qa_n == 0 else "%d file%s" % (qa_n, "" if qa_n == 1 else "s")))
+    # 99_feedback/ arrived in 0.27.0, so a repo scaffolded earlier does not have
+    # one until it upgrades — and a row linking to a directory that is not there
+    # is a broken link dressed as a to-do, the same reason LAYER3 rows are guarded.
+    # Reports about the kit are counted, the template and the README are not.
+    if (docs / "99_feedback").is_dir():
+        fb_n = len([f for f in md_files(docs / "99_feedback")
+                    if f.name.startswith("FEEDBACK-")])
+        oversight += ('<div class="refrow%s"><span class="rf">'
+                      '<a href="99_feedback/">99_feedback/</a></span>'
+                      '<span class="rd">Lỗi của chính docs-kit / crew, mỗi vấn đề một prompt gửi đi được</span>'
+                      '<span class="rn">%s</span></div>'
+                      % (" is-empty" if fb_n == 0 else "",
+                         "empty" if fb_n == 0 else "%d report%s" % (fb_n, "" if fb_n == 1 else "s")))
 
     content = (
         '<p class="kicker">docs / overview</p>'

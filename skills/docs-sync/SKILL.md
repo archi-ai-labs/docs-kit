@@ -282,3 +282,31 @@ Then summarize:
   the Issues opened for it.
 - **Needs your decision**: full-lane work without a Decision, ambiguous mappings
   between work and Backlog items, unresolved validator failures. Ask — never guess.
+
+## Step 8 — Did the kit itself get in the way this session?
+
+One question, asked once, at the end: **did anything in this session require a
+workaround around docs-kit or crew?** Hand-editing a generated file, skipping a
+gate, running a step no document mentions, a `FAIL` on something the standard
+permits, a hook that should have spoken and did not.
+
+No → say nothing and stop. This step produces no output when there is nothing.
+
+Yes → file it, do not merely report it (STANDARD §12):
+
+```bash
+bash "$PLUGIN_ROOT/scripts/docs_feedback.sh" new <slug>
+```
+
+Fill in the body from what actually happened in this session — the command, the
+output, what you did instead — while it is still in front of you. That is the
+whole reason this sits at the end of a sync rather than in a skill of its own:
+the workaround was paid for an hour ago, and by the next session it is gone.
+
+Two limits, both enforced by you and not by a script:
+- **Already filed → append one line** to that report's *Seen again* section.
+  `docs_feedback.sh list` shows what is there. A second file is noise; a
+  recurrence count is evidence.
+- **Cannot say what the kit should do differently → do not file.** Say it to the
+  user in the summary instead. §12.2 has the four cases that do not qualify, and
+  "the validator correctly caught my mistake" is the common one.

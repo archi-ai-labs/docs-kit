@@ -11,6 +11,7 @@ trước — mất 30 giây.
 | 2 · Change | `20_issues` `21_proposals` `22_decisions` `23_backlog` | Tiến trình, truy nguyên được | Theo đúng luồng bên dưới |
 | 3 · Reference | `30_conventions` `40_services` `50_runbooks` `60_fe-integration` `70_deploy` `93_qa` | Tài liệu vận hành | Sửa thẳng, không cần Decision |
 | Oversight | `92_audit` | Nhật ký chỉ ghi thêm | Chỉ nối dòng, không bao giờ viết lại |
+| Oversight | `99_feedback` | Lỗi của chính docs-kit / crew | Mỗi vấn đề một file, file đó là prompt gửi đi |
 
 ## 2 · Flow
 
@@ -51,6 +52,7 @@ Review (định kỳ)    ⇒ read-only trên layer 1–2; phát hiện nối và
 | 70 | `70_deploy` | Ship kiểu gì: môi trường, pipeline, rollback |
 | 92 | `92_audit` | Nhật ký chỉ ghi thêm — nơi tra cứu truy nguyên |
 | 93 | `93_qa` | Chiến lược test, checklist QA, chỗ còn hổng |
+| 99 | `99_feedback` | Chỗ duy nhất trong `docs/` không nói về sản phẩm: những chỗ docs-kit hoặc crew làm sai — xem §9 |
 
 ## 5 · Traceability
 
@@ -133,6 +135,25 @@ trị enum (`open`, `in-progress`, `done`, `approved`, `rejected`, `fast`, `full
 tiền tố id, tiêu đề mục, và các thuật ngữ (Issue, Proposal, Decision, Backlog,
 Architecture, fast lane, full lane) giữ nguyên tiếng Anh — đổi chúng là hỏng
 validator. Phần diễn giải viết tiếng Việt, để thuật ngữ Anh nằm trần trong câu.
+
+## 9 · Khi chính bộ kit sai
+
+Mọi thư mục ở trên mô tả sản phẩm, riêng `99_feedback/` mô tả **công cụ**. Ghi một
+file vào đó khi script hoặc hook làm khác điều chuẩn nói, khi phải lách kit mới
+xong một việc bình thường, khi một câu trong tài liệu của kit bị chứng minh là
+sai, hoặc khi cần ghi một sự thật mà mô hình không có ô nào cho nó.
+
+```bash
+bash "$PLUGIN_ROOT/scripts/docs_feedback.sh" new <slug>   # tạo phiếu, tự điền bối cảnh
+bash "$PLUGIN_ROOT/scripts/docs_feedback.sh" show <id>    # in nguyên văn để gửi đi
+```
+
+File tạo ra **chính là prompt**: copy toàn bộ, dán vào một phiên làm việc trên
+repo docs-kit là xong. Luật đầy đủ — bốn trường hợp phải ghi và bốn trường hợp
+không được ghi — nằm ở `99_feedback/README.md`.
+
+Vấn đề của **repo này** thì không thuộc về đây; chỗ của nó là một Issue trong
+`20_issues/`.
 
 Kiểm tra cấu trúc bất cứ lúc nào: `/docs-kit:docs-check` · Đối chiếu sau một phiên
 làm việc: `/docs-kit:docs-sync`

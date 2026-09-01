@@ -84,7 +84,7 @@ Recorded so they are chosen rather than discovered.
    paid knowingly. Only `.docs-kit.json` explains the difference, and `owns` is
    user-declared, so a mis-declaration produces a tree that is wrong in a way nothing can
    detect — a missing folder looks exactly like a folder the profile never wanted. The
-   mitigations are that the branch is opt-in (no `owns` → all 16 folders, the pre-0.23
+   mitigations are that the branch is opt-in (no `owns` → all 17 folders, the pre-0.23
    behaviour), an unknown token is refused rather than ignored, and `--sync` never shrinks
    a tree. None of that helps a plausible-but-wrong declaration.
 
