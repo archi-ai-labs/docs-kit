@@ -45,7 +45,7 @@ jobs:
 
       - name: Shell + Python syntax
         run: |
-          for f in scripts/*.sh; do bash -n "$f"; done
+          for f in scripts/*.sh templates/crew/crew; do bash -n "$f"; done
           python3 -m py_compile scripts/docs_render.py scripts/docs_detect.py scripts/hook_*.py
 
       # The scaffold must validate clean out of the box: the shipped -000 example
@@ -789,6 +789,14 @@ jobs:
           [ "$quiet" -eq 0 ] || { echo "::error::hook fired on an unrelated file."; exit 1; }
           [ "$tmpl" -eq 0 ] || { echo "::error::hook fired on the plugin's own template tree."; exit 1; }
           echo '{"transcript_path":"/nonexistent"}' | python3 scripts/hook_stop_scan.py
+
+      # The crew layer's own discipline applied to itself: every enforcement
+      # path is proven red on a known-bad case first, asserting the reason tag
+      # — [gate:no-draw], "check 1" — never just the exit code. The suite also
+      # runs the CLI end-to-end on a scratch repo (new → done → docs_close via
+      # trailer) and the scaffold's add-never-clobber policy.
+      - name: Crew layer — gates red for the right reason, CLI end-to-end
+        run: bash scripts/crew_test.sh
 
       # The samples ARE the design contract, and they are real renderer output.
       # Regenerating them must produce no diff — a dirty tree here means either

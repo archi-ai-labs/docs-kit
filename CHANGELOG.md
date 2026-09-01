@@ -5,6 +5,135 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
+## [0.26.0] — 2026-09-01
+
+### Added — the crew execution layer
+
+docs-kit carried an idea from Issue to an approved Backlog item and stopped
+there. What happens next — who takes the work, where, how seven parallel
+sessions avoid each other, who merges — had no standard, and on a real repo
+running 5–7 parallel Claude Code sessions for 3 days the gap had a price tag:
+one owner request cut across 4 technical roles took **15h32** wall-clock with
+**~87 minutes** of commits, and its longest stretch was **7h18 of finished
+work sitting unmerged** — three times in two days. The first two tickets run
+as *one ticket – one worktree – one session* closed in **15 and 41 minutes**.
+This release standardises that layer. Every number below is a measurement from
+that repo, kept on purpose: a rule without its number reads as an opinion.
+
+- **`EXECUTION.md`** — a second source of truth beside STANDARD.md, governing
+  how approved work runs: the Backlog item as the unit of work with one token
+  reaching five places (`BACKLOG-157` → `../repo-b157` → `work/b157` →
+  `repo/b157` → lock owner); three execution levels (`fast-pair`/`fast`/`full`)
+  mapped onto the unchanged `lane` enum; five roles cut by request, not by
+  technical layer, each with the constraint that earns its keep (a ticket
+  graded LIGHT held the shared rig **871 s** — only a grader who is not the
+  fixer ever hears that number; one manual pass playing the customer found
+  **12 issues while the suite stayed green** — so the tester patches nothing
+  and files Issues); named locks over shared rigs with a timestamped log; and
+  pacing as three signals instead of a formula, because the origin repo's own
+  `p` numbers (0.78, 0.36) came from ops-queue tickets that the model itself
+  says must not set the executors' pace. A separate file on purpose: STANDARD
+  declares its model fixed, the execution layer is still learning, and the two
+  freeze at different speeds.
+- **`templates/crew/`**, stamped by `/docs-kit:crew-init`: `scripts/crew`
+  (`new` · `done` · `lock` · `status` — bash 3.2, config-driven, zero
+  template substitution so `docs-upgrade` can re-stamp byte-identically), six
+  role commands for `.claude/commands/` (each `disable-model-invocation:
+  true`, so they sit in the user's `/` menu at zero model-context cost until
+  typed — a role is a hat the human hands out, never one the model puts on
+  itself), seven operating docs for `.claude/crew/`, and a CLAUDE.md snippet
+  between `docs-kit:crew` markers.
+  `crew new` refuses a ticket that is not in `docs/23_backlog/` — id
+  allocation is read-then-write (§3), so a worktree allocating its own id
+  collides deterministically; *no ticket, no tree* makes the collision
+  impossible rather than unlikely. `crew done` is the merge procedure as a
+  command, because a procedure kept as prose gets re-typed from memory and the
+  two middle checks fall out first (the origin repo measured that failure
+  class at **5 bites in one day**): merge dev into the ticket's tree, test the
+  post-merge tree, check the main tree holds the dev branch, check it is clean
+  (dirty files *named* — usually an open fast-pair edit), `--ff-only` with two
+  retries when dev moves, then close through the `Closes:` trailer via
+  `docs_close`, release the ticket's locks, remove the tree. Shared state
+  lives in `../<repo>-crew/`, outside every checkout so all sessions see one
+  lock table, resolved from `git worktree list` — computed, never guessed.
+  And because a checkout is not a working environment, `crew new` provisions
+  the tree from config — `copy` payload via APFS clonefile where the
+  filesystem offers it (gigabytes in seconds), `link` for strictly read-only
+  shares, `setup_cmd` for the rest — and logs the cost as a `SETUP` line,
+  which is an input to grading: provisioning that dwarfs the ticket argues
+  `fast-pair` or batching, and a ticket that *edits* a nested repo belongs to
+  that repo's own crew. `crew done` force-cleans only leftovers crew itself
+  put there; anything else uncommitted keeps the tree and gets named.
+- **Two PreToolUse hooks under §8's warn-only doctrine**, silent without a
+  `crew` key. The **explain-gate** (AskUserQuestion) reads the transcript as
+  *events* and accepts a drawing-tool `tool_use` or the fast-lane marker in
+  assistant-authored text since the last human turn. Its own messages never
+  contain the literal marker: the origin repo's first gate string-matched the
+  whole transcript, its refusal message contained both strings it hunted, and
+  it blocked exactly once before holding the door open forever. Unreadable
+  transcript → allow, plus a line in `gate.log`, so silence-from-broken never
+  looks like silence-from-clean. Promotion to a real deny is per repo:
+  `"crew": {"enforce": true}` — bought with evidence, not belief. The
+  **resource-guard** (Bash) warns when a command matches a declared resource's
+  patterns and nobody holds the lock; it stays warn-only permanently, because
+  substring patterns measure the cooperative and miss the forgetful, and that
+  ceiling is declared rather than papered over.
+- **`scripts/crew_test.sh`** — 37 checks wired into CI. Every enforcement path
+  is proven red on a known-bad case *first*, asserting the reason tag
+  (`[gate:no-draw]`, `check 1`, `check 2`), never just the exit code; the
+  suite includes the self-unlock regression (text that merely describes the
+  marker must not open the gate) and survived a mutation run (breaking the
+  marker regex turns exactly the lane case red). It also runs the CLI
+  end-to-end on a scratch repo — `new` → trailer commit → `done` →
+  `docs_close` flips the status citing the sha — and the scaffold's
+  add-never-clobber policy.
+- **Skills** `crew-init` (guards → detect-as-proposals → **role-readiness
+  check**: a role with no evidence behind it — no test command, no prod
+  branch, no deploy artifact — must be raised and asked about, never stamped
+  silently; an absent role lands in `roles_absent`, its command file is
+  skipped, and `crew status` keeps naming the gap → interview → config →
+  stamp → snippet only by consent, per the §9.3 asymmetry), `crew-status`
+  (a wrapper over `scripts/crew status` with docs-check discipline: relay,
+  interpret, fix nothing), and **`explain`** — the four-gates method as a
+  user-typed command (`/docs-kit:explain <topic>`): ground the topic via
+  INDEX.md, pick depth with the three lane questions, BEFORE/AFTER drawing,
+  two-sided trade-offs with numbers, ids as links, the two-measurement rule
+  with its origin case, and one level-2 check question to close. It is
+  model-invocable for one scope — explaining a layer-2 document or chain
+  (Issue, Backlog, Proposal, Decision) — and waits to be typed for everything
+  else; its `arguments:` field (the only frontmatter that holds the menu's
+  instant submit) keeps a menu click from firing before the topic is entered,
+  and `gates.md` slims to the law, pointing there for the method instead of
+  duplicating it.
+
+### Changed — the lane rule is three questions
+
+STANDARD §5 gains: *is there an irreversible side effect — deleting data,
+publishing outside the repo, a one-way flag, sending something to a person?*
+It outranks the other two, because a rollback that takes 5 minutes restores
+nothing that is already gone. Backward-safe: any yes only moves work *into*
+the full lane, so no document that was valid before becomes invalid. All six
+places that stated the two-question rule moved together — STANDARD §1 and §5,
+the kit README, the scaffolded `docs/README.md` digest, the CLAUDE.md
+snippet, `references/issue-capture.md`, and the brief skill.
+
+Also: §6's Backlog-completed trigger names `crew done` for crew repos; §8
+registers the two new hooks under its doctrine; §9.4 documents the `crew`
+config key (absent = the layer is off — the same migration guarantee `owns`
+gives); `hooks/hooks.json` adds the two PreToolUse entries.
+
+### Deliberately absent, with reasons (EXECUTION §10)
+
+No dashboard (a fifth status surface; `crew status` is the data source), no
+`merge=union` (audit appends are serialized through `docs_close` on the main
+tree), no crew-check skill (its two checks are deterministic and live inside
+`crew status`), no validator enforcement of `scope_files:`/`execution:` (the
+calibration log must first say what the thresholds should be — the split
+threshold S > 6 rests on one data point), no brief integration yet (brief has
+its own measured gates; it deserves its own release), and no Node: the origin
+implementation was `.mjs`, and everything shipped here is bash 3.2 + python
+3.9, the kit's own floor.
+
 ## [0.25.0] — 2026-08-31
 
 ### Changed — the Stop hook asks which document describes a file, not what the path looks like

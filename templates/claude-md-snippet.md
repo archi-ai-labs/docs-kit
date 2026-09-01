@@ -12,10 +12,12 @@ enum, tiền tố id, tiêu đề mục và các thuật ngữ (Issue, Proposal,
 Architecture, fast lane, full lane) giữ nguyên tiếng Anh. Phần diễn giải — description,
 why, reason, dòng audit — viết tiếng Việt, để thuật ngữ Anh nằm trần trong câu.
 
-**Lane test** — hai câu hỏi, "có" một câu → full lane (Issue → Proposal → Decision →
-Backlog); "không" cả hai → fast lane (Issue → Backlog):
+**Lane test** — ba câu hỏi, "có" một câu → full lane (Issue → Proposal → Decision →
+Backlog); "không" cả ba → fast lane (Issue → Backlog):
 1. Thay đổi này có sửa tài liệu Architecture không?
 2. Nếu hoá ra sai, rollback có mất hơn 1 ngày không?
+3. Có thao tác nào không lùi được không — xoá dữ liệu, publish ra ngoài, bật cờ
+   một chiều, gửi thứ gì đó cho người khác? Câu này thắng hai câu kia.
 
 **Trigger bắt buộc:**
 

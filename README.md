@@ -184,9 +184,11 @@ OVERSIGHT              92_audit — append-only audit log
 ```
 
 Two lanes run through Layer 2. The **fast lane** goes `Issue → Backlog` directly;
-the **full lane** requires a Proposal and a Decision. The test is two questions:
-does it modify the Architecture doc, and would reverting it take more than a day?
-Either answer being yes puts the change in the full lane.
+the **full lane** requires a Proposal and a Decision. The test is three questions:
+does it modify the Architecture doc, would reverting it take more than a day, and
+is there an irreversible side effect — deleted data, an outside publish, a one-way
+flag? Any yes puts the change in the full lane, and the third question outranks
+the first two.
 
 The full model lives in **[STANDARD.md](STANDARD.md)** — the source of truth every
 skill, hook, script, and template conforms to. Frontmatter contracts (§4), the

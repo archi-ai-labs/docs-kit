@@ -23,10 +23,13 @@ Backlog item xong   ⇒ status: done + nối một dòng vào 92_audit/
 Review (định kỳ)    ⇒ read-only trên layer 1–2; phát hiện nối vào 92_audit/
 ```
 
-## 3 · Lane test — hai câu hỏi, "có" một câu ⇒ FULL lane
+## 3 · Lane test — ba câu hỏi, "có" một câu ⇒ FULL lane
 
 1. Thay đổi này có sửa Architecture, Business logic hay API contract không?
 2. Nếu hoá ra sai, rollback có mất hơn 1 ngày không?
+3. Có thao tác nào không lùi được không — xoá dữ liệu, publish ra ngoài, bật cờ
+   một chiều, gửi thứ gì đó cho người khác? Câu này thắng hai câu kia: rollback
+   5 phút không cứu được dữ liệu đã mất.
 
 ## 4 · Folders
 

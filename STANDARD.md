@@ -7,6 +7,11 @@ this file wins.
 
 The model below is fixed. Do not add stages, remove stages, or reorder them.
 
+How approved work *runs* — worktrees, parallel sessions, locks, the merge
+procedure — is governed by `EXECUTION.md`, the execution layer's own source of
+truth. The two files freeze at different speeds: this model is fixed, that
+layer is still learning.
+
 ## 1. The three layers
 
 ```
@@ -16,9 +21,9 @@ LAYER 1 — FOUNDATION (state; only a Decision may amend it)
 LAYER 2 — CHANGE (process; fully traceable)
   Issue (status: exploring | open | promoted | archived)
     ├─ exploring = raw research, not yet a real Issue
-    ├─ FAST lane (no Architecture change AND revert < 1 day)  → straight to Backlog
-    └─ FULL lane (touches Architecture, or hard to reverse,
-                  or > 1 day of work)                          → Proposal → Decision → Backlog
+    ├─ FAST lane (all three §5 questions "no")                → straight to Backlog
+    └─ FULL lane (touches Architecture, hard to reverse,
+                  or an irreversible side effect)              → Proposal → Decision → Backlog
   Review — periodic audit. READ-ONLY: it never edits layer 1 or layer 2,
            it only appends findings to the audit log.
 
@@ -383,13 +388,21 @@ folder's topic. The validator does not check these folders.
 `00_roadmap/` has no required frontmatter either; keep it aligned with
 approved Decisions.
 
-## 5. Lane rule — two questions
+## 5. Lane rule — three questions
 
-Ask both. **Any "yes" → FULL lane. Both "no" → FAST lane.**
+Ask all three. **Any "yes" → FULL lane. All "no" → FAST lane.**
 
 1. Does this change modify a layer 1 doc — Architecture, Business logic, or an API
    contract?
 2. If it turns out wrong, would reverting take more than 1 day?
+3. Is there an irreversible side effect — deleting data, publishing outside the
+   repo, flipping a one-way flag, sending something to a person?
+
+Question 3 outranks the other two: a rollback that takes 5 minutes restores
+nothing that is already gone. (Added in 0.26.0; it only ever moves work *into*
+the full lane, so no document that was valid before becomes invalid.) Repos
+running the crew layer also declare a chosen fast lane in the reply itself —
+the marker line and the gates around it live in `EXECUTION.md` §7.
 
 - FAST lane: `Issue → Backlog` (`source_ref` = the Issue).
 - FULL lane: `Issue → Proposal → Decision → Backlog` (`source_ref` = the Decision).
@@ -400,7 +413,7 @@ Ask both. **Any "yes" → FULL lane. Both "no" → FAST lane.**
 |---|---|
 | Code change touches a schema, API contract, or component boundary | A Decision must already exist. If none exists: create an Issue, stop, and ask the user. The contract itself lives in `04_api/` — layer 1, so the same rule that demands the Decision now has somewhere to record its result. |
 | Code change alters a branching business rule | Same — the rule lives in `03_business-logic/`, which is layer 1. |
-| A Backlog item is completed | Set its `status: done` and append one line to `92_audit/`. Preferably by writing `Closes: BACKLOG-NNN` in the commit — see §6.1. |
+| A Backlog item is completed | Set its `status: done` and append one line to `92_audit/`. Preferably by writing `Closes: BACKLOG-NNN` in the commit — see §6.1. In a crew repo, `crew done` performs the merge, the status flip and the worktree cleanup in one command (EXECUTION §6). |
 | A Decision is approved | Amend `02_architecture/` in the SAME session (body + `amended_by` entry). |
 | Starting work that is not in the Backlog | Create an Issue before writing code. |
 
@@ -521,7 +534,7 @@ verifies that a named path exists, never that the sentence about it is still tru
 
 ## 8. Enforcement hooks (warn-only, deterministic)
 
-Two hooks, both plain scripts, **no LLM calls**:
+Two docs-model hooks, both plain scripts, **no LLM calls**:
 
 1. **PostToolUse** on `Edit|Write`: if the edited path is under
    `docs/02_architecture/`, `docs/03_business-logic/` or `docs/04_api/` → warn
@@ -561,6 +574,12 @@ rules have been tuned in practice.
 `docs/README.md` is not a declaration; every documented project has one, and
 accepting it is what made the Stop hook fire in a repo using a different folder
 scheme entirely.
+
+The crew layer (0.26.0) adds two PreToolUse hooks — an explain-gate on
+AskUserQuestion and a resource-guard on Bash — under this same doctrine:
+deterministic, warn-only by default, and silent unless `.docs-kit.json`
+carries a `crew` key. Their evidence rules, their per-repo promote-to-block
+flag, and their declared limits live in `EXECUTION.md` §8.
 
 ## 9. Configuration — `.docs-kit.json` (optional, in the target repo root)
 
@@ -663,6 +682,22 @@ AskUserQuestion, and scaffolds the answer — not the guess. That asymmetry is w
 makes generous hinting safe: an unconfirmed hint costs one extra option in a dialog
 the user is answering anyway, while a silent one would put a wrong fact in a config
 file that decides the shape of the tree.
+
+### 9.4 `crew` — turning on the execution layer
+
+```json
+{ "crew": { "enforce": false } }
+```
+
+The presence of a `crew` object turns the execution layer on for this repo:
+the two crew hooks start reading, `scripts/crew` starts working, and
+`/docs-kit:crew-init` is what writes it. An absent key is the layer switched
+off — nothing fires, nothing changes shape, the same guarantee `owns` gives
+(rule 1 above). Field reference and defaults live in `EXECUTION.md` §9; the
+one field worth naming here is `enforce`, which promotes the explain-gate from
+warn to deny for this repo only, and stays `false` until the shipped test has
+proven the gate red-for-the-right-reason and the log shows warnings being
+ignored.
 
 ## 10. Generated HTML views (read models)
 

@@ -54,10 +54,13 @@ left bare inside the sentence.
 
 ## The lane test
 
-STANDARD §5, two questions. **Any "yes" → FULL. Both "no" → FAST.**
+STANDARD §5, three questions. **Any "yes" → FULL. All "no" → FAST.**
 
 1. Does this change modify the Architecture doc?
 2. If it turns out wrong, would reverting take more than 1 day?
+3. Is there an irreversible side effect — deleting data, publishing outside
+   the repo, flipping a one-way flag, sending something to a person? This one
+   outranks the other two: a 5-minute rollback restores nothing that is gone.
 
 Ask them about the work, not about the size of the diff. A three-line change to
 a schema is full lane; a thousand-line change to a test helper is not.

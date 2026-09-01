@@ -1,0 +1,407 @@
+#!/usr/bin/env bash
+# crew — docs-kit execution-layer CLI (EXECUTION.md is the contract this file
+# implements; stamped into the target repo as scripts/crew by /docs-kit:crew-init).
+#
+# The merge procedure lives HERE as a command, not as prose, because a procedure
+# kept as prose gets re-typed from memory and the two middle checks are the first
+# thing to fall out (EXECUTION §6). Do not "simplify" the checks away.
+#
+# Portability floor: bash 3.2, BSD awk/grep/sed, python3 only for reading
+# .docs-kit.json (degrades to defaults without it). No Node, no jq.
+#
+# Subcommands:
+#   crew new <nnn>                       ticket → worktree + branch (+ deps copy)
+#   crew done <nnn>                      merge procedure, close-out, cleanup
+#   crew lock acquire <res> <nnn> [--wait]
+#   crew lock release <res> <nnn>
+#   crew status                          worktrees · locks · pacing signals
+set -u
+
+die()  { echo "crew: $*" >&2; exit 1; }
+note() { echo "crew: $*"; }
+
+# ---------------------------------------------------------------- resolution
+# Main tree = first entry of `git worktree list` (documented git behaviour).
+# Shared state = sibling of the main tree — outside every checkout, so every
+# session sees one set of locks (EXECUTION §4). Computed, never guessed: this
+# exact resolution is what makes the CLI work identically from any -b worktree.
+MAIN="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree /{print substr($0,10); exit}')"
+[ -n "$MAIN" ] || die "not inside a git repository"
+REPO="$(basename "$MAIN")"
+STATE="$(dirname "$MAIN")/${REPO}-crew"
+CONF="$MAIN/.docs-kit.json"
+
+# ---------------------------------------------------------------- config
+# cfg <key> <default> — reads .docs-kit.json .crew.<key>. Lists print
+# space-joined. Any parse trouble → the default (fail open, like the hooks).
+cfg() {
+  if [ -f "$CONF" ] && command -v python3 >/dev/null 2>&1; then
+    python3 - "$1" "$2" "$CONF" 2>/dev/null <<'PY' || echo "$2"
+import json, sys
+key, dflt, path = sys.argv[1], sys.argv[2], sys.argv[3]
+try:
+    crew = (json.load(open(path)) or {}).get("crew")
+except Exception:
+    print(dflt); raise SystemExit
+if not isinstance(crew, dict):
+    print(dflt); raise SystemExit
+v = crew.get(key, dflt)
+if isinstance(v, list):
+    print(" ".join(str(x) for x in v))
+else:
+    print(v)
+PY
+  else
+    echo "$2"
+  fi
+}
+
+crew_on() {
+  [ -f "$CONF" ] || return 1
+  if command -v python3 >/dev/null 2>&1; then
+    python3 - "$CONF" 2>/dev/null <<'PY'
+import json, sys
+try:
+    ok = isinstance((json.load(open(sys.argv[1])) or {}).get("crew"), dict)
+except Exception:
+    ok = False
+sys.exit(0 if ok else 1)
+PY
+  else
+    grep -q '"crew"' "$CONF"
+  fi
+}
+
+require_on() {
+  crew_on || die "the crew layer is off in this repo — run /docs-kit:crew-init first (EXECUTION §9)"
+}
+
+# ---------------------------------------------------------------- helpers
+# norm 42 | 157 | BACKLOG-157 → zero-padded number, same digits as the id.
+norm() {
+  n="${1#BACKLOG-}"
+  case "$n" in ''|*[!0-9]*) die "bad ticket number: $1" ;; esac
+  printf '%03d' "$((10#$n))"
+}
+
+ticket_file() { # ticket_file <nnn> → path of the Backlog doc, or empty
+  grep -rlE "^id:[[:space:]]*\"?BACKLOG-$1\"?" "$MAIN/docs/23_backlog" 2>/dev/null | head -1
+}
+
+front() { # front <file> <key> → frontmatter value, quotes and inline comment stripped
+  awk -F': ' -v k="$2" '$1==k {v=$2; sub(/[ \t]*#.*$/,"",v); gsub(/"/,"",v); gsub(/^[ \t]+|[ \t]+$/,"",v); print v; exit}' "$1"
+}
+
+log_line() { # log_line <event> <resource> <ticket> <detail>
+  mkdir -p "$STATE"
+  printf '%s\t%s\t%s\t%s\t%s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$1" "$2" "$3" "$4" >> "$STATE/log.tsv"
+}
+
+# ---------------------------------------------------------------- crew new
+cmd_new() {
+  require_on
+  N="$(norm "${1:?usage: crew new <nnn>}")"
+  F="$(ticket_file "$N")"
+  # No ticket, no tree: ids are allocated read-then-write on the main tree, and
+  # a worktree that allocated its own would collide deterministically (EXECUTION §1).
+  [ -n "$F" ] || die "BACKLOG-$N not found under docs/23_backlog — no ticket, no tree (EXECUTION §1)"
+  [ "$(front "$F" status)" = "done" ] && die "BACKLOG-$N is already done"
+  if [ "$(front "$F" execution)" = "fast-pair" ]; then
+    die "BACKLOG-$N is fast-pair: work on the dev branch in the main tree and commit in the same bout — no worktree (EXECUTION §2)"
+  fi
+  DEV="$(cfg dev_branch main)"
+  WT="$(dirname "$MAIN")/${REPO}-b${N}"
+  [ -e "$WT" ] && die "$WT already exists"
+  git -C "$MAIN" worktree add "$WT" -b "work/b$N" "$DEV" || die "worktree add failed"
+  # Provisioning: a checkout is NOT a working environment. Dep dirs, nested
+  # harness repos and env files are gitignored, so they must be put back
+  # deliberately — and the cost of doing so is timed and logged, because it is
+  # an input to grading the ticket (EXECUTION §2).
+  T0="$(date +%s)"
+  for d in $(cfg copy "node_modules"); do
+    if [ -e "$MAIN/$d" ] && [ ! -e "$WT/$d" ]; then
+      mkdir -p "$(dirname "$WT/$d")"
+      # APFS clonefile (cp -c) turns gigabytes into seconds; plain copy elsewhere.
+      cp -Rc "$MAIN/$d" "$WT/$d" 2>/dev/null || cp -R "$MAIN/$d" "$WT/$d"
+      note "copied $d"
+    fi
+  done
+  for d in $(cfg link ""); do
+    if [ -e "$MAIN/$d" ] && [ ! -e "$WT/$d" ]; then
+      mkdir -p "$(dirname "$WT/$d")"
+      ln -s "$MAIN/$d" "$WT/$d"
+      note "linked $d (shared read-only — never link something a ticket edits)"
+    fi
+  done
+  SETUP="$(cfg setup_cmd "")"
+  if [ -n "$SETUP" ]; then
+    ( cd "$WT" && eval "$SETUP" ) || note "setup_cmd failed — the tree may not test cleanly"
+  fi
+  # briefs/ is gitignored on purpose, so a fresh checkout arrives without it.
+  if [ -d "$MAIN/briefs" ] && [ ! -e "$WT/briefs" ]; then
+    cp -R "$MAIN/briefs" "$WT/briefs"
+    note "copied briefs/ (gitignored — it does not follow a worktree on its own)"
+  fi
+  ELAPSED=$(( $(date +%s) - T0 ))
+  log_line SETUP - "BACKLOG-$N" "$ELAPSED"
+  note "tree provisioned in ${ELAPSED}s — if that dwarfs the ticket itself, grade it fast-pair or batch tickets (EXECUTION §2)"
+  log_line NEW - "BACKLOG-$N" "$WT"
+  note "worktree : $WT  (branch work/b$N, from $DEV)"
+  note "session  : name it $REPO/b$N"
+  note "finish   : scripts/crew done $N   (from anywhere in the repo)"
+}
+
+# ---------------------------------------------------------------- crew done
+cmd_done() {
+  require_on
+  N="$(norm "${1:?usage: crew done <nnn>}")"
+  DEV="$(cfg dev_branch main)"
+  TYPECHECK="$(cfg typecheck_cmd "")"
+  TEST="$(cfg test_cmd "")"
+  WT="$(dirname "$MAIN")/${REPO}-b${N}"
+  [ -d "$WT" ] || die "no worktree at $WT — fast-pair tickets close by trailer alone (EXECUTION §2)"
+
+  tries=0
+  while :; do
+    # 1. Conflicts are resolved in the ticket's own tree, never on the main tree.
+    git -C "$WT" merge --no-edit "$DEV" >/dev/null 2>&1 \
+      || die "merge of $DEV into work/b$N has conflicts — resolve in $WT, then rerun"
+    # 2. Test exactly what is about to land: the post-merge tree.
+    if [ -n "$TYPECHECK" ]; then
+      ( cd "$WT" && eval "$TYPECHECK" ) || die "typecheck failed in $WT"
+    fi
+    if [ -n "$TEST" ]; then
+      ( cd "$WT" && eval "$TEST" ) || die "tests failed in $WT — fix there, rerun crew done $N"
+    fi
+    ACTUAL="$(git -C "$WT" diff --name-only "$DEV" | wc -l | tr -d ' ')"
+    # 3. Check 1 — a merge lands on whatever branch the main tree HOLDS,
+    #    not on the branch you assume. This check is not decoration.
+    CUR="$(git -C "$MAIN" symbolic-ref --short HEAD 2>/dev/null || echo '(detached)')"
+    [ "$CUR" = "$DEV" ] || die "check 1: main tree has '$CUR' checked out, expected '$DEV'"
+    # 4. Check 2 — a dirty main tree is usually an open fast-pair edit. Name
+    #    the files instead of failing blind. Known limit, stated on purpose:
+    #    a clean tree does NOT mean nobody is reading it (EXECUTION §6).
+    DIRTY="$(git -C "$MAIN" status --porcelain)"
+    if [ -n "$DIRTY" ]; then
+      echo "$DIRTY" | sed 's/^/  /' >&2
+      die "check 2: main tree is dirty (files above) — an open fast-pair edit? commit or stash it, then rerun"
+    fi
+    # 5. Fast-forward only; if the dev branch moved underneath us, go around
+    #    (merge → test → checks) at most twice, then hand it back to a human.
+    if git -C "$MAIN" merge --ff-only "work/b$N" >/dev/null 2>&1; then
+      break
+    fi
+    tries=$((tries + 1))
+    [ "$tries" -ge 2 ] && die "$DEV kept moving (2 retries) — rerun when the fast-pair burst settles"
+    note "$DEV moved under the merge — retry $tries/2"
+  done
+
+  if git -C "$MAIN" remote | grep -q .; then
+    git -C "$MAIN" push origin "$DEV" "work/b$N" || note "push failed — push by hand when the remote is back"
+  else
+    note "no remote configured — push skipped"
+  fi
+
+  # 6. Close-out through the trailer (STANDARD §6.1): the audit line should cite
+  #    a sha, not a session's recollection.
+  if git -C "$MAIN" log -50 --format=%B "$DEV" | grep -q "^Closes: BACKLOG-$N"; then
+    DC="${CREW_DOCS_CLOSE:-}"
+    if [ -z "$DC" ]; then
+      for base in "${CLAUDE_PLUGIN_ROOT:-/nonexistent}" $(find ~/.claude/plugins -maxdepth 6 -type d -name docs-kit 2>/dev/null); do
+        [ -f "$base/scripts/docs_close.sh" ] && DC="$base/scripts/docs_close.sh" && break
+      done
+    fi
+    if [ -n "$DC" ]; then
+      bash "$DC" --apply "$MAIN" || note "docs_close reported a problem — check its output"
+    else
+      note "trailer found but docs_close is not reachable — /docs-kit:docs-sync will flip the status"
+    fi
+  else
+    note "no 'Closes: BACKLOG-$N' trailer on $DEV — set status: done + audit line yourself, or via docs-sync (STANDARD §6.1)"
+  fi
+
+  # Size calibration: declared S (planner's estimate) vs files actually touched.
+  # This log is how the split threshold S > 6 stops resting on one data point.
+  F="$(ticket_file "$N")"
+  DECLARED="-"
+  [ -n "$F" ] && DECLARED="$(front "$F" scope_files)" && [ -n "$DECLARED" ] || DECLARED="-"
+  log_line SIZE - "BACKLOG-$N" "declared=$DECLARED actual=$ACTUAL"
+
+  # Release anything the ticket still holds, then remove the tree.
+  if [ -d "$STATE/locks" ]; then
+    for LF in "$STATE"/locks/*.lock; do
+      [ -f "$LF" ] || continue
+      if [ "$(sed -n 1p "$LF")" = "BACKLOG-$N" ]; then
+        RES="$(basename "$LF" .lock)"
+        HELD=$(( $(date +%s) - $(sed -n 2p "$LF") ))
+        rm -f "$LF"
+        log_line RELEASE "$RES" "BACKLOG-$N" "$HELD"
+        note "released lock $RES (held ${HELD}s)"
+      fi
+    done
+  fi
+  if ! git -C "$MAIN" worktree remove "$WT" 2>/dev/null; then
+    # Untracked leftovers are usually the copy/link payload this CLI itself put
+    # there. Force-remove ONLY when nothing outside those paths is dirty —
+    # anything else is uncommitted work: it keeps the tree and gets named.
+    SAFE=1
+    while IFS= read -r p; do
+      [ -n "$p" ] || continue
+      p="${p%/}"
+      INSIDE=0
+      for c in $(cfg copy "node_modules") $(cfg link "") briefs; do
+        case "$p" in "$c"|"$c"/*) INSIDE=1; break ;; esac
+      done
+      [ "$INSIDE" -eq 1 ] || { SAFE=0; note "unmerged leftover: $p"; }
+    done <<LEFTOVERS
+$(git -C "$WT" status --porcelain 2>/dev/null | awk '{print $NF}')
+LEFTOVERS
+    if [ "$SAFE" -eq 1 ]; then
+      git -C "$MAIN" worktree remove --force "$WT" 2>/dev/null \
+        || note "worktree remove refused — inspect $WT and remove it by hand"
+    else
+      note "worktree kept: files above are neither committed nor crew-provisioned — commit or delete them, then: git worktree remove --force $WT"
+    fi
+  fi
+  log_line DONE - "BACKLOG-$N" "files=$ACTUAL"
+  note "BACKLOG-$N is on $DEV. Reminder: a clean main tree does not mean nobody is reading it."
+}
+
+# ---------------------------------------------------------------- crew lock
+cmd_lock() {
+  require_on
+  ACTION="${1:?usage: crew lock acquire|release <resource> <nnn> [--wait]}"
+  RES="${2:?resource name required}"
+  N="$(norm "${3:?ticket number required}")"
+  WAIT="${4:-}"
+  OWNER="BACKLOG-$N"
+  mkdir -p "$STATE/locks"
+  LF="$STATE/locks/$RES.lock"
+  case "$ACTION" in
+    acquire)
+      T0="$(date +%s)"
+      while [ -f "$LF" ]; do
+        HOLDER="$(sed -n 1p "$LF")"
+        [ "$HOLDER" = "$OWNER" ] && { note "$RES already held by $OWNER"; return 0; }
+        if [ "$WAIT" = "--wait" ]; then
+          sleep 5
+        else
+          log_line WAIT "$RES" "$OWNER" "holder=$HOLDER"
+          die "$RES is held by $HOLDER — queue with: crew lock acquire $RES $N --wait"
+        fi
+      done
+      printf '%s\n%s\n' "$OWNER" "$(date +%s)" > "$LF"
+      WAITED=$(( $(date +%s) - T0 ))
+      log_line ACQUIRE "$RES" "$OWNER" "$WAITED"
+      note "$RES acquired by $OWNER (waited ${WAITED}s)"
+      ;;
+    release)
+      [ -f "$LF" ] || die "$RES is not held"
+      HOLDER="$(sed -n 1p "$LF")"
+      [ "$HOLDER" = "$OWNER" ] || die "$RES is held by $HOLDER, not $OWNER — not released"
+      HELD=$(( $(date +%s) - $(sed -n 2p "$LF") ))
+      rm -f "$LF"
+      log_line RELEASE "$RES" "$OWNER" "$HELD"
+      note "$RES released (held ${HELD}s)"
+      ;;
+    *) die "unknown lock action: $ACTION" ;;
+  esac
+}
+
+# ---------------------------------------------------------------- crew status
+cmd_status() {
+  require_on
+  CAP="$(cfg reader_cap 4)"
+  BUDGET_MIN="$(cfg wait_budget_min 30)"
+  TODAY="$(date '+%Y-%m-%d')"
+
+  echo "crew status — $REPO"
+  echo ""
+  echo "worktrees:"
+  OPEN=0
+  git -C "$MAIN" worktree list --porcelain | awk '/^worktree /{print substr($0,10)}' | while read -r P; do
+    B="$(basename "$P")"
+    case "$B" in
+      "$REPO"-b[0-9]*)
+        NUM="${B##*-b}"
+        DIRTYC="$(git -C "$P" status --porcelain 2>/dev/null | wc -l | tr -d ' ')"
+        TF="$(ticket_file "$NUM")"
+        TSTAT="(no ticket)"
+        [ -n "$TF" ] && TSTAT="$(front "$TF" status)"
+        FLAG=""
+        [ -z "$TF" ] && FLAG="  ← orphan: worktree without a Backlog item"
+        [ "$TSTAT" = "done" ] && FLAG="  ← orphan: ticket is done but the tree remains"
+        echo "  BACKLOG-$NUM  work/b$NUM  dirty=$DIRTYC  status=$TSTAT$FLAG"
+        ;;
+    esac
+  done
+  OPEN="$(git -C "$MAIN" worktree list --porcelain | awk '/^worktree /{print substr($0,10)}' | grep -c -- "-b[0-9]*$" || true)"
+  [ "$OPEN" -eq 0 ] && echo "  (none)"
+
+  echo ""
+  echo "locks:"
+  FOUND=0
+  if [ -d "$STATE/locks" ]; then
+    for LF in "$STATE"/locks/*.lock; do
+      [ -f "$LF" ] || continue
+      FOUND=1
+      SINCE=$(( $(date +%s) - $(sed -n 2p "$LF") ))
+      echo "  $(basename "$LF" .lock)  held by $(sed -n 1p "$LF")  for ${SINCE}s"
+    done
+  fi
+  [ "$FOUND" -eq 0 ] && echo "  (none held)"
+
+  # In-progress tickets that have no tree — the inverse orphan.
+  if [ -d "$MAIN/docs/23_backlog" ]; then
+    grep -rlE "^status:[[:space:]]*\"?in-progress\"?" "$MAIN/docs/23_backlog" 2>/dev/null | while read -r TF; do
+      TID="$(front "$TF" id)"
+      NUM="${TID#BACKLOG-}"
+      [ -d "$(dirname "$MAIN")/${REPO}-b${NUM}" ] || echo "  note: $TID is in-progress but has no worktree"
+    done
+  fi
+
+  # Role/branch readiness — a configured branch that does not exist, or a role
+  # declared absent at init, is a gap this board should show, not one a session
+  # discovers mid-release.
+  DEVB="$(cfg dev_branch main)"
+  PRODB="$(cfg prod_branch production)"
+  git -C "$MAIN" show-ref --verify --quiet "refs/heads/$DEVB" \
+    || echo "  note: dev_branch '$DEVB' does not exist in this repo"
+  git -C "$MAIN" show-ref --verify --quiet "refs/heads/$PRODB" \
+    || echo "  note: prod_branch '$PRODB' does not exist — the devops/release half is not wired yet"
+  for r in $(cfg roles_absent ""); do
+    echo "  note: role '$r' declared absent at init — its duties fall to whoever is around (.claude/crew/roles.md)"
+  done
+
+  # Pacing — three signals, not a formula (EXECUTION §5).
+  WAITSEC=0
+  if [ -f "$STATE/log.tsv" ]; then
+    WAITSEC="$(awk -F'\t' -v d="$TODAY" 'index($1,d)==1 && $2=="ACQUIRE" {s+=$5} END {print s+0}' "$STATE/log.tsv")"
+  fi
+  BUDGET=$(( BUDGET_MIN * 60 ))
+  echo ""
+  echo "pacing:"
+  echo "  lock wait today : ${WAITSEC}s (budget ${BUDGET}s)"
+  echo "  open sessions   : $OPEN (ceiling $CAP)"
+  if [ "$OPEN" -gt "$CAP" ]; then
+    echo "  → past the reader's ceiling: take nothing more, even light tickets"
+  elif [ "$WAITSEC" -gt "$BUDGET" ]; then
+    echo "  → the lock is the bottleneck: drop one heavy session"
+  elif [ "$WAITSEC" -eq 0 ]; then
+    echo "  → rig idle: taking another heavy ticket is fine"
+  else
+    echo "  → within budget: keep the current mix"
+  fi
+}
+
+# ---------------------------------------------------------------- dispatch
+case "${1:-help}" in
+  new)    shift; cmd_new "$@" ;;
+  done)   shift; cmd_done "$@" ;;
+  lock)   shift; cmd_lock "$@" ;;
+  status) shift; cmd_status "$@" ;;
+  help|--help|-h)
+    sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
+    ;;
+  *) die "unknown subcommand: $1 (try: crew help)" ;;
+esac
