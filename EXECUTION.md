@@ -127,6 +127,21 @@ the customer produced **12 findings while the automated suite stayed green**.
 Findings enter as Issues so the intake stays single (§1) and the planner stays
 the only writer of Backlog items.
 
+**A hat is only worn if the session list shows it.** §1 names a ticket session
+`<repo>/b157`; a hat session takes `crew/<role> · <repo>`, and `crew name
+<role>` compares the running session against that grammar by reading the CLI's
+own session entry (`~/.claude/sessions/<pid>.json`, found by walking up from
+the shell). A session cannot rename itself, so a failed check prints the
+`/rename` line for the human and the role stops there. The check pays for
+itself where the constraint is *only one of these should exist*: the CLI
+refuses a name a live session already holds, which turns the name into the
+mutual exclusion — a second steward on one repo collides at its first command
+instead of after both have edited the rules file. Only `steward.md` runs it as
+a hard first step today; the other hats state their name and can adopt the
+check when someone measures a reason. Fail open holds here as everywhere else
+in this kit: no session entry, or no python3, and the check reports the
+expected name rather than blocking the role.
+
 **A steward session must state, in the request itself, when a rule change
 expands its own authority.** This has happened (a steward wrote into its own
 rules file that stewards build worktrees); the owner approved it, but nothing

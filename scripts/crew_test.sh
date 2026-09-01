@@ -285,6 +285,44 @@ OUT="$( (cd "$WR" && scripts/crew lock release e2e-harness 7) 2>&1 )" \
 grep -q "RELEASE" "$LOGT" && ok "cli: release logged with held time" \
   || bad "cli: release not logged"
 
+# ---------------------------------------------------------------- session name
+# The CLI writes the session name into ~/.claude/sessions/<pid>.json; the check
+# walks up the process tree to find it, so a fixture dir plus this harness's own
+# pid is a real end-to-end run of that walk, not a stub.
+SESS="$TMP/sessions"
+mkdir -p "$SESS"
+RNAME="$(basename "$WR")"
+
+# Known-bad first: a derived name is not a hat name.
+printf '{"pid":%s,"name":"repo-8a","nameSource":"derived"}\n' "$$" > "$SESS/$$.json"
+OUT="$( (cd "$WR" && CREW_SESSIONS_DIR="$SESS" scripts/crew name steward) 2>&1 )" && RC=0 || RC=$?
+if [ "$RC" -ne 0 ] && has "$OUT" "[name:wrong]" \
+   && has "$OUT" "/rename crew/steward · $RNAME"; then
+  ok "name: wrong name is red, and prints the line the human must type"
+else
+  bad "name: wrong name (rc=$RC, got: $OUT)"
+fi
+
+printf '{"pid":%s,"name":"crew/steward · %s"}\n' "$$" "$RNAME" > "$SESS/$$.json"
+OUT="$( (cd "$WR" && CREW_SESSIONS_DIR="$SESS" scripts/crew name steward) 2>&1 )" && RC=0 || RC=$?
+[ "$RC" -eq 0 ] && has "$OUT" "name ok" && ok "name: the hat name passes" \
+  || bad "name: correct name rejected (rc=$RC, got: $OUT)"
+
+# A ticket session keeps the §1 token grammar, not the hat grammar.
+printf '{"pid":%s,"name":"%s/b157"}\n' "$$" "$RNAME" > "$SESS/$$.json"
+OUT="$( (cd "$WR" && CREW_SESSIONS_DIR="$SESS" scripts/crew name executor 157) 2>&1 )" && RC=0 || RC=$?
+[ "$RC" -eq 0 ] && ok "name: ticket grammar is the ticket token, not the hat" \
+  || bad "name: ticket grammar (rc=$RC, got: $OUT)"
+
+# Blind checker must not make the role unrunnable (§8 fail-open doctrine).
+OUT="$( (cd "$WR" && CREW_SESSIONS_DIR="$TMP/no-sessions" scripts/crew name steward) 2>&1 )" && RC=0 || RC=$?
+if [ "$RC" -eq 0 ] && has "$OUT" "check skipped" \
+   && has "$OUT" "crew/steward · $RNAME"; then
+  ok "name: fails open when it cannot see the session, and still states the name"
+else
+  bad "name: fail-open path (rc=$RC, got: $OUT)"
+fi
+
 # ---------------------------------------------------------------- scaffold
 OUT="$(bash "$KIT/scripts/crew_scaffold.sh" "$WR" 2>&1)"
 if has "$OUT" "stamped: .claude/crew/README.md" && [ -f "$WR/.claude/commands/executor.md" ]; then

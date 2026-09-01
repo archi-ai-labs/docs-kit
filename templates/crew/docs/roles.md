@@ -39,6 +39,23 @@ hỏi thẳng người dùng, không được lặng lẽ stamp. Vai trả lời
 `scripts/crew status` nhắc khoảng trống đó cho tới khi ai đó đấu nối. Một tệp
 vai cho một vai không tồn tại là một sự thật sai nằm trong repo.
 
+## Tên phiên là phần nhìn thấy được của mũ
+
+| Loại phiên | Tên | Ví dụ |
+|---|---|---|
+| phiên phiếu (executor) | `<repo>/b<nnn>` | `lop-hoc-zalo/b157` |
+| phiên mũ (bốn vai còn lại) | `crew/<vai> · <repo>` | `crew/steward · lop-hoc-zalo` |
+
+`scripts/crew name <vai>` đọc tên thật của phiên đang chạy rồi so với hai dòng
+trên. Phiên không tự đổi tên được, vì vậy lệnh đỏ in sẵn dòng `/rename` để
+người dùng gõ, và tên chưa đúng thì vai chưa bắt đầu.
+
+Luật này đáng tiền nhất ở steward: một repo chỉ nên có một steward, mà CLI lại
+từ chối một tên đang được phiên sống khác giữ. Hai điều đó cộng lại biến cái
+tên thành khoá loại trừ, nên phiên steward thứ hai biết mình thừa ngay ở lệnh
+đầu tiên. Hiện chỉ `steward.md` bắt buộc chạy phép kiểm; các vai khác mới dừng
+ở mức khai tên, và sẽ siết khi có số đo chứng minh là cần.
+
 ## Steward và cây bút luật
 
 Phiên steward khi đề xuất một thay đổi luật **mở rộng quyền của chính nó** phải

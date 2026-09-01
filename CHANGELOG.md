@@ -5,6 +5,41 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
+## [0.26.2] — 2026-09-01
+
+### Added — `crew name`, because a hat nobody can see gets worn twice
+
+§1 has always given a ticket session a name (`<repo>/b157`), and the four hat
+sessions had none — planner, tester, devops and steward all showed up in the session
+list under whatever the CLI derived, so the one place a human can see which hats are
+on showed nothing. The gap costs most at steward, where the rule is *only one of
+these should exist*.
+
+- **`crew name <role> [<nnn>]`** compares the running session against the naming
+  grammar and exits 1 when it does not match. A hat session is `crew/<role> · <repo>`;
+  a ticket session keeps the §1 token, `<repo>/b<nnn>`. Both grammars live in the
+  script, so no role file spells either one out a second time.
+- **The name is a readable fact, not an honour system.** The CLI writes
+  `~/.claude/sessions/<pid>.json` with the session's `name`, and the pid holding it is
+  an ancestor of the shell the check runs in — so the check walks up the process tree
+  to its own entry. Verified against a live session before the rule was written.
+- **A session cannot rename itself** (`/rename` is a CLI command, not a tool), so the
+  failed check prints the exact line for the human and the role stops there.
+  `steward.md` runs it as step 0, ahead of even read-only work.
+- **The name doubles as mutual exclusion.** The CLI refuses a name a live session
+  already holds, so a second steward on one repo collides at its first command instead
+  of after both have edited the same rules file.
+- **Fail open, as everywhere else in this kit** (§8): no session entry, or no python3,
+  and the check reports the expected name instead of blocking the role.
+  `CREW_SESSIONS_DIR` points the lookup at a fixture, which is how the shipped tests
+  exercise the real process walk rather than a stub.
+
+Only steward is held to the check today. The other three hats state their name and can
+adopt it when someone measures a reason — same order as everything else here: evidence,
+then warn, then block.
+
+`scripts/crew_test.sh` is at **41 checks**, four of them new, known-bad case first.
+
 ## [0.26.1] — 2026-09-01
 
 ### Fixed — the explain skill could satisfy itself without drawing anything

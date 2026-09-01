@@ -15,6 +15,7 @@
 #   crew lock acquire <res> <nnn> [--wait]
 #   crew lock release <res> <nnn>
 #   crew status                          worktrees · locks · pacing signals
+#   crew name <role> [<nnn>]             is this session wearing its name?
 set -u
 
 die()  { echo "crew: $*" >&2; exit 1; }
@@ -394,14 +395,88 @@ cmd_status() {
   fi
 }
 
+# ---------------------------------------------------------------- name
+# crew name <role> [<nnn>] — is this session wearing its hat's name?
+#
+# WHY THIS IS A COMMAND AND NOT A SENTENCE IN THE ROLE FILE: the session list is
+# the only place a human sees which hats are on. A hat nobody can see is a hat
+# that gets worn twice, and two stewards on one repo is the collision the naming
+# rule exists to make impossible — the CLI refuses a name another live session
+# already holds, so the rename itself is the mutual exclusion.
+#
+# The name is readable: the CLI writes ~/.claude/sessions/<pid>.json carrying
+# "name", and the pid that owns it is an ancestor of this shell. Walk up to it.
+#
+# Fail open when the entry cannot be read — another harness, a piped run, no
+# python3 — because a role must not become unrunnable when the checker goes
+# blind. A name that is present and WRONG is the opposite case and exits 1:
+# the name is the whole point of the check.
+SESSIONS="${CREW_SESSIONS_DIR:-$HOME/.claude/sessions}"
+
+session_file() {
+  SP=$$
+  SI=0
+  while [ "$SI" -lt 12 ]; do
+    [ -f "$SESSIONS/$SP.json" ] && { echo "$SESSIONS/$SP.json"; return 0; }
+    SP="$(ps -o ppid= -p "$SP" 2>/dev/null | tr -d ' ')"
+    [ -n "$SP" ] && [ "$SP" != "0" ] && [ "$SP" != "1" ] || return 1
+    SI=$((SI + 1))
+  done
+  return 1
+}
+
+cmd_name() {
+  ROLE="${1:-}"
+  [ -n "$ROLE" ] || die "usage: crew name <role> [<nnn>]"
+  TICKET="${2:-}"
+  # Two grammars, one place. A ticket session carries the ticket token that
+  # already appears in five places (EXECUTION §3); a hat session carries the
+  # hat. Never let a role file spell either one out again.
+  if [ -n "$TICKET" ]; then
+    WANT="$REPO/b$TICKET"
+  else
+    WANT="crew/$ROLE · $REPO"
+  fi
+
+  SF="$(session_file)" || {
+    note "name: no session entry under $SESSIONS — check skipped"
+    note "name: this session should be named: $WANT"
+    return 0
+  }
+  command -v python3 >/dev/null 2>&1 || {
+    note "name: python3 missing — check skipped"
+    note "name: this session should be named: $WANT"
+    return 0
+  }
+  GOT="$(python3 - "$SF" 2>/dev/null <<'PYNAME'
+import json, sys
+try:
+    print((json.load(open(sys.argv[1])) or {}).get("name") or "")
+except Exception:
+    print("")
+PYNAME
+)"
+  if [ "$GOT" = "$WANT" ]; then
+    note "name ok: $GOT"
+    return 0
+  fi
+  echo "crew: [name:wrong] this session is named '$GOT'; the $ROLE hat is '$WANT'" >&2
+  echo "crew: a session cannot rename itself — ask the human to type this line," >&2
+  echo "crew: then run the check again:" >&2
+  echo "" >&2
+  echo "  /rename $WANT" >&2
+  exit 1
+}
+
 # ---------------------------------------------------------------- dispatch
 case "${1:-help}" in
   new)    shift; cmd_new "$@" ;;
   done)   shift; cmd_done "$@" ;;
   lock)   shift; cmd_lock "$@" ;;
   status) shift; cmd_status "$@" ;;
+  name)   shift; cmd_name "$@" ;;
   help|--help|-h)
-    sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
+    awk 'NR>1 && /^#/ {sub(/^# ?/, ""); print; next} NR>1 {exit}' "$0"
     ;;
   *) die "unknown subcommand: $1 (try: crew help)" ;;
 esac
