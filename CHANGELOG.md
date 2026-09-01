@@ -5,6 +5,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
+## [0.27.2] — 2026-09-01
+
+### Fixed — the 0.27.1 workflow carried the same check twice
+
+The frontmatter gate was written wide first (it also flagged values opening with
+`[` or `{`), then narrowed to the one rule that matters. The narrowing added the
+new step without removing the old one, so 0.27.1 shipped both and the wide copy
+failed on six templates using legitimate flow collections. Nothing outside
+`.github/` differs from 0.27.1 — the plugin at both tags is byte-identical.
+
+**The lesson is the round trip, not the duplicate.** Three CI cycles were spent
+discovering things a local run would have shown, so the workflow's shell steps are
+now extracted and run locally before a push. Seven of the twenty-eight fail on
+macOS for reasons that are not defects — `sed -i` is GNU-only, and the tag gate
+needs `GITHUB_REF_NAME` — which is worth knowing before reading a red line as a
+finding.
+
 ## [0.27.1] — 2026-09-01
 
 ### Fixed — `skills/explain` loaded with no metadata at all
