@@ -286,42 +286,63 @@ grep -q "RELEASE" "$LOGT" && ok "cli: release logged with held time" \
   || bad "cli: release not logged"
 
 # ---------------------------------------------------------------- session name
-# The CLI writes the session name into ~/.claude/sessions/<pid>.json; the check
-# walks up the process tree to find it, so a fixture dir plus this harness's own
-# pid is a real end-to-end run of that walk, not a stub.
+# The title is the last custom-title record in the session transcript, reached
+# from the sessionId in the live session entry — which the check finds by walking
+# up the process tree. Planting the entry under this harness's own pid exercises
+# that walk for real instead of stubbing it.
 SESS="$TMP/sessions"
-mkdir -p "$SESS"
+PROJ="$TMP/projects/slug"
+mkdir -p "$SESS" "$PROJ"
 RNAME="$(basename "$WR")"
+printf '{"pid":%s,"sessionId":"s1"}\n' "$$" > "$SESS/$$.json"
+run_name() { # run_name <args...>
+  (cd "$WR" && CREW_SESSIONS_DIR="$SESS" CREW_PROJECTS_DIR="$TMP/projects" scripts/crew name "$@") 2>&1
+}
 
-# Known-bad first: a derived name is not a hat name.
-printf '{"pid":%s,"name":"repo-8a","nameSource":"derived"}\n' "$$" > "$SESS/$$.json"
-OUT="$( (cd "$WR" && CREW_SESSIONS_DIR="$SESS" scripts/crew name steward) 2>&1 )" && RC=0 || RC=$?
+# Known-bad first: an auto-generated title is not a hat name.
+printf '{"type":"custom-title","customTitle":"Diagram explanations"}\n' > "$PROJ/s1.jsonl"
+OUT="$(run_name steward)" && RC=0 || RC=$?
 if [ "$RC" -ne 0 ] && has "$OUT" "[name:wrong]" \
-   && has "$OUT" "/rename crew/steward · $RNAME"; then
-  ok "name: wrong name is red, and prints the line the human must type"
+   && has "$OUT" "/rename $RNAME · crew/steward"; then
+  ok "name: wrong title is red, and prints the line the human must type"
 else
-  bad "name: wrong name (rc=$RC, got: $OUT)"
+  bad "name: wrong title (rc=$RC, got: $OUT)"
 fi
 
-printf '{"pid":%s,"name":"crew/steward · %s"}\n' "$$" "$RNAME" > "$SESS/$$.json"
-OUT="$( (cd "$WR" && CREW_SESSIONS_DIR="$SESS" scripts/crew name steward) 2>&1 )" && RC=0 || RC=$?
-[ "$RC" -eq 0 ] && has "$OUT" "name ok" && ok "name: the hat name passes" \
-  || bad "name: correct name rejected (rc=$RC, got: $OUT)"
+# A session nobody has retitled reads as unnamed, not as a match on empty.
+printf '{"type":"ai-title","aiTitle":"Diagram explanations"}\n' > "$PROJ/s1.jsonl"
+OUT="$(run_name steward)" && RC=0 || RC=$?
+[ "$RC" -ne 0 ] && has "$OUT" "no set title" && ok "name: an auto title is not a name" \
+  || bad "name: auto title (rc=$RC, got: $OUT)"
 
-# A ticket session keeps the §1 token grammar, not the hat grammar.
-printf '{"pid":%s,"name":"%s/b157"}\n' "$$" "$RNAME" > "$SESS/$$.json"
-OUT="$( (cd "$WR" && CREW_SESSIONS_DIR="$SESS" scripts/crew name executor 157) 2>&1 )" && RC=0 || RC=$?
-[ "$RC" -eq 0 ] && ok "name: ticket grammar is the ticket token, not the hat" \
+# The LAST custom-title wins — a rename lands as another record, not an edit.
+{ printf '{"type":"custom-title","customTitle":"old name"}\n'
+  printf '{"type":"custom-title","customTitle":"%s · crew/steward"}\n' "$RNAME"; } > "$PROJ/s1.jsonl"
+OUT="$(run_name steward)" && RC=0 || RC=$?
+[ "$RC" -eq 0 ] && has "$OUT" "name ok" && ok "name: the newest title is the title" \
+  || bad "name: correct title rejected (rc=$RC, got: $OUT)"
+
+# A ticket session carries the §1 token in the middle, zero-padded the way
+# `crew new 42` pads it — an unpadded expectation would disagree with the branch.
+printf '{"type":"custom-title","customTitle":"%s · b042 · crew/executor"}\n' "$RNAME" > "$PROJ/s1.jsonl"
+OUT="$(run_name executor 42)" && RC=0 || RC=$?
+[ "$RC" -eq 0 ] && ok "name: ticket grammar carries the padded token" \
   || bad "name: ticket grammar (rc=$RC, got: $OUT)"
 
 # Blind checker must not make the role unrunnable (§8 fail-open doctrine).
 OUT="$( (cd "$WR" && CREW_SESSIONS_DIR="$TMP/no-sessions" scripts/crew name steward) 2>&1 )" && RC=0 || RC=$?
 if [ "$RC" -eq 0 ] && has "$OUT" "check skipped" \
-   && has "$OUT" "crew/steward · $RNAME"; then
-  ok "name: fails open when it cannot see the session, and still states the name"
+   && has "$OUT" "$RNAME · crew/steward"; then
+  ok "name: fails open with no session entry, and still states the name"
 else
-  bad "name: fail-open path (rc=$RC, got: $OUT)"
+  bad "name: fail-open on session entry (rc=$RC, got: $OUT)"
 fi
+
+OUT="$( (cd "$WR" && CREW_SESSIONS_DIR="$SESS" CREW_PROJECTS_DIR="$TMP/no-projects" \
+  scripts/crew name steward) 2>&1 )" && RC=0 || RC=$?
+[ "$RC" -eq 0 ] && has "$OUT" "check skipped" \
+  && ok "name: fails open with no transcript" \
+  || bad "name: fail-open on transcript (rc=$RC, got: $OUT)"
 
 # ---------------------------------------------------------------- scaffold
 OUT="$(bash "$KIT/scripts/crew_scaffold.sh" "$WR" 2>&1)"
@@ -346,6 +367,39 @@ if has "$OUT" "review : .claude/crew/README.md.new" \
 else
   bad "scaffold: clobber policy (got: $OUT)"
 fi
+# The manifest is what makes a re-stamp after a kit update automatic: a file the
+# script itself wrote and nobody touched is replaced in place, and only a file a
+# human edited still needs hands. The kit is COPIED first — a test that edits the
+# checkout it runs from leaves the repo dirty the moment it fails.
+[ -f "$WR/.claude/crew/.stamp" ] && ok "scaffold: writes the stamp manifest" \
+  || bad "scaffold: no manifest at .claude/crew/.stamp"
+
+KC="$TMP/kitcopy"
+mkdir -p "$KC"
+cp -R "$KIT/scripts" "$KIT/templates" "$KC/"
+echo "a line the next kit version adds" >> "$KC/templates/crew/docs/tickets.md"
+
+OUT="$(bash "$KC/scripts/crew_scaffold.sh" "$WR" 2>&1)"
+if has "$OUT" "updated: .claude/crew/tickets.md" \
+   && [ ! -f "$WR/.claude/crew/tickets.md.new" ] \
+   && grep -q "a line the next kit version adds" "$WR/.claude/crew/tickets.md"; then
+  ok "scaffold: an untouched kit file is updated in place, no .new"
+else
+  bad "scaffold: untouched file not updated (got: $OUT)"
+fi
+
+# A file the human edited keeps its hands-off treatment.
+echo "steward wrote a rule here" >> "$WR/.claude/crew/tickets.md"
+echo "and the kit moved again" >> "$KC/templates/crew/docs/tickets.md"
+OUT="$(bash "$KC/scripts/crew_scaffold.sh" "$WR" 2>&1)"
+if has "$OUT" "review : .claude/crew/tickets.md.new" \
+   && has "$OUT" "next   :" \
+   && grep -q "steward wrote a rule here" "$WR/.claude/crew/tickets.md"; then
+  ok "scaffold: an edited file still gets .new, with the command to finish it"
+else
+  bad "scaffold: edited file mishandled (got: $OUT)"
+fi
+
 # A role the interview found absent is never stamped — a command file for a
 # ghost role is a wrong fact in the repo.
 SK="$TMP/skiprepo"
@@ -360,6 +414,29 @@ if [ -f "$SK/.claude/commands/planner.md" ] \
 else
   bad "scaffold: --skip (got: $OUT)"
 fi
+
+# ---------------------------------------------------------------- role file
+# A session opened from a task reads its role through `crew role`, not through a
+# path. The worktree below is the reason: .claude/ was stamped after the initial
+# commit, so it is untracked and a fresh worktree has no copy — which is exactly
+# what a repo that gitignores .claude/ looks like from inside a worktree.
+OUT="$( (cd "$WR" && scripts/crew role executor) 2>&1 )" && RC=0 || RC=$?
+[ "$RC" -eq 0 ] && has "$OUT" "crew new" && ok "role: prints the stamped role file" \
+  || bad "role: main tree (rc=$RC, got: $OUT)"
+
+git -C "$WR" worktree add -q "$W/probe" -b probe/x >/dev/null 2>&1
+if [ ! -f "$W/probe/.claude/commands/executor.md" ]; then
+  ok "role: the probe worktree really has no role file of its own"
+else
+  bad "role: probe worktree already carries .claude — the check below proves nothing"
+fi
+OUT="$( (cd "$W/probe" && scripts/crew role executor) 2>&1 )" && RC=0 || RC=$?
+[ "$RC" -eq 0 ] && has "$OUT" "crew new" && ok "role: reaches the main tree from a worktree" \
+  || bad "role: from worktree (rc=$RC, got: $OUT)"
+
+OUT="$( (cd "$WR" && scripts/crew role ghost) 2>&1 )" && RC=0 || RC=$?
+[ "$RC" -ne 0 ] && has "$OUT" "no role file" && ok "role: an unstamped role is red, and says so" \
+  || bad "role: unstamped (rc=$RC, got: $OUT)"
 
 # ---------------------------------------------------------------- summary
 echo ""

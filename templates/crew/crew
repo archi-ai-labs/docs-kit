@@ -16,6 +16,7 @@
 #   crew lock release <res> <nnn>
 #   crew status                          worktrees · locks · pacing signals
 #   crew name <role> [<nnn>]             is this session wearing its name?
+#   crew role <role>                     print a role file (works from a worktree)
 set -u
 
 die()  { echo "crew: $*" >&2; exit 1; }
@@ -148,7 +149,7 @@ cmd_new() {
   note "tree provisioned in ${ELAPSED}s — if that dwarfs the ticket itself, grade it fast-pair or batch tickets (EXECUTION §2)"
   log_line NEW - "BACKLOG-$N" "$WT"
   note "worktree : $WT  (branch work/b$N, from $DEV)"
-  note "session  : name it $REPO/b$N"
+  note "session  : title it $REPO · b$N · crew/executor  (scripts/crew name executor $N)"
   note "finish   : scripts/crew done $N   (from anywhere in the repo)"
 }
 
@@ -395,23 +396,51 @@ cmd_status() {
   fi
 }
 
+# ---------------------------------------------------------------- role
+# crew role <role> — print the role file, resolved from the MAIN tree.
+#
+# WHY THIS EXISTS: a session opened from a task cannot INVOKE a role file — they
+# all carry disable-model-invocation, on purpose — but it can read one. Telling
+# it to read `.claude/commands/executor.md` assumes two things that are not true
+# everywhere: that the session sits in the main tree (it moves to a worktree at
+# `crew new`), and that `.claude/` is tracked by git (a repo is free to ignore
+# it, and then the worktree has no copy at all). This reads from $MAIN, which is
+# computed from git, so neither assumption is needed.
+cmd_role() {
+  RN="${1:-}"
+  [ -n "$RN" ] || die "usage: crew role <role>"
+  RF="$MAIN/.claude/commands/$RN.md"
+  [ -f "$RF" ] || die "no role file for '$RN' at $RF — crew-init may have left the role unstamped (.claude/crew/roles.md)"
+  cat "$RF"
+}
+
 # ---------------------------------------------------------------- name
 # crew name <role> [<nnn>] — is this session wearing its hat's name?
 #
 # WHY THIS IS A COMMAND AND NOT A SENTENCE IN THE ROLE FILE: the session list is
-# the only place a human sees which hats are on. A hat nobody can see is a hat
-# that gets worn twice, and two stewards on one repo is the collision the naming
-# rule exists to make impossible — the CLI refuses a name another live session
-# already holds, so the rename itself is the mutual exclusion.
+# the only place a human sees which hats are on, and a hat nobody can see is a
+# hat that gets worn twice.
 #
-# The name is readable: the CLI writes ~/.claude/sessions/<pid>.json carrying
-# "name", and the pid that owns it is an ancestor of this shell. Walk up to it.
+# WHY IT READS THE TITLE AND NOT THE CLI's SESSION `name` — measured, 0.26.3:
+# they are two fields set by two different gestures. Renaming inside the desktop
+# app writes the TITLE only; `/rename` in a terminal writes both. The first
+# version of this check read `name`, and four sessions renamed in the app — each
+# correctly named and plainly readable in the sidebar — all came back red. A
+# check that fails on the exact gesture it is asking for is a check that gets
+# switched off.
 #
-# Fail open when the entry cannot be read — another harness, a piped run, no
-# python3 — because a role must not become unrunnable when the checker goes
-# blind. A name that is present and WRONG is the opposite case and exits 1:
-# the name is the whole point of the check.
+# The title is a fact on disk: the last {"type":"custom-title"} record in the
+# session transcript, reached from the sessionId in the live session entry.
+#
+# WHAT THIS DOES NOT DO: titles are not unique, so nothing here stops two
+# sessions wearing one hat. It makes the hat visible; the human reading the list
+# is what catches the duplicate.
+#
+# Fail open whenever a piece cannot be read — no session entry, no transcript,
+# no python3 — because a role must not become unrunnable when the checker goes
+# blind. A title that IS readable and wrong exits 1: that is the whole point.
 SESSIONS="${CREW_SESSIONS_DIR:-$HOME/.claude/sessions}"
+PROJECTS="${CREW_PROJECTS_DIR:-$HOME/.claude/projects}"
 
 session_file() {
   SP=$$
@@ -429,40 +458,59 @@ cmd_name() {
   ROLE="${1:-}"
   [ -n "$ROLE" ] || die "usage: crew name <role> [<nnn>]"
   TICKET="${2:-}"
-  # Two grammars, one place. A ticket session carries the ticket token that
-  # already appears in five places (EXECUTION §3); a hat session carries the
-  # hat. Never let a role file spell either one out again.
+  # Two grammars, one place, project first so any session list sorts by repo.
+  # A ticket session keeps the §1 token verbatim (b157, the same string the
+  # worktree and the branch carry) and adds the hat; a hat session is just the
+  # hat. Never let a role file spell either grammar out again.
   if [ -n "$TICKET" ]; then
-    WANT="$REPO/b$TICKET"
+    WANT="$REPO · b$(norm "$TICKET") · crew/$ROLE"
   else
-    WANT="crew/$ROLE · $REPO"
+    WANT="$REPO · crew/$ROLE"
   fi
 
-  SF="$(session_file)" || {
-    note "name: no session entry under $SESSIONS — check skipped"
-    note "name: this session should be named: $WANT"
-    return 0
-  }
-  command -v python3 >/dev/null 2>&1 || {
-    note "name: python3 missing — check skipped"
-    note "name: this session should be named: $WANT"
-    return 0
-  }
-  GOT="$(python3 - "$SF" 2>/dev/null <<'PYNAME'
-import json, sys
+  skip() { note "name: $1 — check skipped"; note "name: this session should be titled: $WANT"; }
+
+  SF="$(session_file)" || { skip "no session entry under $SESSIONS"; return 0; }
+  command -v python3 >/dev/null 2>&1 || { skip "python3 missing"; return 0; }
+
+  GOT="$(python3 - "$SF" "$PROJECTS" <<'PYNAME'
+import glob, json, os, sys
 try:
-    print((json.load(open(sys.argv[1])) or {}).get("name") or "")
+    sid = (json.load(open(sys.argv[1])) or {}).get("sessionId") or ""
 except Exception:
-    print("")
+    sid = ""
+if not sid:
+    raise SystemExit(2)
+found = glob.glob(os.path.join(sys.argv[2], "*", sid + ".jsonl"))
+if not found:
+    raise SystemExit(2)
+title = ""
+with open(found[0], errors="replace") as f:
+    for line in f:
+        if '"custom-title"' not in line:
+            continue
+        try:
+            rec = json.loads(line)
+        except Exception:
+            continue
+        if rec.get("type") == "custom-title" and rec.get("customTitle"):
+            title = rec["customTitle"]
+print(title)
 PYNAME
-)"
+)" || { skip "no transcript for this session under $PROJECTS"; return 0; }
+
   if [ "$GOT" = "$WANT" ]; then
     note "name ok: $GOT"
     return 0
   fi
-  echo "crew: [name:wrong] this session is named '$GOT'; the $ROLE hat is '$WANT'" >&2
-  echo "crew: a session cannot rename itself — ask the human to type this line," >&2
-  echo "crew: then run the check again:" >&2
+  if [ -z "$GOT" ]; then
+    echo "crew: [name:wrong] this session has no set title, so the list shows an" >&2
+    echo "crew: auto-generated one; the $ROLE hat is '$WANT'" >&2
+  else
+    echo "crew: [name:wrong] this session is titled '$GOT'; the $ROLE hat is '$WANT'" >&2
+  fi
+  echo "crew: retitle it, then run the check again — inside the app the session" >&2
+  echo "crew: can retitle itself; in a terminal the human types:" >&2
   echo "" >&2
   echo "  /rename $WANT" >&2
   exit 1
@@ -475,6 +523,7 @@ case "${1:-help}" in
   lock)   shift; cmd_lock "$@" ;;
   status) shift; cmd_status "$@" ;;
   name)   shift; cmd_name "$@" ;;
+  role)   shift; cmd_role "$@" ;;
   help|--help|-h)
     awk 'NR>1 && /^#/ {sub(/^# ?/, ""); print; next} NR>1 {exit}' "$0"
     ;;

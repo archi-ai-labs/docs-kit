@@ -1,6 +1,6 @@
 ---
 name: explain
-description: Explain a docs-kit layer-2 document or its chain — an Issue, Backlog item, Proposal, or Decision — to the four-gates standard, BEFORE/AFTER drawing, trade-offs with numbers, ids as links, one level-2 check question to close. Trigger when the user asks what or why about an ISSUE-/BACKLOG-/PROPOSAL-/DECISION- id, a lane choice, or the workflow between them; every other topic waits to be typed explicitly.
+description: Explain a docs-kit layer-2 document or its chain — an Issue, Backlog item, Proposal, or Decision — or a mechanism this repo runs on, such as a script, a hook, a skill, a command or a config key, to the four-gates standard: at least one drawing, BEFORE/AFTER, trade-offs with numbers, ids as links, one level-2 check question to close. Trigger when the user asks what or why about an ISSUE-/BACKLOG-/PROPOSAL-/DECISION- id, a lane choice, the workflow between them, or how a piece of this repo's own tooling actually works; every other topic waits to be typed explicitly.
 arguments: topic
 argument-hint: "<điều chưa hiểu — một id, một tệp, một quyết định>"
 ---
@@ -27,6 +27,12 @@ answers in words has answered a different question.
 - If it names ids (`BACKLOG-`, `DECISION-`, `PROPOSAL-`, `ISSUE-`): open
   exactly those documents via `docs/INDEX.md` — never glob whole folders.
 - If it names code, a file, or an error: read that code first.
+- If it names a mechanism this repo runs on — a script, a hook, a skill, a
+  command, a config key: open the file and read the part that answers the
+  question, then say where you read it. A mechanism explained from memory is
+  how one confident wrong sentence ends up drawn four times; this skill has its
+  own case, a claim that the CLI refuses a session name another session holds,
+  when it quietly hands out a different name instead.
 - If you genuinely cannot tell WHICH thing is meant, ask one short clarifying
   question and stop. Do not explain a guess.
 
@@ -69,6 +75,33 @@ Any "yes" → **deep form**, everything below.
   number, wrong reading, and four good-looking diagrams laundered it. If you
   cannot run the falsifying measurement, say so inside the explanation — a
   labelled hole beats a confident one.
+
+## The three shapes — both lanes, no fourth invented on the spot
+
+The fast lane draws one of these small and the deep lane draws it full size;
+neither gets to skip the step. Pick the shape from the question, not from the
+topic:
+
+| The question is | The drawing is |
+|---|---|
+| what changed? | two columns, before on the left, after on the right, one row per change |
+| one input, several outcomes | the source at the left, each outcome its own box at the right |
+| what happens, in order? | stations stacked downward, with the command that moves between two of them in a box of its own |
+
+Four rules keep them readable, and each is here because breaking it cost a
+redraw:
+
+- **Prose lives outside the picture.** Inside: labels only — one claim per box,
+  a subtitle of five words or fewer. A paragraph inside a diagram is a paragraph
+  nobody reads sitting in a box nobody can scan.
+- **Evidence is the real output.** Paste the actual lines a command printed,
+  including the ugly ones. A described output and a real one look identical to
+  the reader and only one of them can be checked.
+- **Colour carries meaning, not sequence.** Neutral for ordinary steps, one
+  colour for the outcome that is fine, one for the outcome that needs a human.
+  Three families is the ceiling; a rainbow encodes nothing.
+- **One picture answers one question.** A second question earns a second
+  picture, never a second panel bolted onto the first.
 
 ## Step 3 — Close with exactly one level-2 check question
 

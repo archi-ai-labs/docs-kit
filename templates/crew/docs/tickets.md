@@ -5,11 +5,11 @@
 Số phiếu xuất hiện **nguyên vẹn** ở năm chỗ, nên gõ một con số là tra ra hết:
 
 ```
-BACKLOG-157        phiếu (docs/23_backlog/)
-../<repo>-b157     cây làm việc
-work/b157          nhánh
-<repo>/b157        tên phiên
-BACKLOG-157        chủ khoá (crew lock acquire <resource> 157)
+BACKLOG-157                      phiếu (docs/23_backlog/)
+../<repo>-b157                   cây làm việc
+work/b157                        nhánh
+<repo> · b157 · crew/executor    tên phiên
+BACKLOG-157                      chủ khoá (crew lock acquire <resource> 157)
 ```
 
 ## Ba mức thi hành
@@ -35,6 +35,19 @@ fast-pair đang mở chặn mọi `crew done` ở phép kiểm cây-sạch.
 `crew new` in thời gian dựng cây và ghi dòng `SETUP` vào log; thời gian đó
 lớn hơn phần việc dự kiến thì phiếu xuống `fast-pair`, hoặc gộp nhiều phiếu
 nhỏ làm một cho đáng một lần dựng.
+
+## Việc không thành phiếu
+
+Phiếu là đơn vị giao việc, không phải sổ ghi mọi thứ cần làm. Giá một phiếu là
+một cây, một phiên và một lượt gộp — `crew new` in thời gian dựng cây ra để bạn
+nhìn thấy con số đó — nên việc rẻ hơn cái giá ấy thì làm tại chỗ.
+
+Không thành phiếu: dọn dẹp tài liệu layer 2 (archive hoặc đóng một Issue, sửa
+trạng thái, sửa typo trong phiếu). Người phát hiện làm ngay kèm dòng audit,
+hoặc nó đi kèm phiếu đã sinh ra nó.
+
+Có thành phiếu: mọi thứ chạm code, kể cả một dòng — nhưng khi đó nó là
+`fast-pair` ở bảng dưới, không phải một cây riêng.
 
 ## Phiếu tự khai kích thước
 

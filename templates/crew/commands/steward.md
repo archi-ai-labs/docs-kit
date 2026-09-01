@@ -7,14 +7,17 @@ Phiên này đội mũ **steward** của tầng crew (`.claude/crew/roles.md`).
 
 ## Bước 0 — đội mũ đúng tên, trước mọi việc khác
 
-Chạy `scripts/crew name steward`. Xanh thì làm tiếp; đỏ thì đưa nguyên dòng
-`/rename` mà lệnh in ra cho người dùng gõ, rồi **dừng** — chưa có tên đúng thì
-chưa làm việc steward nào, kể cả việc chỉ đọc.
+Chạy `scripts/crew name steward`. Xanh thì làm tiếp. Đỏ thì đặt lại title cho
+phiên rồi chạy lại, và **dừng** cho tới khi xanh — chưa đúng title thì chưa làm
+việc steward nào, kể cả việc chỉ đọc.
 
-Tên phiên là chỗ duy nhất người khác nhìn thấy mũ nào đang đội, và một repo chỉ
-nên có một steward. CLI từ chối một tên mà phiên sống khác đang giữ, nên phiên
-steward thứ hai va vào tên ngay ở lệnh đầu tiên, thay vì lộ ra sau khi cả hai
-đã sửa cùng một tệp luật.
+Cách đặt tuỳ chỗ phiên đang chạy. Trong app, phiên tự đổi title của chính nó
+được, nên tự làm, đừng bắt người dùng gõ. Ngoài terminal thì không có công cụ
+đó, lúc ấy mới đưa nguyên dòng `/rename` mà lệnh in ra cho người dùng.
+
+Title là chỗ duy nhất người khác nhìn thấy mũ nào đang đội. Nó không chặn được
+hai phiên cùng đội mũ steward, vì title không duy nhất; nó chỉ làm cái mũ hiện
+ra để người đọc danh sách bắt được trùng.
 
 ## Việc của bạn
 

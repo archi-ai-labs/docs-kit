@@ -21,7 +21,10 @@ containing `.claude-plugin/plugin.json`). Then check, in order:
    stop — crew rides the Backlog (EXECUTION §1), there is no second ticket
    system to fall back to.
 3. `.docs-kit.json` already has a `crew` key? Then this repo is already on;
-   say so and point re-stamping to `/docs-kit:docs-upgrade` instead. Stop.
+   say so and point re-stamping to `/docs-kit:crew-update` instead. Stop.
+   (It used to point at `docs-upgrade`, which only ever touched `docs/` — so an
+   already-on repo had no route forward at all and sat on the version it was
+   stamped with.)
 
 ## Step 1 — Detect, as proposals only
 

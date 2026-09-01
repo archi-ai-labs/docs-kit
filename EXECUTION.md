@@ -29,11 +29,21 @@ five, verbatim:
 | Ticket | `BACKLOG-nnn` | `BACKLOG-157` |
 | Worktree | `../<repo>-b<nnn>` | `../myapp-b157` |
 | Branch | `work/b<nnn>` | `work/b157` |
-| Session name | `<repo>/b<nnn>` | `myapp/b157` |
+| Session name | `<repo> · b<nnn> · crew/executor` | `myapp · b157 · crew/executor` |
 | Lock owner | full id | `crew lock acquire e2e-harness 157` → owner `BACKLOG-157` |
 
 `<nnn>` is the zero-padded number exactly as it appears in `id:` — `crew`
 normalizes `crew new 42` to `b042`.
+
+**Not every job is a ticket.** A ticket costs a worktree, a session and a merge
+— `crew new` prints the provisioning time so the cost is visible — so anything
+cheaper than that is done where it is found. Bookkeeping on Layer 2 documents
+(archiving or closing an Issue, correcting a status, a typo in a ticket) is not
+delegated work: whoever notices does it with the audit line, or it rides along
+with the ticket that produced it. A whole ticket spent archiving one Issue
+trades the full setup cost for a single file edit. The boundary is code: work
+that touches code is a ticket even at one line, and a one-file ticket is
+`fast-pair` (§2), not "not a ticket".
 
 **The ticket exists in the main tree before the worktree does.** `crew new`
 refuses to create a worktree for an id it cannot find under `docs/23_backlog/`.
@@ -127,20 +137,31 @@ the customer produced **12 findings while the automated suite stayed green**.
 Findings enter as Issues so the intake stays single (§1) and the planner stays
 the only writer of Backlog items.
 
-**A hat is only worn if the session list shows it.** §1 names a ticket session
-`<repo>/b157`; a hat session takes `crew/<role> · <repo>`, and `crew name
-<role>` compares the running session against that grammar by reading the CLI's
-own session entry (`~/.claude/sessions/<pid>.json`, found by walking up from
-the shell). A session cannot rename itself, so a failed check prints the
-`/rename` line for the human and the role stops there. The check pays for
-itself where the constraint is *only one of these should exist*: the CLI
-refuses a name a live session already holds, which turns the name into the
-mutual exclusion — a second steward on one repo collides at its first command
-instead of after both have edited the rules file. Only `steward.md` runs it as
-a hard first step today; the other hats state their name and can adopt the
-check when someone measures a reason. Fail open holds here as everywhere else
-in this kit: no session entry, or no python3, and the check reports the
-expected name rather than blocking the role.
+**A hat is only worn if the session list shows it.** §1 titles a ticket session
+`<repo> · b157 · crew/executor`; a hat session drops the middle field and takes
+`<repo> · crew/<role>`. The repo leads so any session list sorts by project, and
+the ticket keeps the §1 token verbatim — `b157`, the same string the worktree
+and the branch carry. `crew name <role> [<nnn>]` compares the running session
+against that grammar and exits 1 when it does not match; `steward.md` runs it as
+a hard first step, ahead of even read-only work.
+
+**It reads the session TITLE, and the difference is not cosmetic.** A session
+carries two labels: a `name` in the live entry `~/.claude/sessions/<pid>.json`,
+and a title that the session list displays. Renaming inside the desktop app
+writes the title only; `/rename` in a terminal writes both. The first version of
+this check read `name`, and four sessions renamed in the app — each correctly
+named, each plainly readable in the sidebar — came back red. A check that fails
+on the exact gesture it asks for is a check that gets switched off, so it now
+reads the title: the last `{"type":"custom-title"}` record in the session
+transcript, reached from the sessionId in the live entry.
+
+**What the rule does not buy.** Titles are not unique, so nothing here prevents
+two sessions from wearing one hat; it makes the hat visible, and a human reading
+the list is what catches the duplicate. Only `steward.md` runs the check today;
+the other hats state their title and can adopt it when someone measures a
+reason. Fail open holds as everywhere else in this kit — no session entry, no
+transcript, no python3, and the check reports the expected title rather than
+blocking the role.
 
 **A steward session must state, in the request itself, when a rule change
 expands its own authority.** This has happened (a steward wrote into its own
@@ -367,7 +388,14 @@ default shown; a minimal opt-in is `"crew": {}`.
 asymmetry of §9.3), stamps `scripts/crew`, `.claude/crew/*.md` and
 `.claude/commands/*.md` from `templates/crew/`, and offers the CLAUDE.md
 snippet through AskUserQuestion with a text fallback, like every other write to
-user config. Re-stamping after a kit upgrade belongs to `/docs-kit:docs-upgrade`.
+user config. Re-stamping after a kit upgrade belongs to `/docs-kit:crew-update`,
+which is a separate skill for a reason measured in 0.26.3: crew-init's own guard
+turns an already-on repo away, `docs-upgrade` only ever touched `docs/`, and the
+two together left a repo stranded on the version it was stamped with. crew-update
+re-stamps and nothing else — no interview, no config write — and it decides what
+it may replace from the sha256 manifest at `.claude/crew/.stamp`, so a file the
+scaffold wrote and nobody touched is updated in place while an edited one still
+lands as `.new`.
 
 ## 10. Deliberately absent from 0.26.0
 

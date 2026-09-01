@@ -43,18 +43,27 @@ vai cho một vai không tồn tại là một sự thật sai nằm trong repo.
 
 | Loại phiên | Tên | Ví dụ |
 |---|---|---|
-| phiên phiếu (executor) | `<repo>/b<nnn>` | `lop-hoc-zalo/b157` |
-| phiên mũ (bốn vai còn lại) | `crew/<vai> · <repo>` | `crew/steward · lop-hoc-zalo` |
+| phiên phiếu (executor) | `<repo> · b<nnn> · crew/executor` | `lop-hoc-zalo · b157 · crew/executor` |
+| phiên mũ (bốn vai còn lại) | `<repo> · crew/<vai>` | `lop-hoc-zalo · crew/steward` |
 
-`scripts/crew name <vai>` đọc tên thật của phiên đang chạy rồi so với hai dòng
-trên. Phiên không tự đổi tên được, vì vậy lệnh đỏ in sẵn dòng `/rename` để
-người dùng gõ, và tên chưa đúng thì vai chưa bắt đầu.
+Tên repo đứng trước để danh sách phiên tự gom theo dự án, và phiên phiếu giữ
+nguyên token `b157` — đúng chuỗi mà cây làm việc và nhánh đang mang, nên gõ một
+con số vẫn tra ra cả năm chỗ (`tickets.md`).
 
-Luật này đáng tiền nhất ở steward: một repo chỉ nên có một steward, mà CLI lại
-từ chối một tên đang được phiên sống khác giữ. Hai điều đó cộng lại biến cái
-tên thành khoá loại trừ, nên phiên steward thứ hai biết mình thừa ngay ở lệnh
-đầu tiên. Hiện chỉ `steward.md` bắt buộc chạy phép kiểm; các vai khác mới dừng
-ở mức khai tên, và sẽ siết khi có số đo chứng minh là cần.
+`scripts/crew name <vai> [<nnn>]` đọc **title** của phiên đang chạy rồi so với
+hai dòng trên, và title chưa đúng thì vai chưa bắt đầu.
+
+Một phiên mang hai nhãn khác nhau, và phép kiểm đọc nhãn nào là chuyện có hậu
+quả thật. `name` nằm trong bản ghi phiên sống, còn title là thứ danh sách phiên
+hiển thị. Đổi tên trong app chỉ ghi title, còn `/rename` gõ trong terminal ghi
+cả hai. Bản đầu của phép kiểm đọc `name`, nên bốn phiên đã đổi tên trong app —
+đặt đúng và nhìn thấy đúng ngay trong sidebar — đều báo đỏ. Vì vậy nó chuyển
+sang đọc title: bản ghi `custom-title` cuối cùng trong transcript của phiên.
+
+Luật này mua được cái gì và không mua được cái gì, nói thẳng ra: title không
+duy nhất, nên nó **không** chặn được hai phiên cùng đội một mũ. Nó chỉ làm cái
+mũ hiện ra, và người đọc danh sách mới là thứ bắt được trùng. Hiện chỉ
+`steward.md` bắt buộc chạy phép kiểm; các vai khác mới dừng ở mức khai tên.
 
 ## Steward và cây bút luật
 

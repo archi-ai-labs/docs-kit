@@ -4,10 +4,11 @@ Vấn đề bốn cổng giải: người dùng gật một quyết định họ
 đó trông giống hệt một cái gật có hiểu biết, kể cả với chính họ.
 
 Tài liệu này giữ phần **luật**. Phần **cách làm** một lời giải thích đạt
-chuẩn — sơ đồ TRƯỚC/SAU, tradeoff kèm số, luật hai phép đo với ca gốc, luật
-link id, câu kiểm mức 2 — đóng gói trong skill `explain`: gõ
+chuẩn — ba khuôn hình vẽ, sơ đồ TRƯỚC/SAU, tradeoff kèm số, luật hai phép đo
+với ca gốc, luật link id, câu kiểm mức 2 — đóng gói trong skill `explain`: gõ
 `/docs-kit:explain <vấn đề>`, hoặc phiên tự nạp nó khi bạn hỏi về một Issue,
-Backlog, Proposal hay Decision.
+Backlog, Proposal, Decision, hay về một cơ chế của chính repo này (một script,
+một hook, một skill, một khoá cấu hình).
 
 ## Gate 0 — lane test, ba câu (STANDARD §5)
 

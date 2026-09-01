@@ -5,6 +5,95 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
+## [0.26.3] — 2026-09-01
+
+### Fixed — the naming check was reading the wrong label
+
+0.26.2 shipped `crew name` reading the CLI's session `name`. A session carries two
+labels, set by two different gestures: renaming inside the desktop app writes the
+TITLE only, `/rename` in a terminal writes both. Measured on four sessions renamed
+in the app — each correctly named, each plainly readable in the sidebar — the check
+came back red on all four. A check that fails on the exact gesture it asks for is a
+check that gets switched off.
+
+- It now reads the title: the last `{"type":"custom-title"}` record in the session
+  transcript, reached from the sessionId in the live session entry. A session nobody
+  retitled is reported as unnamed rather than compared against an empty string.
+- **The grammar is project-first**, so any session list sorts by repo: a hat session
+  is `<repo> · crew/<role>`, a ticket session `<repo> · b<nnn> · crew/executor` —
+  keeping §1's token verbatim, and now zero-padded through the same `norm` the
+  worktree and branch use (0.26.2 expected `b42` where `crew new 42` makes `b042`).
+- **The mutual-exclusion claim is withdrawn.** 0.26.2 said the CLI refuses a name a
+  live session holds. It does not: it hands out a different name and mentions the
+  request was taken. Titles are not unique at all, so the rule makes a hat visible
+  and nothing more — a human reading the list is what catches a duplicate. Corrected
+  in EXECUTION.md, roles.md and steward.md.
+
+### Fixed — four holes on the road from planner to a new executor session
+
+All four came out of one real handoff, and none of them was the session misbehaving.
+
+- **A whole Backlog item was spent archiving one Issue.** A ticket costs a worktree,
+  a session and a merge — `crew new` prints the provisioning time, so the cost is on
+  screen. Layer-2 bookkeeping is now explicitly not a ticket: whoever notices does it
+  with the audit line. The boundary is code — one line of it is still a ticket, and a
+  one-file ticket is `fast-pair`, not "not a ticket".
+- **Nothing told the planner how to hand work over.** `planner.md` said "say: take
+  BACKLOG-157", which only works when the receiver is already open. It now has the
+  new-session case: the task title IS the session title, so it takes the executor
+  grammar, and the prompt must stand alone.
+- **The prompt used to point at a path.** `.claude/commands/executor.md` is not
+  reachable from everywhere: the executor moves to a worktree at step 1, and a repo
+  is free to gitignore `.claude/` — then the worktree has no copy at all. New
+  subcommand **`crew role <role>`** prints the file from the MAIN tree, resolved
+  through git. The shipped test builds a worktree that genuinely lacks the file,
+  asserts that it lacks it, and then reads the role through the command anyway.
+- **`executor.md` gained the same step 0 as steward** — `crew name executor <nnn>`
+  before anything, including read-only work.
+
+### Added — `crew-update`, the half that was missing
+
+`crew-init` turns the layer on and its own guard turns an already-on repo away,
+pointing at `docs-upgrade` — which only ever touched `docs/`. Between them a repo had
+no route forward and sat on the version it was stamped with. Measured here: a repo
+stamped at 0.26.0 while the installed plugin had been at 0.26.2 for two releases.
+
+- **`/docs-kit:crew-update`** re-stamps and nothing else: no interview, no config
+  write. It prints the version it is about to stamp first, because a session runs the
+  plugin that was installed when it started, and stamping an old one quietly puts the
+  old files back.
+- **`crew_scaffold.sh` now writes what it wrote**: a sha256 per file at
+  `.claude/crew/.stamp`. On a later run a file whose hash still matches is this
+  script's own copy and is UPDATED in place; anything else is a human edit and lands
+  as `.new` — which in `.claude/crew/` is usually the steward's own rule, the exact
+  content that must not vanish under a kit update. Summary counts four classes now,
+  and prints the `diff … && mv …` line for each file still needing hands.
+- A repo with no manifest yet takes the conservative path once. That run writes the
+  manifest, and every later update is automatic. No sha256 on PATH degrades to the
+  old always-`.new` rule.
+- `crew-init`'s guard, EXECUTION §9 and `setup.md` all repointed here.
+
+### Changed — `explain` covers the repo's own machinery, and names its shapes
+
+- **Scope**: it now triggers on a mechanism this repo runs on — a script, a hook, a
+  skill, a command, a config key — alongside the Layer-2 ids. With it, a rule: open
+  the file and say where you read it. Explaining a mechanism from memory is how one
+  confident wrong sentence gets drawn four times, and this release contains that
+  exact case (see the withdrawn claim above).
+- **Three shapes**, chosen by the shape of the question rather than the topic:
+  two columns for what-changed, one-source-to-many-outcomes for a branch, and
+  stations stacked downward for what-happens-in-order. Four rules ride along —
+  prose lives outside the picture, evidence is the real output, colour carries
+  meaning and not sequence, one picture answers one question.
+
+### Also
+
+- README's command table lists `explain` and the three `crew-*` skills, which it has
+  never done since the crew layer shipped.
+- `scripts/crew_test.sh` is at **50 checks**, and the scaffold tests now run against a
+  copy of the kit — a test that edits the checkout it runs from leaves the repo dirty
+  the moment it fails.
+
 ## [0.26.2] — 2026-09-01
 
 ### Added — `crew name`, because a hat nobody can see gets worn twice

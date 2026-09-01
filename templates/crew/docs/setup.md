@@ -60,7 +60,18 @@ Quyền chặn mua bằng số liệu, không mua bằng niềm tin. Resource-gu
 
 ## Nâng cấp
 
-Bản mới của docs-kit có thể đổi `scripts/crew` và các template ở đây.
-`/docs-kit:docs-upgrade` re-stamp: tệp bạn chưa sửa được thay thẳng, tệp bạn
-đã sửa được đặt cạnh dưới tên `.new` để bạn tự trộn — không bao giờ ghi đè
-chỉnh sửa cục bộ.
+Bản mới của docs-kit có thể đổi `scripts/crew` và các template ở đây. Hai
+bước, không hơn:
+
+```
+claude plugin update docs-kit@archi-ai-labs
+/docs-kit:crew-update
+```
+
+Lệnh sau chỉ chép tệp, không hỏi lại phần cấu hình. Nó phân biệt được tệp nào
+là của chính nó nhờ sổ sha256 ở `.claude/crew/.stamp`: tệp bạn chưa đụng tới
+thì thay thẳng, tệp bạn đã sửa thì đặt bản mới cạnh dưới tên `.new` để bạn tự
+trộn. Không bao giờ ghi đè chỉnh sửa cục bộ.
+
+Repo được stamp trước khi có sổ thì lần chạy đầu vẫn ra `.new` một lượt, và
+chính lần đó sinh ra sổ.
