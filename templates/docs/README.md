@@ -52,7 +52,7 @@ Review (định kỳ)    ⇒ read-only trên layer 1–2; phát hiện nối và
 | 70 | `70_deploy` | Ship kiểu gì: môi trường, pipeline, rollback |
 | 92 | `92_audit` | Nhật ký chỉ ghi thêm — nơi tra cứu truy nguyên |
 | 93 | `93_qa` | Chiến lược test, checklist QA, chỗ còn hổng |
-| 99 | `99_feedback` | Chỗ duy nhất trong `docs/` không nói về sản phẩm: những chỗ docs-kit hoặc crew làm sai — xem §9 |
+| 99 | `99_feedback` | Chỗ duy nhất trong `docs/` không nói về sản phẩm: những chỗ docs-kit hoặc crew làm sai — xem §10 |
 
 ## 5 · Traceability
 
@@ -105,7 +105,8 @@ Không ghi gì, dựng lại cả hai bằng đúng code path của render thậ
 Mọi fact quan trọng ở layer 1 đều mang một **neo** vào source: component có
 `` `path/in/repo` ``, mỗi khối hình có header `code:`. Validator kiểm hai thứ:
 
-- `FAIL [anchor]` — đường dẫn không còn tồn tại. Chắc chắn sai, phải sửa.
+- `NOTE [anchor]` — đường dẫn không còn tồn tại. Chắc chắn sai, nhưng là link sai
+  chứ không phải tên sai, nên validator in ra và vẫn cho qua (xem §8).
 - `NOTE [stale]` — `verified_at` là git rev của lần cuối thực sự đọc code đó; file đã
   đổi kể từ rev ấy. **Cảnh báo, không phải lỗi** — đổi không đồng nghĩa sai.
 
@@ -128,7 +129,28 @@ báo hai loại lệch — operation **đang chạy mà không ai mô tả** (đ
 sau khi việc đã rồi) và operation **mô tả rồi mà artifact không có**. Nửa sinh tự động
 không ai bảo trì, nên nó không thể cũ.
 
-## 8 · Ngôn ngữ
+## 8 · Validator: tên sai là lỗi, link sai là ghi chú
+
+Validator chạy ở hai mức. Ở mức mặc định, nó chỉ báo `FAIL` khi một **cái tên** sai,
+còn mọi liên kết hỏng đều in ra dưới dạng `NOTE` và vẫn thoát 0.
+
+Ranh giới này không nằm ở mức quan trọng mà nằm ở chi phí phát hiện. Một `id:` trùng
+làm mọi tham chiếu tới nó trở nên nhập nhằng, và không tham chiếu nào trông có vẻ
+sai, nên sẽ không ai nhận ra nữa. Còn một `*_ref:` trỏ vào khoảng không thì chỉ hỏng
+đúng một cạnh, và người đầu tiên bấm vào là thấy ngay.
+
+| Mức | Kiểm gì |
+|---|---|
+| `FAIL` | `id:` thiếu hoặc trùng; tiền tố `id:` không khớp thư mục; enum `lane`/`status`/`outcome` sai; một component name khai ở hai tài liệu với **hai đường dẫn khác nhau**; `92_audit/` bị sửa dòng cũ; token lạ trong `owns` |
+| `NOTE` | `*_ref:` rỗng hoặc không phân giải được; Backlog thiếu `source_ref`; thiếu một trường bắt buộc khác `id`; Proposal thiếu mục "Alternatives considered"; `amended_by` trích một Decision không tồn tại; một neo trỏ vào đường dẫn không còn |
+
+Nhắc lại một component name mà không kèm đường dẫn riêng thì không bị báo, vì một tài
+liệu flow xuyên suốt buộc phải nhắc lại các thành phần mà `architecture.md` đã khai.
+
+Thêm cờ `--strict` thì mọi dòng ở hàng `NOTE` quay lại thành `FAIL`. Đó là mức dành
+cho CI, còn mức mặc định dành cho lúc đang làm việc.
+
+## 9 · Ngôn ngữ
 
 Khung tiếng Anh, giải thích tiếng Việt. Tên thư mục, tên trường frontmatter, giá
 trị enum (`open`, `in-progress`, `done`, `approved`, `rejected`, `fast`, `full`),
@@ -136,7 +158,7 @@ tiền tố id, tiêu đề mục, và các thuật ngữ (Issue, Proposal, Deci
 Architecture, fast lane, full lane) giữ nguyên tiếng Anh — đổi chúng là hỏng
 validator. Phần diễn giải viết tiếng Việt, để thuật ngữ Anh nằm trần trong câu.
 
-## 9 · Khi chính bộ kit sai
+## 10 · Khi chính bộ kit sai
 
 Mọi thư mục ở trên mô tả sản phẩm, riêng `99_feedback/` mô tả **công cụ**. Ghi một
 file vào đó khi script hoặc hook làm khác điều chuẩn nói, khi phải lách kit mới

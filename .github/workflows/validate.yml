@@ -393,8 +393,13 @@ jobs:
           bash scripts/docs_scaffold.sh "$work" >/dev/null
           sed -i 's/^issue_ref: ISSUE-000/issue_ref: ISSUE-999/' \
             "$work/docs/21_proposals/PROPOSAL-000-example.md"
-          if bash scripts/docs_validate.sh "$work/docs"; then
-            echo "::error::validator passed a dangling issue_ref — the ref check is broken."
+          bash scripts/docs_validate.sh "$work/docs" > "$work/val.txt" 2>&1 || true
+          grep -q 'NOTE \[ref\].*ISSUE-999' "$work/val.txt" \
+            || { echo "::error::a dangling issue_ref was not even reported."; exit 1; }
+          bash scripts/docs_validate.sh "$work/docs" \
+            || { echo "::error::a dangling ref must not fail the default run (0.28.0)."; exit 1; }
+          if bash scripts/docs_validate.sh "$work/docs" --strict; then
+            echo "::error::--strict passed a dangling issue_ref — the ref check is broken."
             exit 1
           fi
           echo "OK — dangling ref rejected"
@@ -421,8 +426,11 @@ jobs:
           bash scripts/docs_validate.sh "$work/docs" \
             || { echo "::error::anchor check failed on a path that exists."; exit 1; }
           mv "$work/src/engine/match.go" "$work/src/engine/matcher.go"
-          if bash scripts/docs_validate.sh "$work/docs"; then
-            echo "::error::validator passed a components path that no longer exists."
+          bash scripts/docs_validate.sh "$work/docs" > "$work/val.txt" 2>&1 || true
+          grep -q 'NOTE \[anchor\]' "$work/val.txt" \
+            || { echo "::error::a moved components path was not even reported."; exit 1; }
+          if bash scripts/docs_validate.sh "$work/docs" --strict; then
+            echo "::error::--strict passed a components path that no longer exists."
             exit 1
           fi
           echo "OK — moved path rejected, placeholders ignored"
@@ -441,8 +449,11 @@ jobs:
             || { echo "::error::archiving a valid document made the tree invalid."; exit 1; }
           sed -i 's/^source_ref: DECISION-000/source_ref: DECISION-888/' \
             "$work/docs/23_backlog/_archive/BACKLOG-000-example.md"
-          if bash scripts/docs_validate.sh "$work/docs"; then
-            echo "::error::a dangling ref inside _archive/ was not reported."
+          bash scripts/docs_validate.sh "$work/docs" > "$work/val.txt" 2>&1 || true
+          grep -q 'NOTE \[ref\].*_archive' "$work/val.txt" \
+            || { echo "::error::a dangling ref inside _archive/ was not reported."; exit 1; }
+          if bash scripts/docs_validate.sh "$work/docs" --strict; then
+            echo "::error::--strict passed a dangling ref inside _archive/."
             exit 1
           fi
           echo "OK — _archive/ is read less, validated the same"
@@ -554,11 +565,13 @@ jobs:
           echo "$out" | grep -q "lib/deleted.ts" \
             || { echo "::error::a genuinely missing anchor stopped being reported."; exit 1; }
           for good in "app/users/\[id\]/page.tsx" "lib/\*.schema.ts" "lib/comment.ts"; do
-            echo "$out" | grep -q "FAIL \[anchor\].*$good" \
+            echo "$out" | grep -q "\[anchor\].*$good" \
               && { echo "::error::anchor check false-positived on $good"; exit 1; }
           done
-          [ "$(echo "$out" | grep -c 'FAIL \[anchor\]')" = "1" ] \
-            || { echo "::error::expected exactly one anchor failure."; exit 1; }
+          [ "$(echo "$out" | grep -c '\[anchor\]')" = "1" ] \
+            || { echo "::error::expected exactly one anchor finding."; exit 1; }
+          echo "$out" | grep -q 'NOTE \[anchor\]' \
+            || { echo "::error::an anchor finding must be a NOTE by default (0.28.0)."; exit 1; }
           echo "OK — one real miss reported, three legal forms accepted"
 
       # docs_close.sh turns a `Closes:` trailer into the two writes that used to be
@@ -681,12 +694,20 @@ jobs:
             grep -q "<code>$s.md</code>" "$work/docs/current.html" \
               || { echo "::error::the card for $s does not name the doc that declares it."; exit 1; }
           done
+          # A cross-cutting doc naming a participant it does not own is a
+          # re-mention, not a clash: same name, no path of its own. It must pass.
+          printf -- '---\ncomponents:\n  - orders\n  - billing\ndata_flow: []\ntech_stack: []\nconstraints: []\namended_by: []\n---\n\n# Flows\n' \
+            > "$work/docs/02_architecture/flows.md"
+          bash scripts/docs_validate.sh "$work/docs" --strict \
+            || { echo "::error::a bare re-mention of a component was rejected as a clash."; exit 1; }
+          rm "$work/docs/02_architecture/flows.md"
+          # Two declarations giving DIFFERENT paths is the real ambiguity, and stays hard.
           sed -i 's/^  - billing /  - orders /' "$work/docs/02_architecture/billing.md"
           if bash scripts/docs_validate.sh "$work/docs"; then
-            echo "::error::a component name declared in two architecture docs was accepted."
+            echo "::error::two components sharing a name with conflicting paths were accepted."
             exit 1
           fi
-          echo "OK — every architecture doc renders, duplicate component names rejected"
+          echo "OK — every architecture doc renders, conflicting component paths rejected, re-mentions allowed"
 
       # 04_api exists because STANDARD 6 demanded a Decision before an API contract
       # changes while 4 said layer 3 needs none. Closing that means the folder has
@@ -720,8 +741,11 @@ jobs:
           grep -q '^# file | service | protocol | ops' "$work/docs/INDEX.md" \
             || { echo "::error::INDEX.md has no 04_api section."; exit 1; }
           sed -i 's/^service: "orders"/service: "ordrs"/' "$work/docs/04_api/example-api.md"
-          if bash scripts/docs_validate.sh "$work/docs"; then
-            echo "::error::service: naming no component was accepted."
+          bash scripts/docs_validate.sh "$work/docs" > "$work/val.txt" 2>&1 || true
+          grep -q 'NOTE \[ref\].*ordrs' "$work/val.txt" \
+            || { echo "::error::service: naming no component was not reported."; exit 1; }
+          if bash scripts/docs_validate.sh "$work/docs" --strict; then
+            echo "::error::--strict accepted a service: naming no component."
             exit 1
           fi
           sed -i 's/^service: "ordrs"/service: "orders"/; s/^protocol: http/protocol: soap/' \
@@ -794,13 +818,18 @@ jobs:
           cp "$work/openapi.json" "$work/openapi.yaml"
           sed -i 's|generated_from: "openapi.json"|generated_from: "openapi.yaml"|' \
             "$work/docs/04_api/example-api.md"
-          bash scripts/docs_render.sh --check-api "$work" 2>&1 | grep -q "YAML" \
+          bash scripts/docs_render.sh --check-api "$work" > "$work/api.txt" 2>&1 || true
+          grep -q "YAML" "$work/api.txt" \
             || { echo "::error::a YAML spec was not refused with an explanation."; exit 1; }
           # A moved artifact is an anchor problem, and [anchor] must own it.
           sed -i 's|generated_from: "openapi.yaml"|generated_from: "api/gone.json"|' \
             "$work/docs/04_api/example-api.md"
-          bash scripts/docs_validate.sh "$work/docs" 2>&1 | grep -q "FAIL \[anchor\].*api/gone.json" \
+          bash scripts/docs_validate.sh "$work/docs" > "$work/val.txt" 2>&1 || true
+          grep -q "NOTE \[anchor\].*api/gone.json" "$work/val.txt" \
             || { echo "::error::a missing generated_from artifact was not caught by [anchor]."; exit 1; }
+          bash scripts/docs_validate.sh "$work/docs" --strict > "$work/strict.txt" 2>&1 || true
+          grep -q "FAIL \[anchor\].*api/gone.json" "$work/strict.txt" \
+            || { echo "::error::--strict did not fail on a missing generated_from artifact."; exit 1; }
           echo "OK — drift caught both ways, paths normalised, YAML refused"
 
       # --sync is how a repo scaffolded by an older docs-kit picks up a folder a

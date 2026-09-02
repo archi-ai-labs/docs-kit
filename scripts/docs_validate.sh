@@ -3,29 +3,45 @@
 #
 # Read-only. No LLM, no network. Contract: STANDARD.md §7.
 #
-# Usage:  docs_validate.sh [docs_dir]     (default: ./docs)
+# Usage:  docs_validate.sh [--strict] [docs_dir]     (default: ./docs)
 # Exit:   0 = clean · 1 = violations found · 2 = setup error
 # Output: one "FAIL [tag] <file>: <message>" line per violation, then a count.
-#         "NOTE [layout] ..." lines are informational only (never affect exit code).
+#         "NOTE [tag] ..." lines print the same way and never affect the exit code.
 #
-# Checks (tags):
-#   [ref]          every *_ref: resolves to an existing id: under docs/. Keys that must
-#                  be unique and are not are reported here too: a duplicate id:, and a
-#                  component name declared in two 02_architecture/ docs (edges and the
-#                  rendered cards resolve components by name, so a clash is ambiguous)
-#   [backlog]      every Backlog item has a non-empty source_ref:
-#   [frontmatter]  required fields per type, valid enums, id prefix per folder,
-#                  Proposals contain an "Alternatives considered" heading
+# TWO SEVERITIES, AND THE LINE BETWEEN THEM IS NAMES vs LINKS (0.28.0).
+#   A wrong NAME silently merges two different things: a duplicate id makes every
+#   reference to it ambiguous, an id in the wrong folder breaks the convention the
+#   folder is read by. Those stay FAIL.
+#   A wrong LINK is one broken edge, visible the moment you follow it and harmless
+#   until you do. Those print as NOTE and pass — `--strict` turns every one of them
+#   back into a FAIL, which is what CI should run.
+#
+# Hard checks — these FAIL (tags):
+#   [ref]          a duplicate id:, and a component name declared twice with
+#                  CONFLICTING backticked paths (edges and the rendered cards
+#                  resolve components by name, so two different paths under one
+#                  name are genuinely ambiguous). Repeating a name with no path of
+#                  its own is a re-mention — a cross-cutting flows doc naming a
+#                  participant it does not own — and is not reported.
+#   [frontmatter]  a missing `id`, an id whose prefix does not match its folder,
+#                  an empty or invalid enum value
 #   [audit-append] 92_audit/ files are append-only vs git HEAD (skipped without git/HEAD)
-#   [amended-by]   every amended_by / rejected entry cites an existing DECISION id
-#   [anchor]       every path a doc names — a `backticked` components path, a fence
-#                  `code:` header — still exists in the repo
 #   [profile]      `owns` in .docs-kit.json holds only tokens the standard defines.
-#                  A typo there silently drops a folder from the scaffold, so unlike
-#                  the profile NOTEs below this one fails: `owns` is a closed enum,
-#                  and a value outside it cannot be "a judgment call I disagree with"
+#                  A typo there silently drops a folder from the scaffold, and
+#                  `owns` is a closed enum, so a value outside it cannot be
+#                  "a judgment call I disagree with"
 #
-# Informational only (never affect the exit code):
+# Soft checks — these print and pass, and FAIL only under --strict:
+#   [ref]          a *_ref: that is empty or resolves to no id: under docs/;
+#                  an 04_api/ `service:` naming no declared component
+#   [backlog]      a Backlog item with no source_ref:
+#   [frontmatter]  a required field other than `id` missing; a Proposal with no
+#                  "Alternatives considered" heading
+#   [amended-by]   an amended_by / rejected entry citing a Decision that is not there
+#   [anchor]       a path a doc names — a `backticked` components path, a fence
+#                  `code:` header, a `generated_from` artifact — that no longer exists
+#
+# Informational always (never affect the exit code, even under --strict):
 #   NOTE [layout]  a folder this repo's profile calls for is missing (STANDARD §9 —
 #                  the profile is `owns` in .docs-kit.json; no declaration = all 17)
 #   NOTE [stale]   a Layer 1 doc carries verified_at: <rev> and files it names have
@@ -44,7 +60,17 @@
 
 set -u
 
-DOCS="${1:-docs}"
+STRICT=0
+DOCS=""
+for arg in "$@"; do
+  case "$arg" in
+    --strict) STRICT=1 ;;
+    -*) echo "FAIL [setup] unknown flag '$arg' (only --strict)"; exit 2 ;;
+    *) [ -z "$DOCS" ] && DOCS="$arg" ;;
+  esac
+done
+[ -z "$DOCS" ] && DOCS="docs"
+
 if [ ! -d "$DOCS" ]; then
   echo "FAIL [setup] $DOCS: directory not found (run /docs-kit:docs-init first)"
   exit 2
@@ -70,7 +96,11 @@ fi
 TMP="$(mktemp -d)" || exit 2
 trap 'rm -rf "$TMP"' EXIT
 FAILS="$TMP/fails"
+NOTES="$TMP/notes"
+SOFTS="$TMP/softs"
 : > "$FAILS"
+: > "$NOTES"
+: > "$SOFTS"
 TAB="$(printf '\t')"
 
 fail() { # fail <tag> <file> <message>
@@ -79,8 +109,39 @@ fail() { # fail <tag> <file> <message>
 
 # NOTE lines print immediately and never touch the exit code. Used where
 # "changed" cannot be distinguished from "wrong" without reading the code.
+# Counted in a file, not a variable: several callers sit inside `... | while`
+# pipelines, whose subshell would drop a counter increment on the floor.
 note() { # note <tag> <file> <message>
   printf 'NOTE [%s] %s: %s\n' "$1" "$2" "$3"
+  echo x >> "$NOTES"
+}
+
+# soft <tag> <file> <message> — a finding about a LINK, not about a name.
+#
+# A *_ref resolving to nothing, an amended_by citing a Decision that is not
+# there, a documented path that moved: all still printed, none of them failing
+# the run unless --strict is passed.
+#
+# WHY THE DEFAULT MOVED (0.28.0). Measured on this author's own repos before
+# changing anything. BO-trading's 23_backlog/ is empty, and its README says why:
+# `source_ref` must point at a Decision or an Issue, most of its workstreams had
+# neither, so the work was written into the roadmap plan instead. A check people
+# route around enforces nothing, while a check that prints without blocking is
+# still read. (The 7 failures the old validator produced on that same repo were
+# all false positives from the component check below, which is fixed rather than
+# demoted — they are not evidence for this line.)
+#
+# Names stay hard, and that is the whole line: a duplicate id, an id in the
+# wrong folder, an unknown `owns` token and a rewritten audit line remain FAIL,
+# because those are the facts every link resolves *through*. A wrong link is one
+# broken edge; a wrong name silently merges two different things.
+soft() { # soft <tag> <file> <message>
+  if [ "$STRICT" -eq 1 ]; then
+    fail "$1" "$2" "$3"
+  else
+    note "$1" "$2" "$3"
+    echo x >> "$SOFTS"   # the subset of NOTEs that --strict would have failed on
+  fi
 }
 
 # ---------------------------------------------------------------- helpers ----
@@ -186,9 +247,9 @@ while IFS= read -r f; do
       case "$f" in
         */23_backlog/*) [ "$key" = "source_ref" ] && continue ;;
       esac
-      fail ref "$f" "field '$key' is empty — every *_ref must point to an existing id"
+      soft ref "$f" "field '$key' is empty — every *_ref must point to an existing id"
     elif ! id_exists "$val"; then
-      fail ref "$f" "field '$key' points to '$val' which matches no id: under $DOCS"
+      soft ref "$f" "field '$key' points to '$val' which matches no id: under $DOCS"
     fi
   done < "$TMP/refs"
 done < "$TMP/files"
@@ -203,7 +264,7 @@ for f in "$DOCS"/23_backlog/*.md "$DOCS"/23_backlog/_archive/*.md; do
   fi
   src="$(fm_get "$f" source_ref)"
   if [ -z "$src" ]; then
-    fail backlog "$f" "missing or empty source_ref (Decision for full lane, Issue for fast lane)"
+    soft backlog "$f" "missing or empty source_ref (Decision for full lane, Issue for fast lane)"
   fi
 done
 
@@ -216,7 +277,15 @@ require_fields() { # require_fields <file> <key...>  → 0 if frontmatter presen
     return 1
   fi
   for k in "$@"; do
-    fm_has "$rf_f" "$k" || fail frontmatter "$rf_f" "missing required field '$k'"
+    fm_has "$rf_f" "$k" && continue
+    # `id` is the name everything else resolves through, so its absence stays
+    # hard. Every other missing field leaves a document that is merely thinner
+    # than the contract asks for, and a thin document still resolves.
+    if [ "$k" = "id" ]; then
+      fail frontmatter "$rf_f" "missing required field 'id' — nothing can refer to this document"
+    else
+      soft frontmatter "$rf_f" "missing required field '$k'"
+    fi
   done
   return 0
 }
@@ -263,7 +332,7 @@ for dir in 01_products 02_architecture 03_business-logic 04_api 20_issues 21_pro
           check_id_prefix "$f" PROPOSAL
         fi
         if ! grep -Eiq '^#{1,6}[[:space:]]+.*alternatives considered' "$f"; then
-          fail frontmatter "$f" "missing 'Alternatives considered' heading (2-3 options with trade-offs required)"
+          soft frontmatter "$f" "missing 'Alternatives considered' heading (2-3 options with trade-offs required)"
         fi
         ;;
       22_decisions)
@@ -318,12 +387,12 @@ for amdir in 02_architecture 03_business-logic 04_api; do
         [ -z "$entry" ] && continue
         refs="$(printf '%s' "$entry" | grep -oE 'DECISION-[0-9]+' || true)"
         if [ -z "$refs" ]; then
-          fail amended-by "$f" "$key entry lacks a DECISION-NNN ref: '$entry'"
+          soft amended-by "$f" "$key entry lacks a DECISION-NNN ref: '$entry'"
           continue
         fi
         while IFS= read -r r; do
           [ -z "$r" ] && continue
-          id_exists "$r" || fail amended-by "$f" "$key cites '$r' which matches no Decision id: under $DOCS"
+          id_exists "$r" || soft amended-by "$f" "$key cites '$r' which matches no Decision id: under $DOCS"
         done <<EOF
 $refs
 EOF
@@ -435,22 +504,58 @@ anchor_prefix() {
 # A component name IS a reference key: data_flow edges name components, and the
 # rendered cards resolve upstream/downstream by name. Once 02_architecture/ holds
 # one doc per service, two docs can declare the same name — and the renderer takes
-# the first, silently. Reported here for the same reason a duplicate id: is.
+# the first, silently.
+#
+# But repeating a name is not the same as disagreeing about it. A cross-cutting
+# document — a flows.md drawing a sequence across services — has to NAME the
+# participants that live in other documents, and the grammar has no way to say
+# "reference, do not declare". Measured on BO-trading: 7 failures, every one a
+# bare `- api` re-listed beside a bare `- api`, nothing in conflict, and the
+# renderer's "takes the first" losing exactly nothing.
+#
+# So the conflict is what fails: two declarations of one name that give DIFFERENT
+# backticked paths. Same path, or a path on only one side, is a re-mention.
+component_sig() { # component_sig <file> → "name<TAB>path" per entry ("" path if none)
+  fm_list "$1" components | awk -F'`' '
+    {
+      s = $0
+      sub(/^[ \t]*-[ \t]*/, "", s)
+      sub(/^"/, "", s); sub(/"$/, "", s)
+      path = (NF >= 3) ? $2 : ""
+      for (i = 1; i <= 4; i++) {
+        sep = (i == 1) ? " — " : (i == 2) ? " – " : (i == 3) ? " -- " : ": "
+        p = index(s, sep)
+        if (p > 0) { s = substr(s, 1, p - 1); break }
+      }
+      gsub(/\[[a-z]+\]/, "", s)
+      gsub(/`[^`]*`/, "", s)
+      gsub(/^[ \t]+|[ \t\r]+$/, "", s)
+      if (s != "") print s "\t" path
+    }'
+}
+
 : > "$TMP/compnames"
+: > "$TMP/compsig"
 for f in "$DOCS"/02_architecture/*.md; do
   [ -f "$f" ] || continue
   case "$(basename "$f")" in README.md) continue ;; esac
   component_names "$f" | while IFS= read -r n; do
     [ -n "$n" ] && printf '%s\t%s\n' "$n" "$f" >> "$TMP/compnames"
   done
+  component_sig "$f" | while IFS="$TAB" read -r n path; do
+    [ -n "$n" ] && printf '%s\t%s\t%s\n' "$n" "$path" "$f" >> "$TMP/compsig"
+  done
 done
-if [ -s "$TMP/compnames" ]; then
-  cut -f1 "$TMP/compnames" | LC_ALL=C sort | uniq -d > "$TMP/compdups"
+if [ -s "$TMP/compsig" ]; then
+  # Only names carrying two or more DISTINCT non-empty paths are conflicts.
+  awk -F"$TAB" '$2 != "" { key = $1 SUBSEP $2; if (!(key in seen)) { seen[key] = 1; n[$1]++ } }
+                END { for (k in n) if (n[k] > 1) print k }' "$TMP/compsig" \
+    | LC_ALL=C sort > "$TMP/compdups"
   while IFS= read -r dup; do
     [ -z "$dup" ] && continue
-    where="$(awk -F"$TAB" -v d="$dup" '$1==d { print $2 }' "$TMP/compnames" | tr '\n' ' ')"
-    first="$(awk -F"$TAB" -v d="$dup" '$1==d { print $2; exit }' "$TMP/compnames")"
-    fail ref "$first" "component '$dup' is declared in more than one architecture doc: $where"
+    where="$(awk -F"$TAB" -v d="$dup" '$1==d && $2!="" { print $3 " (" $2 ")" }' "$TMP/compsig" | tr '\n' ' ')"
+    first="$(awk -F"$TAB" -v d="$dup" '$1==d { print $3; exit }' "$TMP/compsig")"
+    fail ref "$first" "component '$dup' is declared with conflicting paths: $where"
   done < "$TMP/compdups"
 fi
 
@@ -468,7 +573,7 @@ if [ -s "$TMP/compnames" ] && [ -d "$DOCS/04_api" ]; then
     svc="$(fm_get "$f" service)"
     [ -z "$svc" ] && continue      # emptiness is check 3's finding, not this one
     cut -f1 "$TMP/compnames" | grep -Fxq "$svc" || \
-      fail ref "$f" "service '$svc' matches no component declared in $DOCS/02_architecture/"
+      soft ref "$f" "service '$svc' matches no component declared in $DOCS/02_architecture/"
   done
 fi
 
@@ -493,7 +598,7 @@ if [ -n "$ROOT" ]; then
         [ -z "$p" ] && continue
         case "$p" in *"<"*|*">"*) continue ;; esac   # template placeholder
         anchor_exists "$ROOT" "$p" || \
-          fail anchor "$f" "names '$p', which does not exist in the repo (a moved or deleted path makes this doc unverifiable)"
+          soft anchor "$f" "names '$p', which does not exist in the repo (a moved or deleted path makes this doc unverifiable)"
       done < "$TMP/anchors"
 
       # verified_at: <rev> — warn when the code under those anchors has moved on.
@@ -637,7 +742,7 @@ else
   LAYOUT_WHY="docs_profile.sh not found — held to all 17"
 fi
 for dir in $LAYOUT_WANT; do
-  [ -d "$DOCS/$dir" ] || echo "NOTE [layout] $DOCS/$dir: folder missing — this repo's profile calls for it ($LAYOUT_WHY)"
+  [ -d "$DOCS/$dir" ] || note layout "$DOCS/$dir" "folder missing — this repo's profile calls for it ($LAYOUT_WHY)"
 done
 
 # -------------------------------------------------------------------- report -
@@ -648,5 +753,16 @@ if [ -s "$FAILS" ]; then
   echo "docs-validate: $(wc -l < "$FAILS" | tr -d ' ') violation(s) across $SCANNED markdown file(s) in $DOCS"
   exit 1
 fi
-echo "docs-validate: OK — $SCANNED markdown file(s) in $DOCS pass all checks (ref, backlog, frontmatter, audit-append, amended-by, anchor, profile)"
+NOTED="$(wc -l < "$NOTES" | tr -d ' ')"
+SOFTED="$(wc -l < "$SOFTS" | tr -d ' ')"
+if [ "$SOFTED" -gt 0 ]; then
+  # No failures, so this run passes — but "pass all checks" would read as
+  # "nothing was found", and the NOTE lines above found something.
+  echo "docs-validate: OK — $SCANNED markdown file(s) in $DOCS, no failures · $NOTED note(s) above, $SOFTED of them fail under --strict"
+elif [ "$NOTED" -gt 0 ]; then
+  # Layout/profile/stale notes only: nothing here fails in any mode.
+  echo "docs-validate: OK — $SCANNED markdown file(s) in $DOCS pass all checks · $NOTED informational note(s) above"
+else
+  echo "docs-validate: OK — $SCANNED markdown file(s) in $DOCS pass all checks (ref, backlog, frontmatter, audit-append, amended-by, anchor, profile)"
+fi
 exit 0

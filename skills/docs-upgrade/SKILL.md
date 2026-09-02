@@ -78,10 +78,14 @@ may now have findings. **That is the point, not a regression — say so.** Group
   `99_feedback/` is the other one worth a sentence: it is the first folder under
   `docs/` that is not about the product, and it is where a problem with the kit gets
   written down instead of said once in a session that then ends (STANDARD §12).
-- **`FAIL [anchor]`** — paths a doc names that no longer exist. These were never
+- **`NOTE [anchor]`** — paths a doc names that no longer exist. These were never
   checked before this version; they are pre-existing drift being surfaced, not damage
   the upgrade did. Say that plainly or it reads as breakage.
-- **`NOTE [stale]` / `NOTE [profile]`** — informational, never affect the exit code.
+- **The other `NOTE` lines** — since 0.28.0 the validator fails on wrong *names* and
+  only notes wrong *links* (STANDARD §7), so an upgraded repo may exit 0 while
+  printing a dozen `NOTE [ref]` lines. Group them, do not bury them, and do not
+  present them as failures: they are real findings the exit code deliberately
+  ignores. `NOTE [stale]` and `NOTE [profile]` stay informational as before.
 - **`FAIL [profile]`** — a token in `owns` that the standard does not define. It is
   a typo, and it costs the repo a folder: `"endpoint"` yields no `04_api/`. Say
   which token and what the valid five are; the fix is one character in
@@ -95,7 +99,7 @@ belongs elsewhere:
 
 | Finding | Where it gets fixed |
 |---|---|
-| `FAIL [anchor]` on a moved path | `/docs-kit:docs-sync` (it is a layer 1 edit → Decision workflow) |
+| `NOTE [anchor]` on a moved path | `/docs-kit:docs-sync` (it is a layer 1 edit → Decision workflow) |
 | Layer 1 docs with no `verified_at` | `/docs-kit:docs-sync`, once the code behind them has been read |
 | Terminal Backlog/Issues still in the hot folders | `/docs-kit:docs-sync` Step 6 archives them |
 | `NOTE [profile]` — `owns` no longer describes this repo | the user: `owns` in `.docs-kit.json` is a declared fact, and changing what a repo owns is a layer 1 change, so it goes through a Decision. Once it changes, run this skill again to get the folders it now justifies |

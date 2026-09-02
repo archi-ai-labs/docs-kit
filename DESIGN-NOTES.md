@@ -47,7 +47,7 @@ whether a sentence about a component is still true.
 
 ---
 
-## 2. Limitations that survive 0.23.0
+## 2. Limitations that survive 0.28.0
 
 Recorded so they are chosen rather than discovered.
 
@@ -99,6 +99,15 @@ Recorded so they are chosen rather than discovered.
    system, splitting per service means the whole is never visible in one picture. The
    requirement "visual and complete" is therefore met at the service level and not at the
    system level. A cross-repo aggregate view would fix it and does not exist.
+
+9. **A finding that only prints depends on someone reading it.** 0.28.0 demoted every link
+   check to `NOTE`, on evidence that a blocking link rule gets routed around rather than
+   satisfied: one repo's `23_backlog/` is empty, and its README says why — `source_ref`
+   has to resolve to a Decision or an Issue, most of its workstreams have neither, so the
+   work went into the roadmap document instead. That shows the old severity did not work.
+   It does not show the new one does — an unread `NOTE` and an unenforced rule leave
+   identical docs behind, and the kit measures neither. `--strict` moves the choice to each
+   repo, and a repo that never makes it has chosen the default.
 
 ---
 

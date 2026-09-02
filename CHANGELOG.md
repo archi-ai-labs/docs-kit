@@ -5,6 +5,76 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
+## [0.28.0] — 2026-09-02
+
+### Changed — a wrong name fails, a wrong link warns
+
+The validator had one severity, so a dangling `*_ref:` stopped a run exactly as hard
+as a duplicated `id:`. Those two are not the same defect and were never worth the same
+reaction, and treating them alike made the strictest rules the ones people worked
+around.
+
+`docs_validate.sh` now reports at two levels, and the line between them is **what a
+wrong one costs to notice**:
+
+- **A wrong name silently merges two different things.** A duplicate `id:` makes every
+  reference to it ambiguous and none of them look wrong. A missing `id:` leaves a
+  document nothing can point at; an `id:` prefix that disagrees with its folder breaks
+  the convention the folder is read by. Nothing downstream recovers from these, so they
+  still `FAIL`.
+- **A wrong link is one broken edge.** It is visible to the first person who follows it,
+  harmless until then, and the document around it still reads correctly. These print as
+  `NOTE` and the run passes: empty and dangling refs, a Backlog item with no
+  `source_ref`, a required field other than `id`, a Proposal with no "Alternatives
+  considered", an `amended_by` citing a Decision that does not exist, a `service:` that
+  joins to nothing, and an anchor whose path has moved.
+
+`--strict` turns every soft finding back into a `FAIL`. That is the mode for CI, and
+the default is the mode for working. Nothing was deleted: every check that ran before
+still runs, and every finding is still printed.
+
+**The evidence, and what it does not show.** Two things were measured, and they argue
+differently. Every failure the old validator produced across two real repos — 7 of 7 —
+was a false positive from the duplicate-component check, fixed below rather than
+demoted. Separately, one of those repos has an empty `23_backlog/` whose README states
+the reason outright: `source_ref` must resolve to a Decision or an Issue, most of its
+workstreams have neither, so the work was written into the roadmap plan instead. That
+is a blocking rule being routed around, which is the case for demoting it. It is not
+evidence that a `NOTE` gets acted on, and DESIGN-NOTES §2.9 records that gap rather
+than assuming it away.
+
+### Fixed — a component named twice is not a component declared twice
+
+The duplicate-component check keyed on the name alone, so `flows.md` re-listing the
+seven components `architecture.md` declares produced seven `FAIL [ref]` lines. Naming
+a component in a cross-cutting flow document is not optional — that is what a flow
+document is — and the check was calling the standard's own layout a violation.
+
+It now keys on **name plus backticked path**, and fires only when one name carries two
+different non-empty paths. That is the case that is genuinely ambiguous, because edges
+and figure nodes resolve components by name. A re-mention with no path of its own is
+silent. This is a hard `FAIL` in both modes; the fix narrowed what it catches, not how
+loudly it complains.
+
+After the change, both measured repos pass — including under `--strict`.
+
+### Changed — the generated page stops saying "clean" over findings it can see
+
+`index.html`'s badge read the validator's exit code alone, which after the change
+above would have printed **docs-check clean** over a document whose refs all resolve
+to nothing. A page nobody wrote is believed precisely because nobody wrote it, so the
+badge now counts both: failures keep the live orange dot, a run with notes and no
+failures gets a static graphite dot and the count, and green is reserved for a run
+that printed nothing at all.
+
+### Documentation
+
+STANDARD §7 now carries two tables instead of one, plus the names-vs-links rationale;
+`docs-check` explains soft findings instead of listing only failures; `docs-sync` and
+`docs-upgrade` say that a `NOTE [anchor]` still needs reading even when the exit code
+is 0; the per-repo digest gains §8 with the same rule in Vietnamese. DESIGN-NOTES §2 is
+re-reviewed as of this version and gains the limitation above.
+
 ## [0.27.2] — 2026-09-01
 
 ### Fixed — the 0.27.1 workflow carried the same check twice

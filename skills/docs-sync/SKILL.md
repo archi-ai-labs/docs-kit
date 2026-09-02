@@ -149,8 +149,10 @@ bash "$PLUGIN_ROOT/scripts/docs_validate.sh" docs
 
 Two kinds of line tell you where to look, deterministically and for free:
 
-- `FAIL [anchor] <file>: names '<path>', which does not exist` — a documented path
-  moved or was deleted. This is certain, not a guess.
+- `NOTE [anchor] <file>: names '<path>', which does not exist` — a documented path
+  moved or was deleted. This is certain, not a guess. It prints as a `NOTE` because a
+  moved path is a broken link rather than a wrong name (STANDARD §7), so the run can
+  still exit 0 — read the lines, not the exit code.
 - `NOTE [stale] <file>: verified_at <rev> — N of the paths this doc names changed`
   — the code under this document has moved since anyone last read it.
 
@@ -245,8 +247,9 @@ itself changed:
 bash "$PLUGIN_ROOT/scripts/docs_validate.sh" docs
 ```
 
-Fix only violations **introduced by this sync**; pre-existing ones belong to the
-report.
+Fix only findings **introduced by this sync**; pre-existing ones belong to the
+report. `NOTE` lines count here exactly like `FAIL` lines: a broken `*_ref:` this sync
+wrote is this sync's to fix, whether or not it changed the exit code.
 
 Then regenerate the read models so they reflect the reconciled state:
 

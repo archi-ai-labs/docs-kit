@@ -339,6 +339,7 @@ the check fails. A gate that has only ever been seen passing is not a gate.
 work="$(mktemp -d)"; git -C "$work" init -q
 bash scripts/docs_scaffold.sh "$work"
 bash scripts/docs_validate.sh "$work/docs"     # arg is the DOCS dir, not the repo root
+bash scripts/docs_validate.sh --strict "$work/docs"   # CI mode: link findings fail too
 
 # render, reproducibly
 DOCS_KIT_NOW=2026-07-31T09:30:00 python3 scripts/docs_render.py "$work"
@@ -359,9 +360,16 @@ bash scripts/docs_feedback.sh show FEEDBACK-001 "$work"
 bash design/make-samples.sh && git diff --stat -- design/
 ```
 
-Mutating a ref, an enum, an audit line, an `amended_by` entry, or a path named in
-`components` must turn the validator's `OK` into `FAIL` lines — a validator that
-only ever passes is not a test.
+Mutating an enum, an audit line, or a duplicated `id:` must turn the validator's `OK`
+into `FAIL` lines, and mutating a ref, an `amended_by` entry, or a path named in
+`components` must produce `NOTE` lines that become `FAIL` under `--strict`. A
+validator that only ever passes is not a test.
+
+That split is the validator's contract since 0.28.0: **a wrong name fails, a wrong
+link warns** (STANDARD §7). A duplicate id makes every reference to it ambiguous and
+none of them look wrong, so nothing downstream can recover; a dangling ref is one
+broken edge, visible to the first person who follows it. `--strict` restores the old
+behaviour for CI.
 
 </details>
 

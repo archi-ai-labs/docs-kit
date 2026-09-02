@@ -3827,11 +3827,15 @@ def build_index(ctx, docs, data, audit, latest_rev, check_result):
 
     meta = [tag(ctx["ref"]), tag("generated " + ctx["stamp"])]
     if check_result is not None:
-        if check_result == 0:
-            meta.append('<span class="status">%sdocs-check clean</span>' % dot_html("live"))
-        else:
+        fails, notes = check_result
+        if fails:
             meta.append('<span class="status live">%sdocs-check · %d error%s</span>'
-                        % (dot_html("progress"), check_result, "" if check_result == 1 else "s"))
+                        % (dot_html("progress"), fails, "" if fails == 1 else "s"))
+        elif notes:
+            meta.append('<span class="status">%sdocs-check · %d note%s</span>'
+                        % (dot_html("open"), notes, "" if notes == 1 else "s"))
+        else:
+            meta.append('<span class="status">%sdocs-check clean</span>' % dot_html("live"))
     if counts["in-progress"]:
         meta.append('<span class="status live">%s%d in flight</span>'
                     % (dot_html("progress"), counts["in-progress"]))
@@ -3949,17 +3953,28 @@ def load_audit(docs, today):
 
 
 def run_validator(script_dir, root):
+    """Returns (failures, notes), or None when the validator cannot be run.
+
+    Both numbers, because since 0.28.0 the exit code no longer carries all of the
+    answer: a link finding prints and passes. Reporting only the exit code would
+    print "docs-check clean" over a dozen refs that resolve to nothing, which is
+    the one thing a generated page must never do — a reader believes it precisely
+    because nobody wrote it.
+    """
     validator = script_dir / "docs_validate.sh"
     if not validator.is_file():
         return None
     try:
         r = subprocess.run(["bash", str(validator), str(root / "docs")], capture_output=True,
                            text=True, timeout=60)
-        if r.returncode == 0:
-            return 0
-        return sum(1 for ln in (r.stdout + r.stderr).split("\n") if ln.startswith("FAIL ")) or 1
     except Exception:
         return None
+    lines = (r.stdout + r.stderr).split("\n")
+    fails = sum(1 for ln in lines if ln.startswith("FAIL "))
+    notes = sum(1 for ln in lines if ln.startswith("NOTE "))
+    if r.returncode != 0 and not fails:
+        fails = 1  # exit 2 (no docs/, bad flag) prints no FAIL line and is still a problem
+    return (fails, notes)
 
 
 # ---------------------------------------------------------------- main

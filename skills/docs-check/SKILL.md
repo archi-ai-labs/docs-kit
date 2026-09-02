@@ -21,8 +21,18 @@ containing `.claude-plugin/plugin.json`), then:
 bash "$PLUGIN_ROOT/scripts/docs_validate.sh" docs
 ```
 
+Run it **without `--strict`**. That flag exists for CI, where a broken link should
+stop a merge; here the user is asking what state their docs are in, and the default
+mode answers that without pretending every finding is equally urgent.
+
 Exit codes: `0` clean · `1` violations (one `FAIL [tag] file: message` line
 each) · `2` setup error (usually: no `docs/` — suggest `/docs-kit:docs-init`).
+
+The script reports at two severities, and the line between them is **names vs links**
+(STANDARD §7). `FAIL` means a name is wrong, which silently merges two different
+things and cannot be recovered from downstream. `NOTE` means a link is wrong, which
+is one broken edge, visible the moment anyone follows it, and harmless until then.
+Both are worth relaying. Only `FAIL` is worth stopping for.
 
 Then check that the agent read model is current:
 
@@ -54,7 +64,19 @@ nothing, fix nothing.
 ## Step 2 — Report
 
 **Clean run:** say so in one or two sentences, quoting the script's OK line
-(file count). Relay `NOTE` lines as informational — they never affect the exit code:
+(file count). A run with `NOTE` lines and no `FAIL` is still a clean run — say that
+plainly rather than presenting the notes as failures the user got away with.
+
+Relay every `NOTE` line. They never affect the exit code, and they come in two
+families. The **soft findings** — `NOTE [ref]`, `NOTE [backlog]`, `NOTE [anchor]`,
+`NOTE [amended-by]`, and `NOTE [frontmatter]` for any field other than `id` — are the
+same checks §7 lists as soft: a link that resolves to nothing, a required field left
+out, a path that has moved. Explain each one the way the FAIL list below does, and say
+what it costs: a reader who follows that edge lands nowhere. Then leave the decision
+with the user. These are worth fixing when someone is already in the file, not worth
+a round trip of their own.
+
+The rest are **informational about the repo**, not about a document:
 - `NOTE [layout]` — a folder this repo's profile calls for is missing. Which folders
   those are comes from `owns` in `.docs-kit.json` (STANDARD §9.1); a repo that
   declares nothing is held to all 17. A folder *outside* the profile is never
@@ -71,25 +93,26 @@ Remind the user the script checks form, not content quality.
 **Violations:** for each FAIL line, produce:
 1. The raw line (so the user can grep for it).
 2. What it means in plain language — the tag explains the rule family:
-   - `[ref]` — a `*_ref:` points to an id that doesn't exist (typo, deleted doc,
-     or the referenced doc was never created), or an id is duplicated.
-   - `[backlog]` — a Backlog item lost its traceability (`source_ref` must name
-     the Decision for full lane, the Issue for fast lane).
-   - `[frontmatter]` — required fields/enums/id-prefix broken for that doc type,
-     or a Proposal lacks its "Alternatives considered" section.
+   - `[ref]` — an id is duplicated, so every reference to it is now ambiguous and
+     neither reference looks wrong; or one component name is declared in two
+     architecture docs with **conflicting** backticked paths. A name repeated with no
+     path of its own is a re-mention, which a cross-cutting flows document has to do,
+     and the script does not report it.
+   - `[frontmatter]` — a doc has no `id:`, so nothing can refer to it; or its `id:`
+     prefix does not match its folder; or a `lane`/`status`/`outcome` value is outside
+     its enum.
    - `[audit-append]` — someone edited or deleted existing audit-log lines;
      the log is append-only history.
-   - `[amended-by]` — an `amended_by` or `rejected` entry doesn't cite an existing
-     Decision — exactly the "only Decisions amend Architecture" rule.
-   - `[anchor]` — a layer 1 doc names a path that no longer exists (a component's
-     backticked `path/in/repo`, or a figure fence's `code:` header). The doc cannot
-     be verified against anything until the path is corrected or the entry removed.
-     Correcting a path is a layer 1 edit, so it goes through the Decision workflow
-     like any other — the check tells you *that* it is wrong, never what it should say.
+   - `[profile]` — a token in `owns` the standard does not define. A typo there
+     silently drops a whole folder from the scaffold.
 3. A concrete suggested fix (which file, which field, what value).
 4. Who should do it: mechanical fixes → offer to run `/docs-kit:docs-sync`;
-   judgment calls (e.g. which Decision an amendment belongs to, whether audit
-   history was rewritten intentionally) → the user.
+   judgment calls (e.g. whether two docs describing one component name should merge,
+   whether audit history was rewritten intentionally) → the user.
+
+Correcting a documented path is a layer 1 edit, so it goes through the Decision
+workflow like any other — every check here tells you *that* something is wrong,
+never what it should say.
 
 **Stale read model (`--check` exit 1):** report it separately from the validator's
 findings — it is not a violation of the docs, it means a generated read model has

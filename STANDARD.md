@@ -467,21 +467,53 @@ cheaper path, not a required one.
 ## 7. Validator contract (`scripts/docs_validate.sh`)
 
 Deterministic, read-only, no LLM, no network. Usage:
-`docs_validate.sh [docs_dir]` (default `./docs`).
+`docs_validate.sh [--strict] [docs_dir]` (default `./docs`).
 
-Checks:
+### Names fail, links warn
+
+Since 0.28.0 the validator has two severities, and the line between them is not
+importance — it is **what a wrong one costs to notice**.
+
+- **A wrong name silently merges two different things.** A duplicate `id:` makes
+  every reference to it ambiguous, and neither reference looks wrong. An id whose
+  prefix does not match its folder breaks the convention the folder is read by.
+  Nothing downstream can recover from these, so they **FAIL**.
+- **A wrong link is one broken edge.** It is visible the moment anyone follows it
+  and harmless until then, and the document it sits in is still perfectly readable.
+  These **print as `NOTE` and pass**.
+
+`--strict` turns every soft finding back into a `FAIL`. That is the mode for CI;
+the default is the mode for working.
+
+**Why the default moved.** Two measurements on real repos, and they say different
+things. Every failure the old validator produced across both — 7 of 7 — was a false
+positive from the one check that could not tell a re-mention from a conflict; that
+check is fixed above, not demoted. Separately, the same repo's `23_backlog/` is empty,
+and its README states the reason: a Backlog item's `source_ref` must resolve to a
+Decision or an Issue, most of its workstreams have neither, so the work was written
+into the roadmap instead. A rule people route around enforces nothing, while a rule
+that prints without blocking is still read.
+
+### Hard checks — these fail
 
 | Tag | Check |
 |---|---|
-| `[ref]` | Every `*_ref:` value resolves to an existing `id:` under docs/. Keys that must be unique and are not — a duplicate `id:`, a component name declared in two architecture docs — are reported here too. |
-| `[backlog]` | Every Backlog item has a non-empty `source_ref:`. |
-| `[frontmatter]` | Required fields per type (§4) are present; `lane`/`status`/`outcome` enums are valid; `id:` prefixes match their folder; Proposals contain an "Alternatives considered" heading. |
+| `[ref]` | A duplicate `id:`. A component name declared in two architecture docs **with conflicting backticked paths** — two different paths under one name are genuinely ambiguous, since edges and cards resolve components by name. Repeating a name with no path of its own is a *re-mention*, which a cross-cutting flows document has to do, and is not reported. |
+| `[frontmatter]` | A missing `id:`; an `id:` prefix that does not match its folder; an empty or invalid `lane`/`status`/`outcome` enum. |
 | `[audit-append]` | `92_audit/` files are append-only vs git HEAD (no deleted or rewritten lines). Skipped when git or HEAD is unavailable. |
-| `[amended-by]` | Every `amended_by` and `rejected` entry in Architecture and Business logic contains a `DECISION-NNN` token that resolves to an existing Decision. |
-| `[anchor]` | Every path a layer 1 document names still exists: the backticked `path/in/repo` of each `components` entry, and the `code:` header of each figure fence. |
 | `[profile]` | Every token in `.docs-kit.json`'s `owns` is one the standard defines (§9.1). A value outside the enum is a typo, and a typo there silently drops a folder from the scaffold. |
 
-Informational lines, which never affect the exit code:
+### Soft checks — these print, pass, and fail only under `--strict`
+
+| Tag | Check |
+|---|---|
+| `[ref]` | A `*_ref:` that is empty or resolves to no `id:` under docs/. An `04_api/` `service:` naming no declared component. |
+| `[backlog]` | A Backlog item with no `source_ref:`. |
+| `[frontmatter]` | A required field other than `id` missing (§4); a Proposal with no "Alternatives considered" heading. |
+| `[amended-by]` | An `amended_by` or `rejected` entry citing a `DECISION-NNN` that resolves to nothing. |
+| `[anchor]` | A path a layer 1 document names that no longer exists: a `components` entry's backticked `path/in/repo`, a figure fence's `code:` header, an `04_api/` `generated_from` artifact. |
+
+Informational lines, which never affect the exit code in either mode:
 
 | Tag | Meaning |
 |---|---|
@@ -489,7 +521,9 @@ Informational lines, which never affect the exit code:
 | `NOTE [profile]` | `.docs-kit.json` declares `owns`, and the repo shows a surface it does not account for — see §9.2. |
 | `NOTE [stale]` | A layer 1 document carries `verified_at: <rev>` and some of the paths it names have changed since that rev — or the rev is not a commit in this repo. |
 
-Output: one line per violation — `FAIL [tag] <file>: <message>` — then a count.
+Output: one line per finding — `FAIL [tag] <file>: <message>` or
+`NOTE [tag] <file>: <message>` — then a summary. A run with notes and no failures
+says so and gives their count, rather than reporting that everything passed.
 Exit codes: `0` clean, `1` violations found, `2` setup error (e.g. docs/ missing).
 
 `_archive/` subfolders are validated exactly like the folder above them (§2).
@@ -501,7 +535,8 @@ component names its `path/in/repo`, every figure fence takes a `code:` header. U
 these checks existed, nothing used them.
 
 - **A path that no longer exists is not a matter of opinion.** The document cannot be
-  verified against anything, so it is a `FAIL`.
+  verified against anything, so it is reported every run — as a `NOTE` by default and
+  a `FAIL` under `--strict`, because a moved path is a broken link, not a wrong name.
 - **A path that merely changed is not proof the document is wrong.** So `verified_at`
   produces a `NOTE`, on the same reasoning as §8's warn-only hooks: blocking on a
   false positive teaches people to switch the check off.
@@ -1047,7 +1082,10 @@ Rules:
   a white packet gliding along solid edges (data direction), marching dashes on
   dashed strokes (async / fast-lane / amendment), and an LED pulse on live dots
   (orange = in-progress, green = docs-check clean). No entrance or hover
-  animations; `prefers-reduced-motion` disables all of it.
+  animations; `prefers-reduced-motion` disables all of it. The green LED means the
+  validator printed **nothing at all**: a run with notes but no failures gets a static
+  graphite dot and the count, because a generated page that reads *clean* over a dozen
+  refs resolving to nothing is worse than one that says nothing (§7).
 - The validator ignores `docs/*.html` (it only reads `.md`); check 4's
   append-only rule is unaffected. `docs/INDEX.md` *is* scanned — it carries no
   frontmatter, so it defines no id and holds no ref, and it is inert to every
