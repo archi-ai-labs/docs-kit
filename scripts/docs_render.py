@@ -164,7 +164,7 @@ def clean_value(v):
 def parse_frontmatter(text):
     """Minimal YAML subset: scalars, inline [a, b] lists, block '- item' lists."""
     lines = text.split("\n")
-    if not lines or lines[0].strip() != "---":
+    if lines[0].strip() != "---":
         return {}, text
     fm, body_start, key = {}, None, None
     for i, raw in enumerate(lines[1:], start=1):
@@ -182,7 +182,7 @@ def parse_frontmatter(text):
         key, val = m.group(1), strip_comment(m.group(2)).strip()
         if val.startswith("[") and val.endswith("]"):
             inner = val[1:-1].strip()
-            fm[key] = [clean_value(x) for x in inner.split(",") if clean_value(x)] if inner else []
+            fm[key] = [v for v in (clean_value(x) for x in inner.split(",")) if v] if inner else []
         elif val == "":
             fm[key] = []  # may become a block list; empty scalar treated as empty
         else:
@@ -417,11 +417,11 @@ L2_STATIONS = [("Issue", "issue", "changes.html#issues", 140),
                ("Backlog", "list", "changes.html#backlog", 760)]
 
 
-def station(cx, cy, color, icon, name, href=None, label_dy=-24):
+def station(cx, cy, color, icon, name, href=None):
     """Metro-style station: filled colored circle, white icon inside, mono label."""
     core = ('<circle cx="%d" cy="%d" r="13" fill="%s"/>' % (cx, cy, color)
             + use_icon(icon, cx - 7, cy - 7, "#ffffff", 14)
-            + svg_text(cx, cy + label_dy, name, 12, "700", INK, anchor="middle"))
+            + svg_text(cx, cy - 24, name, 12, "700", INK, anchor="middle"))
     if href:
         return '<a href="%s">%s</a>' % (href, core)
     return core
@@ -454,7 +454,7 @@ def svg_pipeline(counts):
     names = ["Issue", "Proposal", "Decision", "Backlog"]
     icons = ["issue", "doc", "seal", "list"]
     s = ['<svg viewBox="0 0 880 196" width="100%" role="img" aria-label="change pipeline with '
-         'fast-lane bypass">', "<defs>", symbol_defs(["issue", "doc", "seal", "list"]), "</defs>",
+         'fast-lane bypass">', "<defs>", symbol_defs(icons), "</defs>",
          '<line x1="120" y1="78" x2="760" y2="78" stroke="%s" stroke-width="2.5"/>' % L2,
          '<path d="M120 91 C 195 152, 685 152, 760 91" fill="none" stroke="%s" stroke-width="2" stroke-dasharray="6 5" class="dashrun"/>' % FAST]
     for j in range(4):
@@ -1015,7 +1015,8 @@ def svg_dag(edges, comps, fig_no="1", shapes=None, aria="data flow graph",
                 src_y[e] = yy
         # Arrival. Same rule at the other end: the upper source takes the upper
         # slot. A converged bucket has one arrival point, so its members share it.
-        for key in sorted(buckets, key=lambda k: (k[0], k[1], -1 if k[2] is None else k[2])):
+        bucket_order = sorted(buckets, key=lambda k: (k[0], k[1], -1 if k[2] is None else k[2]))
+        for key in bucket_order:
             _gap, b, drow = key
             members = sorted(buckets[key], key=lambda e: (src_y[e], e))
             ys = ([anchor_y(b, drow)] * len(members) if converge[key]
@@ -1024,7 +1025,7 @@ def svg_dag(edges, comps, fig_no="1", shapes=None, aria="data flow graph",
                 dst_y[e] = yy
 
         bundles = {}
-        for key in sorted(buckets, key=lambda k: (k[0], k[1], -1 if k[2] is None else k[2])):
+        for key in bucket_order:
             gap, b, _drow = key
             members = sorted(buckets[key], key=lambda e: (src_y[e], e))
             for group in ([members] if converge[key] else [[e] for e in members]):
@@ -1111,7 +1112,7 @@ def svg_dag(edges, comps, fig_no="1", shapes=None, aria="data flow graph",
         y2 = by + node_h(b) / 2.0
         color, mid = (FAST, "dag-t") if asyn else (INK, "dag-a")
         dash = ' stroke-dasharray="5 4" class="dashrun"' if asyn else ""
-        if ei in (dashed or ()):   # static dash: marching dashes mean async
+        if ei in static_dash:   # static dash: marching dashes mean async
             dash = ' stroke-dasharray="6 4"'
         if abs(y1 - y2) < 1:
             d = "M%g %g H%g" % (x1, y1, x2)
@@ -1162,7 +1163,7 @@ def svg_dag(edges, comps, fig_no="1", shapes=None, aria="data flow graph",
         tx, ty = bx + node_w(b) / 2.0, by + node_h(b)
         color, mid = (FAST, "dag-t") if asyn else (INK, "dag-a")
         dash = ' stroke-dasharray="5 4" class="dashrun"' if asyn else ""
-        if ei in (dashed or ()):   # static dash: marching dashes mean async
+        if ei in static_dash:   # static dash: marching dashes mean async
             dash = ' stroke-dasharray="6 4"'
         if a == b:  # feeds itself: a retry, or its own queue
             d = "M%g %g C %g %g, %g %g, %g %g" % (sx - 9, sy, sx - 34, ly, sx + 34, ly, sx + 9, sy)
@@ -2127,8 +2128,8 @@ def erd_marker_defs():
 
 def parse_erd(src):
     """An ```erd fence: `table:` opens an entity and every following line is one of
-    its columns. Returns (meta, order, tables, edges, marks) or None when no table
-    parsed.
+    its columns. Returns (meta, order, tables, edges, marks, anchor) or None when
+    no table parsed.
 
     There is no relationship syntax, deliberately. An `fk -> t.c` flag IS the
     relationship, and its cardinality follows from what a foreign key means — many
@@ -2190,7 +2191,7 @@ def parse_erd(src):
             trow = next((j for j, prow in enumerate(tables.get(pt, []))
                          if prow[0] == pc), None)
             anchor[len(edges)] = (ri, trow)
-            edges.append((t, row[4][0], False, ""))
+            edges.append((t, pt, False, ""))
     return meta, order, tables, edges, marks, anchor
 
 
@@ -2361,7 +2362,8 @@ def bare_type(sig):
 def parse_class(src):
     """A ```class fence: `class:` / `interface:` open a type, `extends` and
     `implements` are relation lines inside it, everything else is a member.
-    Returns (meta, order, types, edges, marks) or None when no type parsed.
+    Returns (meta, order, types, edges, marks, dashed, anchor) or None when no
+    type parsed.
 
     A member whose type names another declared type draws an association, for the
     same reason `fk` draws an ERD relationship — one source per fact. Method
@@ -2857,7 +2859,7 @@ def comp_slug(name):
 
 def comp_ref(name):
     """A component chip that jumps to that component's own card."""
-    return '<a class="tag cref" href="#%s">%s</a>' % (comp_slug(name), esc(name))
+    return tag(name, "tag cref", "#" + comp_slug(name))
 
 
 def body_sections(md, names):
@@ -3211,8 +3213,7 @@ def build_current(ctx, docs, data):
                 dot, badge, refs = "", "", ""
                 if live:
                     st = fm_str(backlog_by_id[live[0]], "status")
-                    dot_kind = {"open": "open", "in-progress": "progress", "done": "done"}.get(st, "open")
-                    dot = '<span class="dot%s"></span>' % ("" if dot_kind == "open" else " d-" + dot_kind)
+                    dot = dot_html(BACKLOG_DOTS.get(st, "open"))
                     badge = id_tag(live[0], here)
                 if other_ids:
                     refs = "".join(id_tag(x, here, "tag") for x in other_ids)
@@ -3362,18 +3363,16 @@ def build_current(ctx, docs, data):
                                  "<code>a -&gt; b : label</code>)"))
 
     parts.append('<h3 id="a-stack">Tech stack</h3>')
-    stack = stack_raw
-    if stack:
+    if stack_raw:
         parts.append('<div class="meta-row" style="padding-bottom:0;margin-top:8px">%s</div>'
-                     % "".join(tag(x) for x in stack))
+                     % "".join(tag(x) for x in stack_raw))
     else:
         parts.append(empty_state("NO TECH STACK — chưa liệt kê gì"))
 
     parts.append('<h3 id="a-constraints">Constraints</h3>')
-    constraints = constraints_raw
-    if constraints:
+    if constraints_raw:
         parts.append('<ul class="constraints">%s</ul>'
-                     % "".join("<li>%s</li>" % inline_md(c, here) for c in constraints))
+                     % "".join("<li>%s</li>" % inline_md(c, here) for c in constraints_raw))
     else:
         parts.append(empty_state("NO CONSTRAINTS — chưa ghi ràng buộc nào"))
 
@@ -3656,7 +3655,7 @@ def build_changes(ctx, docs, data, audit):
             col_cls = ("col-h now" if st == "open"
                        else "col-h later" if st == "archived" else "col-h")
             cols.append('<div><div class="%s">%s <span class="n">%d</span></div>%s</div>'
-                        % (col_cls, st.replace("-", " "), len(members), "".join(items)))
+                        % (col_cls, st, len(members), "".join(items)))
         parts.append('<div class="board">%s</div>' % "".join(cols))
 
     # --- proposals
@@ -3696,10 +3695,10 @@ def build_changes(ctx, docs, data, audit):
             stamp = ('<span class="stamp st-%s">%s</span>' % (esc(outcome), esc(outcome))
                      if outcome in ("approved", "rejected") else esc(outcome))
             amendment = fm_str(d, "architecture_amendment") or "none"
-            am_cell = "<span class=\"dim\">—</span>" if amendment in ("none", "") \
+            am_cell = "<span class=\"dim\">—</span>" if amendment == "none" \
                 else inline_md(amendment, here)
             rev = ctx.get("rev_letter", {}).get(fm_str(d, "id"))
-            if rev and amendment not in ("none", ""):
+            if rev and amendment != "none":
                 am_cell = "REV %s — %s" % (rev, am_cell)
             rows.append('<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>'
                         % (id_tag(fm_str(d, "id"), here), stamp, esc(fm_str(d, "decided_by") or "—"),
@@ -3711,13 +3710,13 @@ def build_changes(ctx, docs, data, audit):
 
     # --- traceability
     chains = []
+    arrow = farrow(L2)
     for d in sorted(decisions, key=lambda x: fm_str(x, "id"), reverse=True):
         dec_id = fm_str(d, "id")
         prop_id = fm_str(d, "proposal_ref")
         prop = by_id.get(prop_id)
         issue_id = fm_str(prop, "issue_ref") if prop else ""
         segs = [id_tag(x, here) for x in (issue_id, prop_id, dec_id) if x]
-        arrow = farrow(L2)
         chain = arrow.join(segs)
         bl = backlog_of_source.get(dec_id, [])
         if bl:
@@ -3727,8 +3726,8 @@ def build_changes(ctx, docs, data, audit):
             chain += ('<span class="status%s">%s%s</span>'
                       % (" live" if st == "in-progress" else "",
                          dot_html(BACKLOG_DOTS.get(st, "open")), esc(st)))
-        chains.append('<div class="flow"><span class="flow-label"%s style="color:%s">Full lane</span>%s</div>'
-                      % ("" , L2, chain))
+        chains.append('<div class="flow"><span class="flow-label" style="color:%s">Full lane</span>%s</div>'
+                      % (L2, chain))
     for b in sorted(backlog, key=lambda x: fm_str(x, "id"), reverse=True):
         src = fm_str(b, "source_ref")
         if src.startswith("ISSUE-"):
@@ -3819,7 +3818,6 @@ LAYER3 = [("30_conventions", "Quy ước code, đặt tên, luật review"),
 
 
 def build_index(ctx, docs, data, audit, latest_rev, check_result):
-    here = "index.html"
     products, backlog = data["products"], data["backlog"]
     comps = ctx.get("component_count", 0)
     counts = {s: sum(1 for b in backlog if fm_str(b, "status") == s)
@@ -3939,10 +3937,10 @@ def load_audit(docs, today):
     entries = []
     if log.is_file():
         for line in log.read_text(encoding="utf-8", errors="replace").split("\n"):
-            m = DATE_LINE_RE.match(line.strip())
-            if not m:
+            line = line.strip()
+            if not DATE_LINE_RE.match(line):
                 continue
-            cells = [c.strip() for c in line.strip().split("|")]
+            cells = [c.strip() for c in line.split("|")]
             entries.append({"date": cells[0], "what": cells[1] if len(cells) > 1 else "",
                             "ref": cells[2] if len(cells) > 2 else "",
                             "deviation": cells[3] if len(cells) > 3 else "-"})
@@ -4264,8 +4262,7 @@ def main():
             if m and m.group(2) not in amends:
                 amends.append(m.group(2))
         comp_names.update(parse_components(d["fm"].get("components", [])).keys())
-    if data["architecture"]:
-        ctx["component_count"] = len(comp_names)
+    ctx["component_count"] = len(comp_names)
     ctx["rev_letter"] = {dec: chr(65 + i) for i, dec in enumerate(amends)}
 
     current_html, latest_rev = build_current(ctx, docs, data)

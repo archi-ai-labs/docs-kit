@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# docs-kit Stop hook — end-of-turn scan for undocumented sensitive changes.
+# docs-kit Stop hook — end-of-turn scan for edits to code documents claim to describe.
 #
 # WHY WARN-ONLY (do not "fix" this into a block):
 #   These enforcement rules have not been battle-tested across real projects yet.
@@ -9,10 +9,10 @@
 #   hook must NEVER call an LLM (no `claude -p`).
 #
 # stdin:  Claude Code hook JSON ({session_id, transcript_path, cwd, ...})
-# stdout: hook JSON with a systemMessage reminding the user to run
-#         /docs-kit:docs-sync — only when the session edited files in sensitive
-#         zones (default **/schema/**, **/api/**, **/migrations/**; configurable
-#         via .docs-kit.json) WITHOUT creating or referencing any Issue/Decision.
+# stdout: hook JSON with a systemMessage pointing at /docs-kit:docs-sync when the
+#         session edited a file some document claims in docs/MAP.tsv (§10) and did
+#         not also edit that document; or, when MAP.tsv is missing in a session
+#         that touched code, one line pointing at /docs-kit:docs-render.
 # Silent when the repo has no docs-kit skeleton. Always exits 0.
 
 set -u

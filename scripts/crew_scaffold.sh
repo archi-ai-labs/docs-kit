@@ -107,7 +107,7 @@ for f in "$SRC"/commands/*.md; do
   case ",$SKIP," in
     *",$b,"*) echo "skipped: .claude/commands/$b.md (role declared absent)"; continue ;;
   esac
-  put "$f" "$TGT/.claude/commands/$(basename "$f")"
+  put "$f" "$TGT/.claude/commands/$b.md"
 done
 for f in "$SRC"/docs/*.md; do
   put "$f" "$TGT/.claude/crew/$(basename "$f")"

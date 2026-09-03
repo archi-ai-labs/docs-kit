@@ -92,7 +92,7 @@ dk_owns_unknown() {
   done
 }
 
-# dk_folders <root> — the folders this repo's profile requires, sorted.
+# dk_folders <root> — the folders this repo's profile requires.
 dk_folders() {
   printf '%s\n' $DK_CORE
   if dk_owns_declared "$1"; then
@@ -106,19 +106,11 @@ dk_folders() {
   return 0
 }
 
-# dk_folders_all — all 17, sorted. The union of every profile; nothing may fall
+# dk_folders_all — all 17. The union of every profile; nothing may fall
 # outside it or the template tree ships a folder no repo can ever receive.
 dk_folders_all() {
   printf '%s\n' $DK_CORE
   printf '%s\n' "$DK_CONDITIONAL" | sed 's/:.*//'
-}
-
-# dk_token_for <folder> — the token a conditional folder needs, or "" for core.
-dk_token_for() {
-  printf '%s\n' "$DK_CONDITIONAL" | while IFS=: read -r folder token; do
-    [ "$folder" = "$1" ] && printf '%s\n' "$token"
-  done
-  return 0
 }
 
 # dk_profile_label <root> — one line naming the profile, for a human reading a

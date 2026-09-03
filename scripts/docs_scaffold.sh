@@ -161,7 +161,7 @@ if [ "$SYNC" -eq 1 ]; then
         case " $NEWDIRS " in *" ${rel%%/*} "*) ;; *) continue ;; esac ;;
     esac
     if [ ! -e "$TARGET/$rel" ]; then
-      mkdir -p "$TARGET/$(dirname "$rel")"
+      case "$rel" in */*) mkdir -p "$TARGET/${rel%/*}" ;; esac
       cp "$TEMPLATES/$rel" "$TARGET/$rel" || { echo "SYNC ERROR: copy failed for $rel"; exit 2; }
       echo "  added docs/$rel"
       created=$((created + 1))
@@ -193,7 +193,7 @@ fi
 mkdir -p "$TARGET" || { echo "SCAFFOLD ERROR: cannot create $TARGET"; exit 2; }
 for f in "$TEMPLATES"/*; do
   [ -e "$f" ] || continue
-  base="$(basename "$f")"
+  base="${f##*/}"
   if [ -d "$f" ]; then
     want_folder "$base" || continue
   fi

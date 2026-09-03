@@ -77,12 +77,10 @@ OUT="$(run_gate "$HR" "$TS/stale_draw.jsonl")"
 has "$OUT" "[gate:no-draw]" && ok "gate: stale drawing does not count" \
   || bad "gate: stale drawing counted (got: $OUT)"
 
-# A drawing in this turn satisfies the gate — silent.
 OUT="$(run_gate "$HR" "$TS/draw.jsonl")"
 [ -z "$OUT" ] && ok "gate: drawing satisfies the gate" \
   || bad "gate: drawing case not silent (got: $OUT)"
 
-# A declared fast lane satisfies the gate — silent.
 OUT="$(run_gate "$HR" "$TS/lane.jsonl")"
 [ -z "$OUT" ] && ok "gate: declared lane satisfies the gate" \
   || bad "gate: lane case not silent (got: $OUT)"
@@ -183,7 +181,6 @@ else
   bad "cli: missing-ticket refusal (rc=$RC out: $OUT)"
 fi
 
-# fast-pair refuses a worktree too.
 OUT="$( (cd "$WR" && scripts/crew new 2) 2>&1 )" && RC=0 || RC=$?
 if [ "$RC" -ne 0 ] && has "$OUT" "fast-pair"; then
   ok "cli: refuses a worktree for a fast-pair ticket"
@@ -191,7 +188,6 @@ else
   bad "cli: fast-pair refusal (rc=$RC out: $OUT)"
 fi
 
-# The real ticket gets a tree, on the right branch.
 OUT="$( (cd "$WR" && scripts/crew new 1) 2>&1 )" || { bad "cli: crew new 1 failed: $OUT"; }
 WT="$W/repo-b001"
 if [ -d "$WT" ] && [ "$(git -C "$WT" rev-parse --abbrev-ref HEAD)" = "work/b001" ]; then
@@ -200,8 +196,6 @@ else
   bad "cli: worktree/branch naming"
 fi
 
-# Provisioning: the gitignored payload arrives, the share is a link, the
-# setup command ran, and the cost was logged.
 if [ -f "$WT/harness/h.txt" ] && [ -f "$WT/.env" ]; then
   ok "cli: gitignored payload copied into the tree"
 else
@@ -215,7 +209,6 @@ grep -q "SETUP" "$W/repo-crew/log.tsv" 2>/dev/null \
   && ok "cli: provisioning time logged" \
   || bad "cli: SETUP line missing from log.tsv"
 
-# check 1 red: the main tree holds the wrong branch.
 ( cd "$WR" && git checkout -q -b temp )
 OUT="$( (cd "$WR" && scripts/crew done 1) 2>&1 )" && RC=0 || RC=$?
 if [ "$RC" -ne 0 ] && has "$OUT" "check 1"; then
@@ -225,7 +218,6 @@ else
 fi
 ( cd "$WR" && git checkout -q main && git branch -q -D temp )
 
-# check 2 red: dirty main tree, and the dirty file is NAMED.
 echo dirty >> "$WR/README.md"
 OUT="$( (cd "$WR" && scripts/crew done 1) 2>&1 )" && RC=0 || RC=$?
 if [ "$RC" -ne 0 ] && has "$OUT" "check 2" && has "$OUT" "README.md"; then
@@ -259,7 +251,6 @@ else
   bad "cli: size calibration missing"
 fi
 
-# Locks: acquire → visible in status → second owner refused → release logged.
 OUT="$( (cd "$WR" && scripts/crew lock acquire e2e-harness 7) 2>&1 )" \
   && ok "cli: lock acquired" || bad "cli: lock acquire ($OUT)"
 OUT="$( (cd "$WR" && scripts/crew lock acquire e2e-harness 8) 2>&1 )" && RC=0 || RC=$?
@@ -354,11 +345,9 @@ fi
 # scripts/crew was already present and identical → kept, not clobbered.
 has "$OUT" "review : scripts/crew" && bad "scaffold: flagged an identical file" \
   || ok "scaffold: identical file skipped silently"
-# Re-run is idempotent: nothing new to stamp.
 OUT="$(bash "$KIT/scripts/crew_scaffold.sh" "$WR" 2>&1)"
 has "$OUT" "0 stamped" && ok "scaffold: re-run stamps nothing" \
   || bad "scaffold: re-run not idempotent (got: $OUT)"
-# A locally edited file is never clobbered — the new version lands as .new.
 echo "local note" >> "$WR/.claude/crew/README.md"
 OUT="$(bash "$KIT/scripts/crew_scaffold.sh" "$WR" 2>&1)"
 if has "$OUT" "review : .claude/crew/README.md.new" \
@@ -388,7 +377,6 @@ else
   bad "scaffold: untouched file not updated (got: $OUT)"
 fi
 
-# A file the human edited keeps its hands-off treatment.
 echo "steward wrote a rule here" >> "$WR/.claude/crew/tickets.md"
 echo "and the kit moved again" >> "$KC/templates/crew/docs/tickets.md"
 OUT="$(bash "$KC/scripts/crew_scaffold.sh" "$WR" 2>&1)"

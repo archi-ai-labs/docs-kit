@@ -7,8 +7,7 @@ WHY WARN-ONLY (do not "fix" this into a block):
     which loses ALL enforcement. Warn now; promote to block only after the
     trigger rules have been tuned in practice. Deterministic — never calls an LLM.
 
-Reads the hook JSON on stdin. If tool_input.file_path is under one of those
-directories, emits hook JSON with:
+If tool_input.file_path is under one of those directories, emits hook JSON with:
   - systemMessage        → shown to the user
   - additionalContext    → injected for the agent so it can self-correct
 Silent (no output) otherwise. Always exits 0.

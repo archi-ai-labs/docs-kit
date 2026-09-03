@@ -105,7 +105,6 @@ title_of() {
 # ------------------------------------------------------------------- list ----
 
 if [ "$CMD" = "list" ]; then
-  n=0
   report_files | while IFS= read -r f; do
     [ -n "$f" ] || continue
     printf '%-15s %-7s %-9s %-9s %s\n' \
@@ -167,11 +166,11 @@ fi
 NEXT=1
 while IFS= read -r f; do
   [ -n "$f" ] || continue
-  cur="$(fm "$f" id | sed 's/^FEEDBACK-//')"
+  cur="$(fm "$f" id)"; cur="${cur#FEEDBACK-}"
   case "$cur" in
     ''|*[!0-9]*) continue ;;
   esac
-  cur="$(printf '%d' "$((10#$cur))")"
+  cur=$((10#$cur))
   [ "$cur" -ge "$NEXT" ] && NEXT=$((cur + 1))
 done <<EOF
 $(report_files)

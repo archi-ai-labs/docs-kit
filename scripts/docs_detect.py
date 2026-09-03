@@ -216,7 +216,7 @@ def composer_json(path):
     data = load_json(path)
     req = data.get("require", {})
     req = req if isinstance(req, dict) else {}
-    ver = req.get("php", "") if isinstance(req.get("php"), str) else ""
+    ver = req.get("php") if isinstance(req.get("php"), str) else ""
     return ("php", ver), [k for k in req if k != "php"]
 
 

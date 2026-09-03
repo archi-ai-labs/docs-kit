@@ -105,7 +105,7 @@ def trailers(root):
         parts = rec.split("\x1f")
         if len(parts) < 5:
             continue
-        _full, short, date, subject, body = parts[0], parts[1], parts[2], parts[3], parts[4]
+        short, date, subject, body = parts[1], parts[2], parts[3], parts[4]
         for m in TRAILER_RE.finditer(body):
             for bid in ID_RE.findall(m.group(1)):
                 found.setdefault(bid, {"sha": short, "date": date, "subject": subject})
@@ -249,7 +249,6 @@ def main():
         # A Decision (and the Proposal behind it) is terminal once every Backlog
         # item that cites it is done and audited. Derived from source_ref, never
         # declared — a "chain complete" field would be a second thing to keep true.
-        done_ids = set(recorded)
         decisions = load(docs_root / "22_decisions")
         proposals = load(docs_root / "21_proposals")
         for dec in decisions:
@@ -260,7 +259,7 @@ def main():
                 continue
             items = [d for d in backlog if did in fm_str(d, "source_ref")]
             if not items or not all(fm_str(d, "status") == "done"
-                                    and fm_str(d, "id") in done_ids for d in items):
+                                    and fm_str(d, "id") in recorded for d in items):
                 continue
             movable.append(("DECISION", did, dec))
             pref = fm_str(dec, "proposal_ref")

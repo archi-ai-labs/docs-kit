@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# docs-kit PostToolUse hook (Edit|Write) — warn when docs/02_architecture/ is edited.
+# docs-kit PostToolUse hook (Edit|Write|MultiEdit) — warn when a layer-1 doc is edited.
 #
 # WHY WARN-ONLY (do not "fix" this into a block):
 #   These enforcement rules have not been battle-tested across real projects yet.
@@ -10,7 +10,8 @@
 #
 # stdin:  Claude Code hook JSON ({tool_name, tool_input:{file_path}, ...})
 # stdout: hook JSON with systemMessage (user-facing) + additionalContext (agent-facing)
-#         when the edited path is under docs/02_architecture/; nothing otherwise.
+#         when the edited path is under docs/02_architecture/, docs/03_business-logic/
+#         or docs/04_api/; nothing otherwise.
 # Always exits 0 — a hook failure must never break the user's session.
 
 set -u

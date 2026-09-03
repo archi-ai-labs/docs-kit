@@ -39,7 +39,6 @@ Logic:
 import fnmatch
 import json
 import os
-import re
 import subprocess
 import sys
 
@@ -140,7 +139,7 @@ def main():
         rel = rel.replace(os.sep, "/").lstrip("./")
         if rel.startswith("../"):
             return  # an edit outside this repo is not this repo's business
-        if re.match(r"^docs/", rel):
+        if rel.startswith("docs/"):
             doc_edits.add(rel)
         else:
             code_edits.add(rel)
@@ -188,7 +187,7 @@ def main():
         }))
         return
 
-    # doc → {"files": set, "rev": verified_at, "claims": set}
+    # doc → {"files": set, "rev": verified_at}
     hit = {}
     claimed_files = set()
     for rel in sorted(code_edits):
@@ -196,9 +195,8 @@ def main():
             if not claims(rel, entry_path):
                 continue
             claimed_files.add(rel)
-            slot = hit.setdefault(doc, {"files": set(), "rev": rev, "claims": set()})
+            slot = hit.setdefault(doc, {"files": set(), "rev": rev})
             slot["files"].add(rel)
-            slot["claims"].add(claim)
 
     # A document the session also edited was already being kept current; saying so
     # would be telling the user about work they just did. This replaces the old

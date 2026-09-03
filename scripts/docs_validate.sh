@@ -76,8 +76,8 @@ if [ ! -d "$DOCS" ]; then
   exit 2
 fi
 
-# The repo root is the parent of docs/. Anchor paths are relative to it, and
-# checks 4 and 6 both need it, so it is resolved once here.
+# Anchor paths are relative to the repo root, and checks 4 and 6 both need it,
+# so it is resolved once here.
 ROOT="$(cd "$DOCS/.." 2>/dev/null && pwd)"
 
 # Which folders belong here is one question with one answer, and the scaffold has
@@ -406,31 +406,20 @@ done
 # Every load-bearing fact in layer 1 already carries an anchor into the source:
 # a component names its `path/in/repo`, and every figure fence takes a `code:`
 # header. Nothing used them. A path that no longer exists is not a matter of
-# opinion, so it FAILs; a path that merely *changed* since verified_at is a NOTE,
-# because changed is not the same as wrong.
+# opinion, so it is reported every run — a NOTE by default and a FAIL under
+# --strict, because a moved path is a broken link, not a wrong name; a path that
+# merely *changed* since verified_at is a NOTE in every mode, because changed is
+# not the same as wrong.
 #
 # Placeholder values — anything containing < or > — are the templates' own
 # "<file to read>" markers and are skipped, so a fresh scaffold passes clean.
 
 # component_names <file> → the name of each components: entry, one per line.
+# The name half of component_sig() — parsed once, so the two cannot disagree.
 # Mirrors parse_components() in the renderer: split off the description at the
 # first " — " / " – " / " -- " / ": ", then drop the [kind] tag and the `path`.
 component_names() {
-  fm_list "$1" components | awk '
-    {
-      s = $0
-      sub(/^[ \t]*-[ \t]*/, "", s)
-      sub(/^"/, "", s); sub(/"$/, "", s)
-      for (i = 1; i <= 4; i++) {
-        sep = (i == 1) ? " — " : (i == 2) ? " – " : (i == 3) ? " -- " : ": "
-        p = index(s, sep)
-        if (p > 0) { s = substr(s, 1, p - 1); break }
-      }
-      gsub(/\[[a-z]+\]/, "", s)
-      gsub(/`[^`]*`/, "", s)
-      gsub(/^[ \t]+|[ \t\r]+$/, "", s)
-      if (s != "") print s
-    }'
+  component_sig "$1" | cut -f1
 }
 
 anchor_paths() { # anchor_paths <file> → one repo-relative path per line
@@ -515,6 +504,9 @@ anchor_prefix() {
 #
 # So the conflict is what fails: two declarations of one name that give DIFFERENT
 # backticked paths. Same path, or a path on only one side, is a re-mention.
+# Mirrors parse_components() in the renderer: split off the description at the
+# first " — " / " – " / " -- " / ": ", then drop the [kind] tag and the `path`.
+# component_names() is the name half of this.
 component_sig() { # component_sig <file> → "name<TAB>path" per entry ("" path if none)
   fm_list "$1" components | awk -F'`' '
     {
@@ -540,7 +532,7 @@ for f in "$DOCS"/02_architecture/*.md; do
   [ -f "$f" ] || continue
   case "$(basename "$f")" in README.md) continue ;; esac
   component_names "$f" | while IFS= read -r n; do
-    [ -n "$n" ] && printf '%s\t%s\n' "$n" "$f" >> "$TMP/compnames"
+    [ -n "$n" ] && printf '%s\n' "$n" >> "$TMP/compnames"
   done
   component_sig "$f" | while IFS="$TAB" read -r n path; do
     [ -n "$n" ] && printf '%s\t%s\t%s\n' "$n" "$path" "$f" >> "$TMP/compsig"
