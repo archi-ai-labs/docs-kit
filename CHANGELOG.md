@@ -5,6 +5,58 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
+## [0.29.0] — 2026-09-05
+
+### Changed — an Issue leaves the hot set when its chain finishes, not when it fails
+
+`docs_close.sh --archive` held four terminal predicates. Three were derived from the
+chain; the fourth read a field, and the field said the wrong thing. An Issue was
+archived at `status: archived`, which means **a person dropped it** — so a completed
+full-lane chain archived its Backlog item, its Decision and its Proposal, and left the
+Issue sitting in `20_issues/`. The folder shrank when work was abandoned and grew when
+it succeeded.
+
+An Issue at `promoted` is now terminal once every successor it produced is terminal:
+the Proposal whose `issue_ref` names it, every Backlog item whose `source_ref` cites
+it, and both when it fed both. `archived` keeps meaning exactly what it meant, so this
+is a second way out of the folder rather than a redefinition of the first.
+
+**The two refusals are the load-bearing half.** An Issue at `promoted` with no
+successor anywhere is never archived: that is a broken chain, not a finished one, and
+the least-read folder is the worst place to hide it — the validator's `[ref]` check
+owns that case. And the Issue pass reads the run's own pending set rather than the
+filesystem, because under `--apply` the Proposal has not moved yet at the moment its
+Issue is judged.
+
+Derived rather than declared, for the reason the neighbouring code already gave in its
+own comment: a "chain complete" field would be a second thing to keep true. Adding a
+fifth status was the alternative, and it was rejected on the same grounds plus the cost
+of widening an enum that the validator, the four board columns and the Issue template
+all have to agree on.
+
+### Fixed — a ref match that was a prefix match
+
+`did in fm_str(d, "source_ref")` made `DECISION-001` match inside `DECISION-0012`. Ids
+are a prefix plus **three digits or more** (§3), so this was reachable, and it would
+have archived one chain on the strength of another's completion. Every ref read in step
+6 now goes through `cites()`, which matches whole ids. The new CI step asserts it with
+an `ISSUE-0012` that completes while `ISSUE-001` is still open.
+
+### Documentation
+
+STANDARD §2 states both ways an Issue can leave, and why only one of them is a
+declaration. The `docs-sync` skill's step 6 lists the derived case alongside the
+others. `docs_close.py`'s module docstring names the new predicate.
+
+The Issue, Proposal and Decision behind this change are recorded at
+[archi-ai-labs/docs-kit#1](https://github.com/archi-ai-labs/docs-kit/issues/1) — this
+repo does not run its own `docs/` tree, so the chain lives on the issue tracker.
+
+**Deliberately not fixed:** a Decision with `outcome: rejected` still never archives,
+and neither does the Proposal behind it, because step 6 requires `approved` before it
+considers anything. A rejected chain has finished just as completely. It is the same
+defect shape and a different question, so it gets its own Issue.
+
 ## [0.28.0] — 2026-09-02
 
 ### Changed — a wrong name fails, a wrong link warns

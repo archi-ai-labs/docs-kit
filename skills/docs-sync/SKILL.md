@@ -210,7 +210,9 @@ Terminal documents leave the hot set (STANDARD §2). After the steps above, move
 `_archive/` under their own folder:
 
 - a Backlog item at `status: done` **whose audit line is written**;
-- an Issue at `status: archived`;
+- an Issue at `status: archived` — a person dropped it;
+- an Issue at `status: promoted` whose successors have all become terminal — the
+  Proposal citing it in the full lane, the Backlog items citing it in the fast lane;
 - a Proposal or Decision whose chain has completed and whose Backlog item is done.
 
 ```bash
@@ -218,9 +220,10 @@ bash "$PLUGIN_ROOT/scripts/docs_close.sh" --archive --apply .
 ```
 
 Every one of those conditions is a predicate over frontmatter, so the script decides
-them — including the Decision/Proposal chain, which it derives from which Backlog
-items cite the Decision in `source_ref`. It refuses to archive a `done` item whose
-audit line is missing, for the reason below. Move a file by hand only for something
+them — including both derived chains, the Decision/Proposal one and the Issue one,
+read from which documents cite them in `source_ref` and `issue_ref`. It refuses to
+archive a `done` item whose audit line is missing, for the reason below, and it
+refuses to archive a `promoted` Issue that produced no successor at all. Move a file by hand only for something
 the predicates do not cover, and then use `git mv` so history follows:
 
 ```bash

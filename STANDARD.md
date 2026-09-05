@@ -71,8 +71,18 @@ full map, and the reasoning for it, is §9.1.
 ### `_archive/` — terminal documents leave the hot set
 
 Each layer 2 folder may hold an `_archive/` subfolder. A document moves there once
-it can no longer change: a Backlog item at `done` with its audit line written, an
-Issue at `archived`, a Proposal or Decision whose chain has completed.
+it can no longer change: a Backlog item at `done` with its audit line written, a
+Proposal or Decision whose chain has completed, and an Issue that is either at
+`archived` or has outlived every successor it produced.
+
+**An Issue leaves two ways, and only one of them is a declaration.** `archived` says a
+person dropped it. The other is derived exactly as the Decision's is: an Issue at
+`promoted` is terminal once the Proposal citing it (full lane) and every Backlog item
+citing it (fast lane) are terminal themselves, and an Issue that fed both needs both.
+An Issue at `promoted` with no successor at all is never archived — that is a broken
+chain, not a finished one, and the least-read folder is the worst place to put it.
+Before 0.29.0 only the declaration existed, which meant `20_issues/` shrank when work
+was abandoned and grew when it succeeded.
 
 **Archiving lowers read cost. It never lowers the standard a document is held to.**
 The validator walks `_archive/` exactly as it walks the folder above it — ids are

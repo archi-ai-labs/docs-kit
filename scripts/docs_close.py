@@ -10,9 +10,10 @@ own history and inferring:
     it, at the moment they said it, in something that outlives the chat.
 
   Step 6 — "what can leave the hot set?" A pure predicate over frontmatter: a
-    Backlog item at `status: done` whose audit line is written, an Issue at
-    `status: archived`, a Decision whose Backlog items are all done. Nothing about
-    it requires reading prose.
+    Backlog item at `status: done` whose audit line is written, a Decision whose
+    Backlog items are all done, and an Issue that was either dropped
+    (`status: archived`) or has outlived every successor it produced. Nothing
+    about it requires reading prose.
 
 WHAT THIS DELIBERATELY DOES NOT DO
     It never writes into layer 1, never creates an Issue, never invents an audit
@@ -72,6 +73,17 @@ def load(folder):
         docs.append({"path": p, "fm": fm, "body": body,
                      "archived": p.parent.name == "_archive"})
     return docs
+
+
+def cites(value, ident):
+    """True when `value` names `ident` as a whole id, not as a prefix of a longer one.
+
+    Ids are a prefix plus three digits *or more* (STANDARD §3), so a plain `in`
+    test makes DECISION-001 a match inside DECISION-0012 — silently archiving a
+    chain on the strength of a different chain's completion. Every ref read in
+    step 6 goes through here.
+    """
+    return re.search(r"\b%s\b" % re.escape(ident), value or "") is not None
 
 
 def fm_str(doc, key):
@@ -242,7 +254,8 @@ def main():
             if fm_str(d, "status") == "done" and bid in recorded:
                 movable.append(("BACKLOG", bid, d))
 
-        for d in load(docs_root / "20_issues"):
+        issues = load(docs_root / "20_issues")
+        for d in issues:
             if not d["archived"] and fm_str(d, "status") == "archived":
                 movable.append(("ISSUE", fm_str(d, "id"), d))
 
@@ -257,7 +270,7 @@ def main():
             did = fm_str(dec, "id")
             if not did or fm_str(dec, "outcome") != "approved":
                 continue
-            items = [d for d in backlog if did in fm_str(d, "source_ref")]
+            items = [d for d in backlog if cites(fm_str(d, "source_ref"), did)]
             if not items or not all(fm_str(d, "status") == "done"
                                     and fm_str(d, "id") in recorded for d in items):
                 continue
@@ -266,6 +279,37 @@ def main():
             for p in proposals:
                 if not p["archived"] and pref and fm_str(p, "id") == pref:
                     movable.append(("PROPOSAL", pref, p))
+
+        # An Issue at `promoted` is terminal for the same reason, one link earlier:
+        # every successor it produced has finished. Full lane that is the Proposal
+        # citing it, fast lane the Backlog items citing it, and an Issue that fed
+        # both needs both. `archived` keeps meaning exactly what it meant — dropped
+        # or superseded — so this is a second way out of the hot folder, not a
+        # redefinition of the first.
+        #
+        # Without this the folder only ever shrinks when work is abandoned: every
+        # other document in a completed chain leaves, and its Issue does not.
+        #
+        # Read this run's own `movable`, never the filesystem. Under --apply the
+        # Proposal above has not moved yet at the moment its Issue is judged here.
+        moving = set(mid for _, mid, _ in movable)
+        for iss in issues:
+            iid = fm_str(iss, "id")
+            if iss["archived"] or not iid or fm_str(iss, "status") != "promoted":
+                continue
+            props = [p for p in proposals if cites(fm_str(p, "issue_ref"), iid)]
+            items = [d for d in backlog if cites(fm_str(d, "source_ref"), iid)]
+            # No successor at all is a broken chain, not a finished one, and the
+            # least-read folder is the worst place to put it. The validator's
+            # [ref] check owns that case.
+            if not props and not items:
+                continue
+            if not all(p["archived"] or fm_str(p, "id") in moving for p in props):
+                continue
+            if not all(fm_str(d, "status") == "done" and fm_str(d, "id") in recorded
+                       for d in items):
+                continue
+            movable.append(("ISSUE", iid, iss))
 
         for kind, did, d in movable:
             pending.append("ARCHIVE %s %s — %s" % (kind, did, d["path"].name))

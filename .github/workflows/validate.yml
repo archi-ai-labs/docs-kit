@@ -618,6 +618,76 @@ jobs:
       # claims an edited file instead of matching path-shape globs. The two cases
       # that made the old one unusable are asserted first — a repo that only has a
       # docs/README.md, and a file under a directory merely named `api`.
+      # Before 0.29.0 the Issue was the one document in a completed chain that never
+      # left the hot folder: its predicate was `status: archived`, which means the
+      # Issue was DROPPED. So 20_issues/ shrank when work was abandoned and grew when
+      # it succeeded. The state is derived now, and the two refusals below matter as
+      # much as the two archivals — an over-eager predicate hides work in the folder
+      # nobody reads.
+      - name: A completed chain archives its Issue; an unfinished one archives nothing
+        run: |
+          work="$(mktemp -d)"
+          git -C "$work" init -q
+          git -C "$work" config user.email ci@example.com
+          git -C "$work" config user.name ci
+          bash scripts/docs_scaffold.sh "$work" >/dev/null
+          rm -f "$work"/docs/2*/[A-Z]*-000-example.md
+          python3 - "$work" <<'EOF'
+          import pathlib, sys
+          r = pathlib.Path(sys.argv[1]) / "docs"
+          def w(rel, fm):
+              (r / rel).write_text(
+                  "---\n" + fm.strip() + "\n---\n\n# d\n\n## Alternatives considered\n\n1. a — b\n",
+                  encoding="utf-8")
+          # full lane, complete once its Backlog item is audited
+          w("20_issues/i1.md",   'id: ISSUE-001\nstatus: promoted\nlane: full\ndescription: "d"\nwhy: "w"')
+          w("21_proposals/p1.md",'id: PROPOSAL-001\nissue_ref: ISSUE-001\nproblem: "x"\nproposed: "y"\nimpact: "none"')
+          w("22_decisions/d1.md",'id: DECISION-001\nproposal_ref: PROPOSAL-001\noutcome: approved\nreason: "r"\ndecided_by: "ci"')
+          w("23_backlog/b1.md",  'id: BACKLOG-001\ndescription: "d"\nsource_ref: DECISION-001\nstatus: done')
+          # fast lane, complete
+          w("20_issues/i2.md",   'id: ISSUE-002\nstatus: promoted\nlane: fast\ndescription: "d"\nwhy: "w"')
+          w("23_backlog/b2.md",  'id: BACKLOG-002\ndescription: "d"\nsource_ref: ISSUE-002\nstatus: done')
+          # fast lane, item still open
+          w("20_issues/i3.md",   'id: ISSUE-003\nstatus: promoted\nlane: fast\ndescription: "d"\nwhy: "w"')
+          w("23_backlog/b3.md",  'id: BACKLOG-003\ndescription: "d"\nsource_ref: ISSUE-003\nstatus: open')
+          # promoted, no successor anywhere: a broken chain, not a finished one
+          w("20_issues/i4.md",   'id: ISSUE-004\nstatus: promoted\nlane: fast\ndescription: "d"\nwhy: "w"')
+          # a longer id that CONTAINS ISSUE-001 as a prefix, completing first
+          w("20_issues/i5.md",   'id: ISSUE-0012\nstatus: promoted\nlane: fast\ndescription: "d"\nwhy: "w"')
+          w("23_backlog/b5.md",  'id: BACKLOG-0012\ndescription: "d"\nsource_ref: ISSUE-0012\nstatus: done')
+          EOF
+          printf '| 2026-09-05 | done | BACKLOG-002 | - |\n| 2026-09-05 | done | BACKLOG-0012 | - |\n' \
+            >> "$work/docs/92_audit/LOG.md"
+          python3 scripts/docs_close.py --archive "$work" > "$work/a1.txt" || true
+          grep -q 'ARCHIVE ISSUE ISSUE-002' "$work/a1.txt" \
+            || { echo "::error::a finished fast-lane Issue was not archived."; exit 1; }
+          for bad in ISSUE-001 ISSUE-003 ISSUE-004; do
+            grep -q "ARCHIVE ISSUE $bad\b" "$work/a1.txt" && {
+              echo "::error::$bad was archived while its chain was unfinished."; exit 1; }
+          done
+          echo "OK — ISSUE-001 survived ISSUE-0012 completing; a whole-id match, not a prefix"
+          # Audit the last item: now the full lane is terminal end to end.
+          printf '| 2026-09-05 | done | BACKLOG-001 | - |\n' >> "$work/docs/92_audit/LOG.md"
+          python3 scripts/docs_close.py --archive "$work" > "$work/a2.txt" || true
+          for want in "ARCHIVE ISSUE ISSUE-001" "ARCHIVE PROPOSAL PROPOSAL-001" \
+                      "ARCHIVE DECISION DECISION-001" "ARCHIVE BACKLOG BACKLOG-001"; do
+            grep -q "$want" "$work/a2.txt" \
+              || { echo "::error::completed chain did not archive: $want"; exit 1; }
+          done
+          git -C "$work" add -A && git -C "$work" commit -qm fixture
+          python3 scripts/docs_close.py --archive --apply "$work" >/dev/null
+          [ -f "$work/docs/20_issues/_archive/i1.md" ] \
+            || { echo "::error::--apply did not move the Issue into _archive/."; exit 1; }
+          [ -f "$work/docs/20_issues/i4.md" ] \
+            || { echo "::error::--apply moved an Issue with no successor."; exit 1; }
+          python3 scripts/docs_close.py --archive --apply "$work" > "$work/a3.txt" \
+            || { echo "::error::a second --apply found work to do; it is not idempotent."; exit 1; }
+          grep -q "nothing to do" "$work/a3.txt" \
+            || { echo "::error::a second --apply did not report a clean tree."; exit 1; }
+          bash scripts/docs_validate.sh "$work/docs" --strict \
+            || { echo "::error::the archived tree no longer validates."; exit 1; }
+          echo "OK — chain complete archives four documents, incomplete archives none"
+
       - name: Stop hook reports by document, not by path shape
         run: |
           work="$(mktemp -d)"
