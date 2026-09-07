@@ -638,15 +638,21 @@ scheme entirely.
 
 **A session that changed code does not owe anyone a `docs-sync`.** The obligation
 exists only when some document claims a file the session touched, which is precisely
-what the Stop hook computes from `MAP.tsv` (§10) — and the answer is usually no. It
-fired in **5 of 308** real sessions after 0.25.0 made it read claims instead of
-guessing from path shape.
+what the Stop hook computes from `MAP.tsv` (§10) — and the answer is usually no. Of
+310 recorded sessions, **35** ran in a repo where the hook may fire at all (three
+repos), and it fired in **1** of those.
+
+Read the denominator carefully, because the first attempt at this number was wrong.
+Grepping every transcript for the hook's message returns 5, and 4 of those are the
+docs-kit repo itself, where the string appears in the output of tests that exercise
+the hook rather than in a real fire. The eligible set is what counts: sessions whose
+recorded `cwd` holds a `docs/` and either `.docs-kit.json` or `docs/22_decisions/`.
 
 So no rule anywhere may say "end every session with `docs-sync`". The `CLAUDE.md`
 block docs-init writes carries the sharp end of this, because it loads in every
 session of every repo and therefore outranks any hook: until 0.30.0 it said exactly
-that, which fired on 100% of sessions while the mechanism built to answer the same
-question fired on 1.6%. A sync is owed when the hook names a document, or right after
+that, which fired on every one of those 35 sessions while the mechanism built to
+answer the same question fired on one. A sync is owed when the hook names a document, or right after
 a Decision is approved. Nowhere else.
 
 **Finishing a Backlog item is not a sync trigger either.** `Closes: BACKLOG-NNN` in

@@ -12,9 +12,14 @@ for the plugin version — the renderer stamps it into every generated page).
 The `CLAUDE.md` block docs-init writes ended with *"any session that changed code ends
 with `/docs-kit:docs-sync`"*. That block loads in **every** session of the repo, so it
 outranked every mechanism built to answer the same question more precisely. Measured
-across 308 real session transcripts: the Stop hook, which reads `MAP.tsv` and reports
-only documents that actually claim an edited file, fired **5 times**. The sentence
-fired every time.
+across 310 recorded session transcripts: **35** ran in a repo where the Stop hook may
+fire at all, and it fired in **1** of them. The sentence fired in all 35.
+
+The first reading of that number was wrong and is worth recording. A plain grep for
+the hook's message across every transcript returns 5, but 4 of those sit in the
+docs-kit repo itself, where the string appears in test output rather than in a real
+fire. The denominator has to be sessions whose recorded `cwd` is a docs-kit repo, not
+every session on the machine.
 
 A sync is owed when the hook names a document, or right after a Decision is approved.
 Nowhere else. The block says that now, and STANDARD §8 forbids any rule from saying
