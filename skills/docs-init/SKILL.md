@@ -275,10 +275,15 @@ folders. Not fatal, worth saying out loud.
 
 ## Step 5 — Wire the rules into CLAUDE.md (ASK FIRST — ALWAYS)
 
-The snippet lives at `$PLUGIN_ROOT/templates/claude-md-snippet.md` (trigger
-table, "only Decision amends Architecture", the lane test, pointer to
-`docs/README.md`). It is fenced by `<!-- docs-kit:start -->` /
-`<!-- docs-kit:end -->` markers.
+The snippet lives at `$PLUGIN_ROOT/templates/claude-md-snippet.md`: the three
+in-session triggers, "only Decision amends Architecture", the `Closes:` trailer, when
+a `docs-sync` is actually owed, and a pointer to `docs/README.md` for everything else.
+It is fenced by `<!-- docs-kit:start -->` / `<!-- docs-kit:end -->` markers.
+
+It is deliberately short and CI caps it, because this is the one file that loads in
+every session of the repo — anything it says outranks every mechanism that could have
+answered the same question more precisely (STANDARD §8). Do not paste extra rules in
+on the way past.
 
 **Never write to CLAUDE.md without explicit consent — no exceptions.**
 

@@ -49,7 +49,31 @@ Decision — this skill does not make it, and will not offer to.
 run `cp -Rn` carefully, which is a careful file operation living in a prompt. It is
 a script now for that reason.
 
-## Step 3 — Regenerate the read models
+## Step 3 — Refresh the CLAUDE.md rules block
+
+The block between `<!-- docs-kit:start -->` and `<!-- docs-kit:end -->` is the only
+part of this kit loaded into **every** session of the repo, so a stale one costs more
+than any other stale file here. It also drifts silently: `docs-init` writes it once
+and nothing has ever updated it since, which is how repos ended up being told to run
+`docs-sync` at the end of every session — a rule that predates the Stop hook knowing
+which documents actually claim the edited files.
+
+Compare the repo's block against `$PLUGIN_ROOT/templates/claude-md-snippet.md`. If
+they already match, say so in one line and move on.
+
+**Never write to CLAUDE.md without explicit consent — no exceptions.** Ask with
+AskUserQuestion: "Refresh the docs-kit rules block in CLAUDE.md? It is N bytes today
+and M in this version." Options: "Yes — replace the block" and "No — leave it".
+If AskUserQuestion fails or comes back empty, ask in plain text and **end the turn**.
+
+On yes, replace only the text between the two markers and change nothing else in the
+file. No markers means the repo declined the block at init; do not add it here, and
+say that `/docs-kit:docs-init` is where that choice belongs.
+
+Show the user what changed in behaviour, not a diff of prose — which triggers were
+dropped, which became conditional. That is the part they will feel.
+
+## Step 4 — Regenerate the read models
 
 ```bash
 bash "$PLUGIN_ROOT/scripts/docs_render.sh" .
@@ -61,7 +85,7 @@ missing one, because the next agent trusts it. If the script exits 3 (`python3`
 missing), say plainly that the read models were not regenerated and that skills must
 fall back to reading folders until they are.
 
-## Step 4 — Run the deterministic checks and report what changed
+## Step 5 — Run the deterministic checks and report what changed
 
 ```bash
 bash "$PLUGIN_ROOT/scripts/docs_validate.sh" docs
@@ -92,7 +116,7 @@ may now have findings. **That is the point, not a regression — say so.** Group
   `.docs-kit.json`, not a Decision.
 - **Everything else** — normal validator findings.
 
-## Step 5 — Offer the follow-ups, do not perform them
+## Step 6 — Offer the follow-ups, do not perform them
 
 This skill changes no content. What it surfaces usually needs content work, and that
 belongs elsewhere:

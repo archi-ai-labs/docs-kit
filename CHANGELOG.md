@@ -5,6 +5,58 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
+## [0.30.0] — 2026-09-07
+
+### Changed — nothing may ask for a `docs-sync` except the hook that knows
+
+The `CLAUDE.md` block docs-init writes ended with *"any session that changed code ends
+with `/docs-kit:docs-sync`"*. That block loads in **every** session of the repo, so it
+outranked every mechanism built to answer the same question more precisely. Measured
+across 308 real session transcripts: the Stop hook, which reads `MAP.tsv` and reports
+only documents that actually claim an edited file, fired **5 times**. The sentence
+fired every time.
+
+A sync is owed when the hook names a document, or right after a Decision is approved.
+Nowhere else. The block says that now, and STANDARD §8 forbids any rule from saying
+otherwise.
+
+The same block also told people to flip `status: done` and write an audit line by hand
+when a Backlog item finished — a rule that predates 0.25.0, when `Closes: BACKLOG-NNN`
+in the commit message made both deterministic. It now points at the trailer, which is
+the author saying it once instead of twice.
+
+The block went from 2,874 bytes to 1,683. Everything cut already lived in
+`docs/README.md`, which its first line points at: the language rules, the lane test in
+full, and the paragraph on reading `INDEX.md` cheaply.
+
+### Added — a ratchet on the surfaces a person actually pays for
+
+Between 0.14.0 and 0.29.0 the documents a repo holds stayed small while the rules a
+person must hold roughly tripled — `STANDARD.md` 31KB → 67KB, the per-repo digest
+4.3KB → 12KB — in commits that each looked like an improvement on its own. Nothing
+watched the total, and the only signal was a user saying the system had become too
+much to keep up with.
+
+CI now caps the three surfaces that are paid for by a person or by every session:
+
+| Surface | Cap | Why it is capped |
+|---|---|---|
+| `templates/claude-md-snippet.md` | 1,800 | loaded in every session of every repo |
+| `templates/docs/README.md` | 12,200 | the 30-second digest, read per repo |
+| sum of skill `description:` fields | 3,500 | the only part of a skill always in context |
+
+Adding to a capped file means cutting something else first. The cap is a ratchet and
+not a judgement — it cannot tell a sentence that earns its place from one that does
+not — so raising it to make a commit pass defeats the entire point. `STANDARD.md` is
+deliberately uncapped, because it is read on demand rather than loaded every session.
+
+### Added — `docs-upgrade` refreshes the `CLAUDE.md` block
+
+`docs-init` wrote that block once and nothing ever updated it, which is how repos kept
+a sync rule that predates the hook. `docs-upgrade` now compares it against the current
+template and offers to replace the text between the markers, with consent, reporting
+which triggers were dropped or made conditional rather than showing a prose diff.
+
 ## [0.29.0] — 2026-09-05
 
 ### Changed — an Issue leaves the hot set when its chain finishes, not when it fails

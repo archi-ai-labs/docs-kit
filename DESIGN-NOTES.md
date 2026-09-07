@@ -109,6 +109,17 @@ Recorded so they are chosen rather than discovered.
    identical docs behind, and the kit measures neither. `--strict` moves the choice to each
    repo, and a repo that never makes it has chosen the default.
 
+10. **The kit's own growth is the failure mode nothing else watches.** Between 0.14.0
+   and 0.29.0 the documents a repo holds stayed small — one live repo carries ten in its
+   hot set — while the rules a person must hold roughly tripled: `STANDARD.md` 31KB →
+   67KB, the per-repo digest 4.3KB → 12KB, both mostly in commits that each looked like
+   an improvement. 0.30.0 caps the two files and the skill-description total in CI, so
+   adding to them means cutting first. The cap is a ratchet, not a judgement: it cannot
+   tell a sentence that earns its place from one that does not, and raising it to make a
+   commit pass defeats it entirely. Nothing watches `STANDARD.md` itself, on purpose —
+   it is read on demand, not loaded every session — so the discipline there is still
+   only a habit.
+
 ---
 
 ## 3. Storage — markdown, or SQLite once it grows

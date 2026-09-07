@@ -634,6 +634,26 @@ rules have been tuned in practice.
 accepting it is what made the Stop hook fire in a repo using a different folder
 scheme entirely.
 
+### The Stop hook is the only thing that may ask for a sync
+
+**A session that changed code does not owe anyone a `docs-sync`.** The obligation
+exists only when some document claims a file the session touched, which is precisely
+what the Stop hook computes from `MAP.tsv` (§10) — and the answer is usually no. It
+fired in **5 of 308** real sessions after 0.25.0 made it read claims instead of
+guessing from path shape.
+
+So no rule anywhere may say "end every session with `docs-sync`". The `CLAUDE.md`
+block docs-init writes carries the sharp end of this, because it loads in every
+session of every repo and therefore outranks any hook: until 0.30.0 it said exactly
+that, which fired on 100% of sessions while the mechanism built to answer the same
+question fired on 1.6%. A sync is owed when the hook names a document, or right after
+a Decision is approved. Nowhere else.
+
+**Finishing a Backlog item is not a sync trigger either.** `Closes: BACKLOG-NNN` in
+the commit message is the author saying it, and `docs_close.sh --apply` writes the
+status and the audit line from that (§6.1). Asking a person to also flip a field by
+hand is asking them to restate what they already stated.
+
 The crew layer (0.26.0) adds two PreToolUse hooks — an explain-gate on
 AskUserQuestion and a resource-guard on Bash — under this same doctrine:
 deterministic, warn-only by default, and silent unless `.docs-kit.json`

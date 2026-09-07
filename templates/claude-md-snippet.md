@@ -1,38 +1,26 @@
 <!-- docs-kit:start (managed by /docs-kit:docs-init — edit between markers only via docs-kit) -->
 ## Documentation rules (docs-kit)
 
-Repo này dùng mô hình docs ba lớp trong `docs/` — đọc `docs/README.md` trước (30 giây).
+Code là sản phẩm, `docs/` là thứ hỗ trợ code. Khối này chỉ giữ những việc bắt buộc
+trong phiên; phần còn lại nằm ở `docs/README.md` và chỉ đọc khi cần.
 
-**Luật cứng:** chỉ Decision workflow mới được đổi `docs/02_architecture/`,
-`docs/03_business-logic/` và `docs/04_api/` — mỗi lần
-sửa phải nối một dòng `amended_by` dẫn Decision đã duyệt, ngay trong phiên nó được duyệt.
+**Chỉ Decision workflow mới được sửa** `docs/02_architecture/`,
+`docs/03_business-logic/` và `docs/04_api/`. Mỗi lần sửa phải nối một dòng
+`amended_by` dẫn Decision đã duyệt, ngay trong phiên Decision đó được duyệt.
 
-**Ngôn ngữ:** khung tiếng Anh, giải thích tiếng Việt. Tên trường frontmatter, giá trị
-enum, tiền tố id, tiêu đề mục và các thuật ngữ (Issue, Proposal, Decision, Backlog,
-Architecture, fast lane, full lane) giữ nguyên tiếng Anh. Phần diễn giải — description,
-why, reason, dòng audit — viết tiếng Việt, để thuật ngữ Anh nằm trần trong câu.
-
-**Lane test** — ba câu hỏi, "có" một câu → full lane (Issue → Proposal → Decision →
-Backlog); "không" cả ba → fast lane (Issue → Backlog):
-1. Thay đổi này có sửa tài liệu Architecture không?
-2. Nếu hoá ra sai, rollback có mất hơn 1 ngày không?
-3. Có thao tác nào không lùi được không — xoá dữ liệu, publish ra ngoài, bật cờ
-   một chiều, gửi thứ gì đó cho người khác? Câu này thắng hai câu kia.
-
-**Trigger bắt buộc:**
-
-| Sự kiện trong phiên | Việc phải làm với docs |
+| Sự kiện | Việc phải làm |
 |---|---|
-| Code đụng tới schema, API contract, hoặc ranh giới component | Phải có sẵn một Decision. Chưa có: tạo Issue, dừng lại, hỏi người dùng. |
-| Một Backlog item hoàn thành | Đặt `status: done` + nối một dòng vào `docs/92_audit/`. |
-| Một Decision được duyệt | Sửa `docs/02_architecture/` (và `docs/03_business-logic/` / `docs/04_api/` nếu Decision đụng quy tắc nghiệp vụ hoặc contract) NGAY trong phiên đó. |
+| Code đụng schema, API contract hoặc ranh giới component | Phải có Decision sẵn. Chưa có thì tạo Issue rồi dừng lại hỏi người dùng. |
 | Bắt đầu việc không có trong Backlog | Tạo Issue trước khi viết code. |
-| docs-kit hoặc crew làm sai — script trái với chuẩn, hoặc phải lách mới xong việc thường | Ghi một file vào `docs/99_feedback/` (`docs_feedback.sh new <slug>`). File đó là prompt gửi thẳng cho docs-kit. Lỗi của **repo này** thì vẫn là Issue. |
+| Một Decision vừa được duyệt | Sửa layer 1 ngay trong phiên đó. |
 
-**Đọc docs cho rẻ:** `docs/INDEX.md` (sinh tự động) là read model cho agent — mỗi tài liệu
-một dòng. Đọc nó trước rồi chỉ mở đúng id cần; **đừng glob cả `22_decisions/` hay
-`23_backlog/`**. Cái gì đã settled thì layer 1 đã giữ: `constraints`, `amended_by`, và
-`rejected` (những phương án đã cân nhắc rồi loại).
+**Xong một Backlog item thì viết `Closes: BACKLOG-NNN` vào commit message**, đừng sửa
+tay. `docs_close.sh --apply .` đặt `status: done` và ghi dòng audit trích đúng sha.
 
-Phiên nào có đổi code thì kết thúc bằng `/docs-kit:docs-sync`; kiểm tra cấu trúc bằng `/docs-kit:docs-check`.
+**Chỉ chạy `/docs-kit:docs-sync` khi** hook cuối phiên gọi tên một tài liệu cụ thể,
+hoặc ngay sau khi một Decision được duyệt. Phiên sửa code mà hook im lặng thì không
+cần chạy, vì im lặng nghĩa là không tài liệu nào nhận những file vừa đổi.
+
+Đọc `docs/INDEX.md` trước rồi mở đúng id cần, đừng glob cả thư mục. docs-kit làm sai
+hoặc phải lách mới xong việc thường thì ghi `docs_feedback.sh new <slug>`.
 <!-- docs-kit:end -->

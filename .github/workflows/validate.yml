@@ -688,6 +688,46 @@ jobs:
             || { echo "::error::the archived tree no longer validates."; exit 1; }
           echo "OK — chain complete archives four documents, incomplete archives none"
 
+      # THE RATCHET. Three surfaces are paid for by a person or by every session in
+      # every repo, and all three roughly tripled between 0.14.0 and 0.29.0 while the
+      # documents they govern did not: STANDARD 31KB -> 67KB, the digest 4.3KB -> 12KB,
+      # the CLAUDE.md snippet loaded on every single turn. Growth there is invisible
+      # per commit and only shows up as "the docs system is too much to keep up with".
+      # So each one gets a cap. Adding to a capped file means cutting something else
+      # first — which is the whole point, and is why the cap must never be raised to
+      # make a commit pass. Raise it only in a commit whose message argues for it.
+      - name: The always-loaded surface never grows
+        run: |
+          python3 - <<'EOF'
+          import pathlib, re, sys
+          CAPS = [("templates/claude-md-snippet.md", 1800,
+                   "loaded in every session of every repo that ran docs-init"),
+                  ("templates/docs/README.md", 12200,
+                   "the 30-second digest a person reads per repo")]
+          bad = 0
+          for rel, cap, why in CAPS:
+              n = len(pathlib.Path(rel).read_bytes())
+              mark = "ok " if n <= cap else "OVER"
+              print("  %s %-36s %6d / %6d  (%s)" % (mark, rel, n, cap, why))
+              if n > cap:
+                  print("::error::%s is %d bytes, cap %d — cut something before adding." % (rel, n, cap))
+                  bad = 1
+          # The skill descriptions are the only part of a skill always in context.
+          total = 0
+          for p in sorted(pathlib.Path("skills").glob("*/SKILL.md")):
+              m = re.search(r"^description:\s*(.+?)\n(?=[a-z-]+:|---)",
+                            p.read_text(encoding="utf-8"), re.S | re.M)
+              total += len(m.group(1).encode()) if m else 0
+          print("  %s %-36s %6d / %6d  (%s)"
+                % ("ok " if total <= 3500 else "OVER", "sum of skill descriptions",
+                   total, 3500, "always in context, all skills"))
+          if total > 3500:
+              print("::error::skill descriptions total %d bytes, cap 3500." % total)
+              bad = 1
+          sys.exit(bad)
+          EOF
+          echo "OK — the always-loaded surface is within its caps"
+
       - name: Stop hook reports by document, not by path shape
         run: |
           work="$(mktemp -d)"
