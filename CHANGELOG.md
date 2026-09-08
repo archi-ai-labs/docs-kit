@@ -5,6 +5,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
+## [0.31.2] — 2026-09-09
+
+### Changed — the manifest description says the crew layer exists
+
+`plugin.json`'s description listed `docs-init`, `docs-sync`, `docs-check`, `docs-render` and
+`brief`, and stopped there. That was accurate at 0.25.0. The crew layer has shipped since
+0.26.0 and is now four more skills, its own execution model in `EXECUTION.md`, and two of
+the four hooks — so anyone reading the manifest in `/plugin` or in the marketplace saw no
+sign of half the plugin. The same text also claimed two warn-only hooks; `hooks.json`
+registers four (`explain_gate` and `resource_guard` on `PreToolUse`, `architecture_warn` on
+`PostToolUse`, `stop_scan` on `Stop`).
+
+The description is now in two halves, docs and crew, and matches the catalog entry in
+`archi-ai-labs/agent-marketplace` word for word — the two had drifted, and a reader has no
+way to tell which one is current. `worktrees` and `parallel` join the keywords, since that
+is what someone looking for the crew half would search for.
+
+Metadata only: no script, template, skill or hook changed. It needs a version of its own
+because the plugin cache is keyed by version, so a description edit that does not bump
+never reaches an installed copy.
+
 ## [0.31.1] — 2026-09-08
 
 ### Fixed — a fast-pair session reads like every other one, and `crew done` can find its closer

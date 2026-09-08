@@ -2,8 +2,8 @@
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "docs-kit",
   "displayName": "Docs Kit",
-  "version": "0.31.1",
-  "description": "Three-layer docs workflow as an installable unit: scaffold the structure (docs-init), reconcile docs with what a session actually did (docs-sync), validate structure deterministically (docs-check), render a deterministic HTML site of the docs (docs-render), and turn settled decisions into a delegation prompt (brief). Warn-only hooks keep the agent honest about Architecture amendments and undocumented sensitive changes.",
+  "version": "0.31.2",
+  "description": "Two layers in one plugin. Docs: scaffold a three-layer structure (docs-init), reconcile it with what a session actually did (docs-sync), validate it deterministically (docs-check), render an HTML read model (docs-render), and turn settled decisions into a delegation prompt (brief). Crew: run tickets in parallel over a fixed pool of executor worktrees — one ticket, one branch, one named session — and close them out from the commit trailer (crew-init, crew-status). Four warn-only hooks watch Architecture edits, undocumented code changes, resource locks and unexplained questions.",
   "author": {
     "name": "archi-ai-labs",
     "url": "https://github.com/archi-ai-labs"
@@ -11,6 +11,6 @@
   "homepage": "https://github.com/archi-ai-labs/docs-kit",
   "repository": "https://github.com/archi-ai-labs/docs-kit",
   "license": "MIT",
-  "keywords": ["docs", "documentation", "workflow", "traceability", "governance", "delegation"],
+  "keywords": ["docs", "documentation", "workflow", "traceability", "governance", "delegation", "worktrees", "parallel"],
   "defaultEnabled": false
 }
