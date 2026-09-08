@@ -30,9 +30,14 @@ Bạn không mở phiên trực tiếp được; thứ bạn dựng là một ta
 Hai thứ bạn viết lúc ấy quyết định phiên mới chạy đúng hay sai.
 
 **Tiêu đề task chính là title của phiên.** Đặt đúng văn phạm executor —
-`<repo> · e<k> · b<nnn> · processing · crew/executor` — chứ không phải một câu
-mô tả việc. Bạn chưa biết `e<k>` lúc dựng chip, vì cây do `crew new` chọn, nên
-để executor tự sửa lại title ở bước 0 sau khi nó nhận cây.
+`<repo> · <chỗ> · b<nnn> · processing · crew/executor` — chứ không phải một câu
+mô tả việc. Phiếu `fast-pair` thì chỗ là `main` và bạn đặt được ngay; phiếu
+`fast`/`full` thì bạn chưa biết `e<k>` lúc dựng chip vì cây do `crew new` chọn,
+nên để executor tự sửa lại title ở bước 0 sau khi nó nhận cây.
+
+Phiếu `fast-pair` vẫn được một phiên riêng như mọi phiếu khác. Prompt của nó
+phải nói rõ **đừng chạy `crew new`** và **đừng dựng cây**, vì đó là hai thứ duy
+nhất mức này bỏ qua.
 
 **Pool tự lớn, còn thu hẹp là việc của bạn.** Mặc định hai executor cộng cây
 chính cho fast-pair, và `crew new` tự dựng thêm khi không còn cây rảnh. Việc bạn

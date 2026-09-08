@@ -30,7 +30,7 @@ five, verbatim:
 | Branch | `work/b<nnn>` | `work/b157` |
 | Lock owner | full id | `crew lock acquire e2e-harness 157` → owner `BACKLOG-157` |
 | Executor tree | `../<repo>-e<k>` | `../myapp-e1` |
-| Session name | `<repo> · e<k> · b<nnn> · <state> · crew/executor` | `myapp · e1 · b157 · processing · crew/executor` |
+| Session name | `<repo> · <e<k>\|main> · b<nnn> · <state> · crew/executor` | `myapp · e1 · b157 · processing · crew/executor` |
 
 `<nnn>` is the zero-padded number exactly as it appears in `id:` — `crew`
 normalizes `crew new 42` to `b042`.
@@ -41,10 +41,12 @@ that lives in it. What pins a ticket to an executor is **the branch that
 executor has checked out**: git already stores it, git refuses to check one
 branch out in two trees, and no file can disagree with it. `crew status` reads
 that pin; nothing writes it. The session title is read off the same three
-things — tree, branch, trailer — so it answers "which executor, which ticket,
-how far along" without opening the board, and it cannot drift from what git
-says. There is deliberately **no idle title**: an executor holding no ticket has
-no session to name. An executor holding no ticket sits at a detached
+things — place, ticket, trailer — so it answers "where, which ticket, how far
+along" without opening the board, and it cannot drift from what git says. The
+place is `e<k>` for a pooled executor and **`main` for a fast-pair session**,
+which skips the worktree and the branch but is still a session of its own. There
+is deliberately **no idle title** and no ticketless one: an executor session
+belongs to exactly one ticket, and without one there is nothing to name. An executor holding no ticket sits at a detached
 HEAD on the dev branch, because "on dev" is the one thing a second worktree may
 not be.
 
@@ -94,12 +96,13 @@ lane splits in two by size:
 
 | Level | Lane | Branch | Tree | Entry conditions |
 |---|---|---|---|---|
-| `fast-pair` | fast | dev branch directly | main tree | ≤ 1 file · plain revert undoes it · touches no contract |
+| `fast-pair` | fast | dev branch directly | main tree, own session | ≤ 1 file · plain revert undoes it · touches no contract |
 | `fast` | fast | `work/b<nnn>` | a free executor | fast lane, but bigger than that |
 | `full` | full | `work/b<nnn>` | a free executor | full lane (Decision exists) |
 
-All three levels have a ticket. `fast-pair` is not "skip the ticket" — it is
-*ticket + dev branch*. What it saves is one merge round and one executor slot,
+All three levels have a ticket **and a session**. `fast-pair` is not "skip the
+ticket", and not "skip the session" either — it is *ticket + session + dev
+branch*, skipping only the worktree and the work branch. What it saves is one merge round and one executor slot,
 which is most of the lifetime of a one-line fix.
 
 The level may be recorded on the Backlog item as an optional `execution:` field
@@ -282,6 +285,9 @@ nothing can go stale and nothing has to be written down:
 | `idle` | detached HEAD | free; no ticket and therefore no session |
 | `processing` | holds `work/b<nnn>` | a session is on that ticket |
 | `finishing` | a commit on the branch carries `Closes: BACKLOG-<nnn>` | declared complete, not yet landed |
+
+A fast-pair session reads the same two states, only from a different place: it
+has no branch of its own, so the trailer is looked for on the dev branch itself.
 
 The last two are also the session's own two states, and the title carries
 whichever holds — the session is born `processing` and ends `finishing`. Only

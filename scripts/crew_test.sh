@@ -167,7 +167,7 @@ status: open
 execution: fast-pair
 ---
 EOF
-  for n in 003 004; do
+  for n in 003 004 006; do
     printf -- '---\nid: BACKLOG-%s\ndescription: "phiếu %s"\nsource_ref: ISSUE-%s\nstatus: open\n---\n' "$n" "$n" "$n" \
       > "docs/23_backlog/t$n.md"
   done
@@ -323,6 +323,29 @@ grep -q "^status: done" "$WR/docs/23_backlog/demo.md" \
 grep -q "BACKLOG-001" "$WR/docs/92_audit/LOG.md" \
   && ok "cli: audit line cites the completion" \
   || bad "cli: audit line missing"
+
+# Every close-out test above hands the path in through CREW_DOCS_CLOSE, so the
+# FALLBACK lookup — the one a real terminal uses — was never run, and that is
+# exactly how ISSUE-014 shipped. The marketplace cache nests a version between
+# `docs-kit` and `scripts/`, so a search for the DIRECTORY finds a base that
+# `scripts/docs_close.sh` never hangs off. Reproduce that shape and require the
+# close-out to still land, with no env var and no CLAUDE_PLUGIN_ROOT.
+FH="$TMP/fakehome"
+FC="$FH/.claude/plugins/cache/archi-ai-labs/docs-kit/0.29.0"
+mkdir -p "$FC"
+cp -R "$KIT/scripts" "$FC/scripts"   # docs_close.sh shells out to siblings, so copy the dir
+( cd "$WR" && scripts/crew new 6 >/dev/null 2>&1 ) || true
+W6="$(git -C "$WR" worktree list --porcelain | awk '
+  /^worktree /{ p = substr($0, 10) }
+  /^branch .*work\/b006$/{ print p; exit }')"
+( cd "$W6" && echo f6 > f6.txt && git add -A \
+  && git -c user.email=t@t -c user.name=t commit -qm "add f6" -m "Closes: BACKLOG-006" )
+OUT="$( (cd "$WR" && env -u CLAUDE_PLUGIN_ROOT -u CREW_DOCS_CLOSE HOME="$FH" scripts/crew done 6) 2>&1 )" || true
+if ! has "$OUT" "docs_close is not reachable" && grep -q "^status: done" "$WR/docs/23_backlog/t006.md"; then
+  ok "cli: the docs_close fallback resolves through the cache's version level"
+else
+  bad "cli: fallback lookup missed docs_close (ISSUE-014 shape) (out: $OUT)"
+fi
 LOGT="$W/repo-crew/log.tsv"
 if [ -f "$LOGT" ] && grep -q "SIZE" "$LOGT" && grep -q "declared=1 actual=1" "$LOGT"; then
   ok "cli: size calibration logged (declared vs actual)"
@@ -461,12 +484,34 @@ OUT="$(run_name steward)" && RC=0 || RC=$?
 [ "$RC" -eq 0 ] && has "$OUT" "name ok" && ok "name: the newest title is the title" \
   || bad "name: correct title rejected (rc=$RC, got: $OUT)"
 
-# A ticket session carries the §1 token in the middle, zero-padded the way
-# `crew new 42` pads it — an unpadded expectation would disagree with the branch.
-printf '{"type":"custom-title","customTitle":"%s · b042 · crew/executor"}\n' "$RNAME" > "$PROJ/s1.jsonl"
+# A fast-pair ticket skips the worktree and the branch, NOT the session — the
+# origin repo really opened one (BACKLOG-010, titled `· b010 · crew/executor`).
+# So it reads in the same shape as any executor session, with `main` as the
+# place, and the token is zero-padded the way `crew new 42` pads it.
+printf '{"type":"custom-title","customTitle":"%s · main · b042 · processing · crew/executor"}\n' "$RNAME" > "$PROJ/s1.jsonl"
 OUT="$(run_name executor 42)" && RC=0 || RC=$?
-[ "$RC" -eq 0 ] && ok "name: ticket grammar carries the padded token" \
-  || bad "name: ticket grammar (rc=$RC, got: $OUT)"
+[ "$RC" -eq 0 ] && ok "name: a fast-pair session sits at main, padded token, born processing" \
+  || bad "name: fast-pair grammar (rc=$RC, got: $OUT)"
+
+# Its trailer lands on the dev branch and not on a work branch, so the state has
+# to be read from there — same two words, a different place to look.
+( cd "$WR" && echo p > pair.txt && git add pair.txt \
+    && git -c user.email=t@t -c user.name=t commit -qm "fast-pair edit" -m "Closes: BACKLOG-042" )
+OUT="$(run_name executor 42)" && RC=0 || RC=$?
+if [ "$RC" -ne 0 ] && has "$OUT" "main · b042 · finishing"; then
+  ok "name: a fast-pair trailer on the dev branch flips the title to finishing"
+else
+  bad "name: fast-pair finishing (rc=$RC, got: $OUT)"
+fi
+
+# An executor session always belongs to one ticket; without a number there is
+# nothing to name, and guessing would produce a title that means nothing.
+OUT="$(run_name executor)" && RC=0 || RC=$?
+if [ "$RC" -ne 0 ] && has "$OUT" "belongs to one ticket"; then
+  ok "name: an executor session with no ticket is refused, not guessed"
+else
+  bad "name: ticketless executor (rc=$RC, got: $OUT)"
+fi
 
 # An executor is titled by its TREE, not its ticket: the pool is persistent, so
 # one session spans many tickets and is named once. Running the check from

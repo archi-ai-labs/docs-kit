@@ -1,23 +1,23 @@
 <!-- docs-kit:crew:start (managed by /docs-kit:crew-init — edit between markers only via docs-kit) -->
 ## Execution rules (docs-kit crew)
 
-Repo này chạy tầng thi hành crew — luật đầy đủ trong `.claude/crew/` (bảy tệp,
-đọc `README.md` trước, 30 giây).
+Repo này chạy tầng thi hành crew — luật đầy đủ trong `.claude/crew/`, đọc
+`README.md` trước.
 
 **Phiếu:** Backlog item là đơn vị công việc. Một phiếu – một nhánh – một phiên,
 làm trọn tới `done`. Không có phiếu trong `docs/23_backlog/` thì không có nhánh.
 
 **Executor là cây thường trực** `../<repo>-e<k>`, dựng một lần rồi dùng lại qua
-nhiều phiếu; đây là thứ duy nhất không còn sinh ra theo phiếu. Nhánh nó đang mở
-là phiếu nó giữ, HEAD tách rời là nó rảnh.
+nhiều phiếu. Nhánh nó đang mở là phiếu nó giữ, HEAD tách rời là nó rảnh.
 
-**Title phiên** `<repo> · e<k> · b<nnn> · <trạng thái> · crew/executor`, do
-`crew name executor` tự đọc từ git: sinh ra ở `processing`, sang `finishing` khi
-commit mang trailer.
+**Title phiên** `<repo> · <chỗ> · b<nnn> · <trạng thái> · crew/executor`, do
+`crew name executor` tự đọc: chỗ là `e<k>`, hoặc `main` với fast-pair; sinh ra ở
+`processing`, sang `finishing` khi commit mang trailer.
 
 **Lệnh:** `scripts/crew new <nnn>` giao phiếu cho một executor rảnh (nhánh
-`work/b<nnn>`), hết cây rảnh thì tự dựng thêm chứ không chặn; `scripts/crew done <nnn>` gộp — sáu bước và hai phép kiểm nằm
-trong ruột lệnh, **không gõ tay sáu lệnh đó**; `scripts/crew lock` trước phần
+`work/b<nnn>`), hết cây rảnh thì tự dựng thêm chứ không chặn; `scripts/crew done
+<nnn>` gộp — sáu bước và hai phép kiểm nằm trong ruột lệnh, **không gõ tay sáu
+lệnh đó**; `scripts/crew lock` trước phần
 chạm máy thật; `scripts/crew status` trước khi nhận thêm phiếu.
 
 **Ba mức thi hành** (`execution:` trong phiếu): `fast-pair` = sửa thẳng nhánh dev

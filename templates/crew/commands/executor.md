@@ -30,6 +30,11 @@ cái mũ do người giao chứ không phải thứ model tự đội. Lấy n�
 1. `scripts/crew new $ARGUMENTS` — phiếu rơi vào executor rảnh trên nhánh
    `work/b$ARGUMENTS`; làm việc TRONG cây mà lệnh in ra. Không còn cây rảnh thì
    lệnh tự dựng thêm một executor, nên bạn không bao giờ bị chặn ở bước này.
+
+   **Phiếu khai `execution: fast-pair` thì bỏ qua bước 1 này.** Lệnh sẽ từ chối
+   và nói lý do: bạn sửa thẳng trên nhánh dev ở cây chính, commit ngay trong
+   cùng lượt, không dựng cây và không mở nhánh. Bước 5 cũng bỏ — phiếu fast-pair
+   đóng bằng trailer, `crew done` không tham gia.
 2. Đọc phiếu và brief của nó (`briefs/` đã nằm sẵn trong executor). Làm **trọn phiếu**: code,
    test, docs, dòng audit — phần nào của phiếu cũng là của bạn, không chuyển
    tay cho vai khác.

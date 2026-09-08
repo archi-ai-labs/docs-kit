@@ -9,7 +9,7 @@ phiếu nên nó mang địa chỉ executor:
 BACKLOG-157                                 phiếu (docs/23_backlog/)
 work/b157                                   nhánh
 BACKLOG-157                                 chủ khoá (crew lock acquire … 157)
-<repo> · e1 · b157 · processing · …         tên phiên
+<repo> · e1 · b157 · processing · …         tên phiên (fast-pair thì e1 → main)
 ../<repo>-e1                                cây của executor (dùng lại)
 ```
 

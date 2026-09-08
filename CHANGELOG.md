@@ -5,6 +5,40 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
+## [0.31.1] — 2026-09-08
+
+### Fixed — a fast-pair session reads like every other one, and `crew done` can find its closer
+
+Two holes that 0.31.0's own rules made visible.
+
+**A fast-pair ticket had no place in the title.** 0.31.0 gave every executor session four
+parts, `<repo> · <place> · b<nnn> · <state> · crew/executor`, but `crew name executor` only
+knew how to fill `<place>` from a pooled worktree. A fast-pair ticket has no worktree and no
+work branch by design (EXECUTION §2), so it fell through to the old three-part grammar
+`<repo> · b<nnn> · crew/executor` — which is the shape a planner session uses, so the two
+roles read the same in the session list. The place is now `main`, and the state is derived
+the same way it is in the pool. Because a fast-pair commit lands straight on the dev branch
+rather than on `work/b<nnn>`, `pair_state()` looks for the `Closes:` trailer there instead;
+`has_closer()` is the one helper both states call, so the board and the title cannot drift
+apart. `crew new` on a fast-pair ticket still refuses to build a tree, but it now prints the
+title to set before it dies, and `crew name executor` with no number refuses rather than
+guessing — a session belongs to one ticket, whichever tree it runs in.
+
+**`crew done` skipped the close-out on every plain terminal.** The fallback that locates
+`docs_close.sh` searched for a *directory* named `docs-kit`. The marketplace cache nests a
+version between the two — `.../cache/archi-ai-labs/docs-kit/0.29.0/scripts/docs_close.sh` —
+so joining `scripts/docs_close.sh` onto the directory it found never resolved. Measured on
+the author's machine: the search returns exactly one base, and that base holds no
+`scripts/` at all, while six real copies sit one level below it. `CLAUDE_PLUGIN_ROOT` is set
+inside a plugin invocation but unset in a terminal, so the fallback is what runs, and the
+trailer was found and then quietly abandoned to the `not reachable` note. The search now
+looks for the file, takes the highest version via `sort -V` (plain `sort` where `-V` is
+absent, per the bash 3.2 floor), and is exercised by a test that builds the nested cache
+shape and asserts the close-out lands with no env var set. Every earlier close-out test
+passed `CREW_DOCS_CLOSE` in by hand, which is how this shipped in the first place.
+
+74 crew checks, up from 73.
+
 ## [0.31.0] — 2026-09-08
 
 ### Changed — an executor is a place, not a ticket

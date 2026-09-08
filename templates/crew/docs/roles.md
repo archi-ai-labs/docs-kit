@@ -43,14 +43,17 @@ vai cho một vai không tồn tại là một sự thật sai nằm trong repo.
 
 | Loại phiên | Tên | Ví dụ |
 |---|---|---|
-| phiên executor | `<repo> · e<k> · b<nnn> · <trạng thái> · crew/executor` | `lop-hoc-zalo · e1 · b157 · processing · crew/executor` |
+| phiên executor trong pool | `<repo> · e<k> · b<nnn> · <trạng thái> · crew/executor` | `lop-hoc-zalo · e1 · b157 · processing · crew/executor` |
+| phiên executor fast-pair | `<repo> · main · b<nnn> · <trạng thái> · crew/executor` | `lop-hoc-zalo · main · b010 · processing · crew/executor` |
 | phiên mũ (bốn vai còn lại) | `<repo> · crew/<vai>` | `lop-hoc-zalo · crew/steward` |
 
 Tên repo đứng trước để danh sách phiên tự gom theo dự án. Ba phần còn lại đều
 đọc từ git chứ không gõ tay: tên cây cho biết executor nào, nhánh cho biết phiếu
-nào, trailer cho biết trạng thái. Mỗi phiếu vẫn một phiên riêng, sinh ra ở
-`processing` và kết thúc ở `finishing`; executor rảnh thì không có phiên nào để
-đặt tên, nên `crew name` báo lỗi thay vì bịa ra một cái title.
+nào, trailer cho biết trạng thái. Ô đầu là **chỗ session đang ngồi**: `e<k>` khi
+nó ở một cây trong pool, `main` khi đó là phiếu fast-pair làm thẳng ở cây chính.
+Mỗi phiếu vẫn một phiên riêng, sinh ra ở `processing` và kết thúc ở `finishing`.
+Executor rảnh thì không có phiên nào để đặt tên, và một phiên executor không có
+số phiếu cũng vậy, nên `crew name` báo lỗi thay vì bịa ra một cái title.
 
 `scripts/crew name <vai>` đọc **title** của phiên đang chạy rồi so với hai dòng
 trên, và title chưa đúng thì vai chưa bắt đầu.

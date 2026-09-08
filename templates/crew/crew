@@ -155,16 +155,28 @@ own_dirty() {
 exec_on()   { exec_map | awk -F'\t' -v b="$1" '$2 == b { print $1; exit }'; }
 en()        { n="$(basename "$1")"; echo "${n##*-}"; }   # …/myapp-e2 → e2
 
+# has_closer <dir> <nnn> <log-args...> — does any commit in that range close the
+# ticket? `grep -c` and not `grep -q`: a -q that matches early SIGPIPEs the git
+# it is reading from, which is a live hazard under pipefail.
+has_closer() {
+  HC_D="$1"; HC_N="$2"; shift 2
+  HC_C="$(git -C "$HC_D" log "$@" --format=%B 2>/dev/null | grep -c "^Closes: BACKLOG-$HC_N" || true)"
+  [ "${HC_C:-0}" -gt 0 ]
+}
+
 # exec_state <tree> <branch> → processing | finishing. Derived, never stored,
 # and computed in ONE place so the board and the session title can never
 # disagree. Only states something ACTS on get a word: `finishing` means the work
 # declared itself done and only the merge is missing (action: crew done), which
 # is the 7h18 of unmerged work the origin repo measured (EXECUTION §5).
 exec_state() {
-  ES_NUM="${2##*/b}"
-  ES_C="$(git -C "$1" log "$(cfg dev_branch main)..$2" --format=%B 2>/dev/null \
-          | grep -c "^Closes: BACKLOG-$ES_NUM" || true)"
-  if [ "${ES_C:-0}" -gt 0 ]; then echo finishing; else echo processing; fi
+  if has_closer "$1" "${2##*/b}" "$(cfg dev_branch main)..$2"; then echo finishing; else echo processing; fi
+}
+
+# The same two states for a fast-pair session, which has no branch of its own:
+# its trailer lands straight on the dev branch, so that is where to look.
+pair_state() {
+  if has_closer "$MAIN" "$1" -50 "$(cfg dev_branch main)"; then echo finishing; else echo processing; fi
 }
 
 # A checkout is not a working environment: dep dirs, nested harness repos and
@@ -285,7 +297,9 @@ cmd_new() {
   [ -n "$F" ] || die "BACKLOG-$N not found under docs/23_backlog — no ticket, no branch (EXECUTION §1)"
   [ "$(front "$F" status)" = "done" ] && die "BACKLOG-$N is already done"
   if [ "$(front "$F" execution)" = "fast-pair" ]; then
-    die "BACKLOG-$N is fast-pair: work on the dev branch in the main tree and commit in the same bout — no executor (EXECUTION §2)"
+    note "BACKLOG-$N is fast-pair: work on the dev branch in the main tree and commit in the same bout"
+    note "session  : it still gets one — title it $REPO · main · b$N · processing · crew/executor"
+    die "no executor for a fast-pair ticket (EXECUTION §2)"
   fi
   DEV="$(cfg dev_branch main)"
   BR="work/b$N"
@@ -394,12 +408,23 @@ cmd_done() {
 
   # 6. Close-out through the trailer (STANDARD §6.1): the audit line should cite
   #    a sha, not a session's recollection.
-  if git -C "$MAIN" log -50 --format=%B "$DEV" | grep -q "^Closes: BACKLOG-$N"; then
+  if has_closer "$MAIN" "$N" -50 "$DEV"; then
     DC="${CREW_DOCS_CLOSE:-}"
+    if [ -z "$DC" ] && [ -f "${CLAUDE_PLUGIN_ROOT:-/nonexistent}/scripts/docs_close.sh" ]; then
+      DC="$CLAUDE_PLUGIN_ROOT/scripts/docs_close.sh"
+    fi
     if [ -z "$DC" ]; then
-      for base in "${CLAUDE_PLUGIN_ROOT:-/nonexistent}" $(find ~/.claude/plugins -maxdepth 6 -type d -name docs-kit 2>/dev/null); do
-        [ -f "$base/scripts/docs_close.sh" ] && DC="$base/scripts/docs_close.sh" && break
-      done
+      # Search for the FILE, never for a directory named docs-kit: the marketplace
+      # cache nests a version between the two (.../docs-kit/0.29.0/scripts/...), so
+      # joining scripts/docs_close.sh onto that directory never resolves. Every
+      # machine where CLAUDE_PLUGIN_ROOT is unset — which is every plain terminal —
+      # therefore skipped the close-out and only printed the note (ISSUE-014).
+      # `sort -V` takes the highest version instead of whichever path find walks
+      # first, and plain `sort` is the fallback where sort has no -V (bash 3.2).
+      DCC="$(find ~/.claude/plugins -maxdepth 8 -type f -name docs_close.sh -path '*docs-kit*' 2>/dev/null)"
+      DC="$(printf '%s\n' "$DCC" | sort -V 2>/dev/null | tail -1)"
+      [ -f "$DC" ] || DC="$(printf '%s\n' "$DCC" | sort | tail -1)"
+      [ -f "$DC" ] || DC=""
     fi
     if [ -n "$DC" ]; then
       bash "$DC" --apply "$MAIN" || note "docs_close reported a problem — check its output"
@@ -675,12 +700,21 @@ cmd_name() {
   HERE="$(git rev-parse --show-toplevel 2>/dev/null || true)"
   SUF=""
   case "$(basename "${HERE:-.}")" in "$REPO"-e[0-9]*) SUF="$(en "$HERE")" ;; esac
-  if [ -n "$SUF" ] && [ "$ROLE" = "executor" ]; then
+  if [ "$ROLE" = "executor" ] && [ -n "$SUF" ]; then
     HB="$(git -C "$HERE" symbolic-ref --short HEAD 2>/dev/null || true)"
     case "$HB" in
       work/b*) WANT="$REPO · $SUF · ${HB#work/} · $(exec_state "$HERE" "$HB") · crew/$ROLE" ;;
       *) die "$SUF holds no ticket, so there is no executor session to name — take one first: scripts/crew new <nnn>" ;;
     esac
+  elif [ "$ROLE" = "executor" ]; then
+    # Main tree: this is a fast-pair session (EXECUTION §2). It gets a session
+    # like any other ticket — only the worktree and the branch are skipped — so
+    # it reads in the same shape, with `main` as the place. The ticket cannot be
+    # derived here (there is no work branch), so it must be passed.
+    [ -n "$TICKET" ] \
+      || die "an executor session belongs to one ticket — pass its number: scripts/crew name executor <nnn>"
+    PN="$(norm "$TICKET")"
+    WANT="$REPO · main · b$PN · $(pair_state "$PN") · crew/$ROLE"
   elif [ -n "$TICKET" ]; then
     WANT="$REPO · b$(norm "$TICKET") · crew/$ROLE"
   else

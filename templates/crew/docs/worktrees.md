@@ -93,6 +93,9 @@ nghĩa là không ai đang đọc nó giữa chừng một lượt review.
 | `processing` | đang giữ `work/b<nnn>` | phiếu đang mở trong executor đó |
 | `finishing` | commit trên nhánh đã mang `Closes: BACKLOG-<nnn>` | việc khai là xong, chỉ còn thiếu lượt gộp |
 
+Phiên `fast-pair` đọc đúng hai trạng thái ấy, chỉ khác chỗ tìm: nó không có
+nhánh riêng nên trailer được tìm thẳng trên nhánh dev.
+
 Chỉ trạng thái nào có người phản ứng lại mới được đặt tên. `finishing` xứng đáng
 vì repo gốc đo được việc xong nằm chờ **7h18** mà không bảng nào nói ra, và phản
 ứng đúng là chạy `crew done`. Một trạng thái thứ tư kiểu "đã nhận, chưa bắt đầu"
