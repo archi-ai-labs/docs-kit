@@ -291,6 +291,27 @@ fi
 )
 [ "$(st)" = "finishing" ] && ok "state: a Closes: trailer reads finishing, before any merge" \
   || bad "state: expected finishing, got '$(st)'"
+
+# Known-bad, and red for the right reason: with the trailer already written, one
+# uncommitted file must pull the state back to `processing` and stop `crew done`
+# at check 0. Measured 2026-09-09 — without this the merge went through, the
+# ticket read `status: done` with an audit line citing a sha, and the file was
+# still sitting in the executor when the run ended.
+( cd "$WT" && echo stray > stray.txt )
+[ "$(st)" = "processing" ] && ok "state: a trailer does not read finishing while the tree owns uncommitted work" \
+  || bad "state: expected processing on a dirty tree, got '$(st)'"
+OUT="$( (cd "$WR" && scripts/crew done 1) 2>&1 )" && RC=0 || RC=$?
+if [ "$RC" -ne 0 ] && has "$OUT" "check 0" && has "$OUT" "stray.txt"; then
+  ok "cli: check 0 is red on a dirty executor and names the file"
+else
+  bad "cli: check 0 (rc=$RC out: $OUT)"
+fi
+grep -q "^status: open" "$WR/docs/23_backlog/demo.md" \
+  && ok "cli: check 0 stops before the merge, so the ticket is not closed" \
+  || bad "cli: ticket closed despite check 0"
+rm -f "$WT/stray.txt"
+[ "$(st)" = "finishing" ] && ok "state: cleaning the tree restores finishing" \
+  || bad "state: expected finishing after cleanup, got '$(st)'"
 OUT="$( (cd "$WR" && CREW_DOCS_CLOSE="$KIT/scripts/docs_close.sh" scripts/crew done 1) 2>&1 )" && RC=0 || RC=$?
 [ "$RC" -eq 0 ] || bad "cli: crew done 1 failed (out: $OUT)"
 [ -z "$(st)" ] && ok "state: a parked executor is back to idle" \
@@ -434,6 +455,27 @@ if [ "$POOLN" -eq 2 ] && has "$OUT" "removed e3" && has "$OUT" "kept e1"; then
   ok "prune: idle executors go, busy ones are kept and named"
 else
   bad "prune: (pool=$POOLN out: $OUT)"
+fi
+
+# FREE is not the same as DETACHED, and this is the pool half of the same
+# defect. Measured 2026-09-09: a tree parked by hand — which is exactly what
+# `crew done` tells the operator to do when its own park refuses — still held
+# the finished ticket's uncommitted file, read `idle`, and the next `crew new`
+# checked a branch out on top of it. One ticket's work then sat on another
+# ticket's branch, one `git add -A` away from being committed there.
+printf -- '---\nid: BACKLOG-160\nstatus: open\nexecution: fast\n---\n' > "$RR/docs/23_backlog/b160.md"
+( cd "$RR" && git add -A && git -c user.email=t@t -c user.name=t commit -qm "ticket 160" ) >/dev/null 2>&1
+( cd "$R/app-e2" && git switch -q --detach dev ) 2>/dev/null || true
+echo leftover > "$R/app-e2/stray.txt"
+OUT="$( (cd "$RR" && scripts/crew status) 2>&1 )"
+has "$OUT" "unclean" && ok "state: a detached tree that still owns files reads unclean, not idle" \
+  || bad "state: unclean not reported (got: $OUT)"
+OUT="$( (cd "$RR" && scripts/crew new 160) 2>&1 )"
+E2H="$(git -C "$R/app-e2" symbolic-ref --short HEAD 2>/dev/null || echo -)"
+if has "$OUT" "no executor was free" && [ "$E2H" = "-" ]; then
+  ok "cli: an unclean tree is not handed to the next ticket — the pool grows instead"
+else
+  bad "cli: unclean tree handed out (head=$E2H out: $OUT)"
 fi
 
 ( cd "$RR" && scripts/crew lock acquire rig 157 >"$R/l1" 2>&1 ) &

@@ -282,9 +282,34 @@ nothing can go stale and nothing has to be written down:
 
 | State | How it is read | Means |
 |---|---|---|
-| `idle` | detached HEAD | free; no ticket and therefore no session |
-| `processing` | holds `work/b<nnn>` | a session is on that ticket |
-| `finishing` | a commit on the branch carries `Closes: BACKLOG-<nnn>` | declared complete, not yet landed |
+| `idle` | detached HEAD **and** nothing uncommitted | free; no ticket and therefore no session |
+| `unclean` | detached HEAD but files uncommitted | holds no ticket, yet not free — clear it |
+| `processing` | holds `work/b<nnn>`, or holds it with files uncommitted | a session is on that ticket |
+| `finishing` | a commit on the branch carries `Closes: BACKLOG-<nnn>` **and** the tree is clean | declared complete, not yet landed |
+
+**Uncommitted work is part of the state, not a column beside it (0.32.0).** Both
+rows above that say "and" were measured on 2026-09-09, in one repo, from one
+cause: the tree was read through its branch alone. With the trailer written and
+one file still uncommitted, the board printed `finishing dirty=1` — two columns
+contradicting each other — and `crew done` then ran to completion: the merge
+landed, the ticket flipped to `status: done` with an audit line citing a sha,
+and the file never left the executor. The same blindness at the other end of the
+cycle: a tree parked by hand, which is exactly what `crew done` tells the
+operator to do when its own park refuses, still carried the finished ticket's
+file, read `idle`, and was handed to the next ticket — one ticket's work sitting
+on another ticket's branch, one `git add -A` from being committed there.
+
+`unclean` earns a word by the rule the other three obey: something acts on it.
+Such a tree drops out of the pool, so `crew new` grows instead of taking it —
+and without the word the pool would grow with no reason visible on the board.
+
+The rule holds for an executor because an executor tree belongs to exactly one
+ticket, so anything uncommitted in it is that ticket's. **It is deliberately not
+applied to the main tree**, where a fast-pair session works: that tree is shared,
+and `crew done` leaves writes there every run — `docs_close` flips the status and
+appends the audit line without committing either. Reading dirtiness as "still
+working" there would pin every fast-pair session at `processing` forever. The
+main tree has its own guard instead, check 2 in §6.
 
 A fast-pair session reads the same two states, only from a different place: it
 has no branch of its own, so the trailer is looked for on the dev branch itself.
@@ -335,12 +360,18 @@ above rather than a formula fed by the wrong queue's data.
 The origin repo's meta-lesson, measured at **5 bites in one day**: *a string
 match is not a measurement* — and a procedure kept as prose gets re-typed from
 memory, where the two middle checks are the first thing to fall out. So the
-six-step merge lives in one command, and sessions **run it, never re-type it**:
+merge procedure lives in one command, and sessions **run it, never re-type it**:
 
 ```
 crew done 157
 ```
 
+0. **Check 0:** the executor's own tree owns nothing uncommitted. Step 2 tests
+   exactly what is about to land, and a dirty tree means what lands is not what
+   the session has. This check already existed at the very end of the command,
+   as the park refusal; measured 2026-09-09, that is too late — by then the
+   merge had happened and the ticket read `status: done`. Same test, moved in
+   front of the merge. Crew's own provisioned payload never counts.
 1. In the executor holding `work/b157`: `git merge <dev-branch>` — conflicts
    are resolved there, never on the main tree.
 2. Typecheck + test commands from config — testing exactly what is about to

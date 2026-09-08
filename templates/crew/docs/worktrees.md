@@ -85,16 +85,32 @@ nghĩa là không ai đang đọc nó giữa chừng một lượt review.
 
 ## Ba trạng thái, đọc từ git
 
-`scripts/crew status` không lưu trạng thái ở đâu cả, nó suy ra từ nhánh:
+`scripts/crew status` không lưu trạng thái ở đâu cả, nó suy ra từ nhánh và từ
+những file chưa commit trong cây:
 
 | Trạng thái | Đọc thế nào | Nghĩa là |
 |---|---|---|
-| `idle` | HEAD tách rời | sẵn sàng nhận phiếu |
+| `idle` | HEAD tách rời **và** cây sạch | sẵn sàng nhận phiếu |
+| `unclean` | HEAD tách rời nhưng còn file chưa commit | không giữ phiếu nào, nhưng chưa rảnh |
 | `processing` | đang giữ `work/b<nnn>` | phiếu đang mở trong executor đó |
-| `finishing` | commit trên nhánh đã mang `Closes: BACKLOG-<nnn>` | việc khai là xong, chỉ còn thiếu lượt gộp |
+| `finishing` | commit trên nhánh đã mang `Closes: BACKLOG-<nnn>` **và** cây sạch | việc khai là xong, chỉ còn thiếu lượt gộp |
 
-Phiên `fast-pair` đọc đúng hai trạng thái ấy, chỉ khác chỗ tìm: nó không có
-nhánh riêng nên trailer được tìm thẳng trên nhánh dev.
+Hai chữ **và** trong bảng là kết quả đo ngày 2026-09-09, từ cùng một nguyên
+nhân là đọc cây chỉ qua nhánh. Khi trailer đã viết mà còn một file chưa commit,
+bảng in ra `finishing dirty=1` — hai cột nói ngược nhau — rồi `crew done` vẫn
+chạy trọn: nhánh được gộp, phiếu lật sang `status: done` kèm dòng audit trích
+sha, còn file kia không bao giờ rời khỏi executor. Ở đầu kia của vòng đời, một
+cây được park bằng tay vẫn mang file thừa của phiếu cũ, đọc ra `idle`, và phiếu
+tiếp theo được giao thẳng vào đó.
+
+Vì vậy một cây `unclean` **rơi khỏi pool**: `crew new` dựng thêm executor chứ
+không nhận nó, và bạn phải commit hoặc xoá những file được gọi tên thì cây mới
+quay lại `idle`.
+
+Phiên `fast-pair` đọc hai trạng thái `processing` và `finishing`, chỉ khác chỗ
+tìm: nó không có nhánh riêng nên trailer được tìm thẳng trên nhánh dev. Luật
+"cây sạch" **không** áp cho nó, vì cây chính là của chung và chính `crew done`
+để lại thay đổi chưa commit ở đó sau mỗi lượt.
 
 Chỉ trạng thái nào có người phản ứng lại mới được đặt tên. `finishing` xứng đáng
 vì repo gốc đo được việc xong nằm chờ **7h18** mà không bảng nào nói ra, và phản

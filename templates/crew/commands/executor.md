@@ -47,9 +47,12 @@ cái mũ do người giao chứ không phải thứ model tự đội. Lấy n�
    ```
 
 4b. `scripts/crew name executor` lần nữa — trailer vừa đẩy trạng thái sang
-   `finishing`, và title cũ giờ đã sai.
-5. `scripts/crew done $ARGUMENTS` — sáu bước gộp với hai phép kiểm nằm trong
+   `finishing`, và title cũ giờ đã sai. Nếu lệnh vẫn đọc ra `processing` thì cây
+   còn file chưa commit; đó là điều kiện của `finishing`, không phải lỗi.
+5. `scripts/crew done $ARGUMENTS` — sáu bước gộp với ba phép kiểm nằm trong
    ruột lệnh. **Không bao giờ gõ tay sáu lệnh đó** (`.claude/crew/worktrees.md`).
+   Check 0 chặn ngay từ đầu nếu cây của bạn còn file chưa commit, vì thứ được
+   gộp phải đúng bằng thứ bạn đang có.
 
 ## Luật riêng của vai
 

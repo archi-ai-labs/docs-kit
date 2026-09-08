@@ -114,7 +114,20 @@ exec_map() { # → "<path>\t<branch or -->" per executor tree, one line each
     /^branch /  { b = substr($0, 8); sub(/^refs\/heads\//, "", b) }
     END { flush() }'
 }
-exec_free() { exec_map | awk -F'\t' '$2 == "-" { print $1; exit }'; }
+# FREE IS NOT THE SAME AS DETACHED. Measured 2026-09-09: an executor parked by
+# hand — which is exactly what `crew done` tells the operator to do when its own
+# park refuses — still carried the finished ticket's uncommitted file. It read
+# `idle`, `crew new` handed it to the next ticket, and `git switch -c` carried
+# that file onto the new branch, where the next `git add -A` sweeps one ticket's
+# work into another ticket's commit. So a tree is free when it holds no branch
+# AND owns nothing uncommitted. A tree that fails the second half drops out of
+# the pool and `crew new` grows instead, which is already the designed answer to
+# "nothing is free" — never a silent handover of somebody's work.
+exec_free() {
+  exec_map | awk -F'\t' '$2 == "-" { print $1 }' | while IFS= read -r p; do
+    [ "$(own_dirty "$p")" -eq 0 ] && { echo "$p"; break; }
+  done
+}
 
 # Claiming an executor must be ATOMIC. Measured 2026-09-08 with three concurrent
 # `crew new` against a pool of two: all three read the same free tree, the last
@@ -142,7 +155,7 @@ claim_unlock() {
 # and some of it cannot be gitignored at all — a `dir/` rule does not match a
 # symlink — so counting it would make a freshly built executor look like it had
 # already started work, and `preparing` would be unreachable in such a repo.
-own_dirty() {
+own_files() {
   git -C "$1" status --porcelain 2>/dev/null | awk '{print $NF}' | while IFS= read -r q; do
     [ -n "$q" ] || continue
     q="${q%/}"
@@ -150,8 +163,9 @@ own_dirty() {
       case "$q" in "$c"|"$c"/*) continue 2 ;; esac
     done
     echo "$q"
-  done | wc -l | tr -d ' '
+  done
 }
+own_dirty() { own_files "$1" | wc -l | tr -d ' '; }
 exec_on()   { exec_map | awk -F'\t' -v b="$1" '$2 == b { print $1; exit }'; }
 en()        { n="$(basename "$1")"; echo "${n##*-}"; }   # …/myapp-e2 → e2
 
@@ -170,11 +184,25 @@ has_closer() {
 # declared itself done and only the merge is missing (action: crew done), which
 # is the 7h18 of unmerged work the origin repo measured (EXECUTION §5).
 exec_state() {
+  # A trailer on an EARLIER commit does not mean the work stopped. Measured
+  # 2026-09-09: with the trailer written and one file still uncommitted, the
+  # board printed `finishing dirty=1` — two columns contradicting each other —
+  # and `crew done` then ran to completion: the ticket flipped to `status: done`
+  # with an audit line citing a sha while that file never landed. The
+  # uncommitted count is therefore part of the state, not a column beside it.
+  if [ "$(own_dirty "$1")" -gt 0 ]; then echo processing; return; fi
   if has_closer "$1" "${2##*/b}" "$(cfg dev_branch main)..$2"; then echo finishing; else echo processing; fi
 }
 
 # The same two states for a fast-pair session, which has no branch of its own:
 # its trailer lands straight on the dev branch, so that is where to look.
+# NOTE the asymmetry, and do not "fix" it into symmetry: the uncommitted-work
+# rule above holds because an executor tree belongs to exactly ONE ticket, so
+# anything uncommitted in it is that ticket's. The main tree is shared, and
+# `crew done` itself leaves writes there every run — docs_close flips the status
+# and appends the audit line without committing either. Reading dirtiness as
+# "still working" here would pin every fast-pair session at `processing`
+# forever. The main tree gets its own guard instead: check 2 of `crew done`.
 pair_state() {
   if has_closer "$MAIN" "$1" -50 "$(cfg dev_branch main)"; then echo finishing; else echo processing; fi
 }
@@ -365,6 +393,20 @@ cmd_done() {
   WT="$(exec_on "work/b$N")"
   [ -n "$WT" ] || die "no executor holds work/b$N — fast-pair tickets close by trailer alone (EXECUTION §2)"
 
+  # Check 0 — the executor's own tree, before anything is merged. Step 2 below
+  # tests exactly what is about to land, and a tree carrying uncommitted work of
+  # its own means what lands is NOT what the session has. This check already
+  # existed at the very END of this command, as the park refusal; measured
+  # 2026-09-09, that is hours too late: by then the merge had happened and the
+  # ticket read `status: done` with an audit line, while the file sat unlanded.
+  # Same test, moved in front of the merge. `own_files` excludes crew's
+  # provisioned payload, so it names only somebody's real work.
+  LEFT="$(own_files "$WT")"
+  if [ -n "$LEFT" ]; then
+    echo "$LEFT" | sed 's/^/  /' >&2
+    die "check 0: $(en "$WT") has uncommitted work (files above) — commit or drop it, then rerun crew done $N"
+  fi
+
   tries=0
   while :; do
     # 1. Conflicts are resolved in the ticket's own tree, never on the main tree.
@@ -461,14 +503,9 @@ cmd_done() {
   SAFE=1
   while IFS= read -r p; do
     [ -n "$p" ] || continue
-    p="${p%/}"
-    INSIDE=0
-    for c in $(cfg copy "node_modules") $(cfg link "") briefs; do
-      case "$p" in "$c"|"$c"/*) INSIDE=1; break ;; esac
-    done
-    [ "$INSIDE" -eq 1 ] || { SAFE=0; note "unmerged leftover: $p"; }
+    SAFE=0; note "unmerged leftover: $p"
   done <<LEFTOVERS
-$(git -C "$WT" status --porcelain 2>/dev/null | awk '{print $NF}')
+$(own_files "$WT")
 LEFTOVERS
   if [ "$SAFE" -eq 1 ]; then
     if git -C "$WT" switch --detach "$DEV" >/dev/null 2>&1; then
@@ -538,17 +575,27 @@ cmd_status() {
 
   echo "crew status — $REPO"
   echo ""
-  # Executor state is DERIVED, never stored: idle is a detached HEAD, and a held
-  # branch is `processing` until its own commit declares the work done. Only the
-  # states something ACTS on are named — `finishing` earns its word because the
-  # origin repo measured finished work sitting unmerged for 7h18 with no board
-  # saying so (EXECUTION §6), while a "just assigned, not started yet" state
-  # would only be a window nobody reacts to.
+  # Executor state is DERIVED, never stored: idle is a detached HEAD over a clean
+  # tree, and a held branch is `processing` until its own commit declares the work
+  # done AND the tree owns nothing uncommitted. Only the states something ACTS on
+  # are named — `finishing` earns its word because the origin repo measured
+  # finished work sitting unmerged for 7h18 with no board saying so (EXECUTION §6),
+  # `unclean` because such a tree silently leaves the pool, while a "just assigned,
+  # not started yet" state would only be a window nobody reacts to.
   DEVB="$(cfg dev_branch main)"
   echo "executors:"
   exec_map | while IFS="$(printf '\t')" read -r P B; do
     if [ "$B" = "-" ]; then
-      echo "  $(en "$P")  idle"
+      DIRTYC="$(own_dirty "$P")"
+      if [ "$DIRTYC" -gt 0 ]; then
+        # `unclean` earns a word by the same rule the other three do: something
+        # ACTS on it. This tree is out of the pool until someone clears it, and
+        # without the word `crew new` would just keep growing the pool with no
+        # reason visible on the board.
+        echo "  $(en "$P")  unclean  dirty=$DIRTYC  ← holds no ticket but owns uncommitted files; clear it or it never takes another"
+      else
+        echo "  $(en "$P")  idle"
+      fi
     else
       NUM="${B##*/b}"
       DIRTYC="$(own_dirty "$P")"

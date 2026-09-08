@@ -5,6 +5,50 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
+## [0.32.0] — 2026-09-09
+
+### Fixed — an executor is free when its tree is clean, not merely when it holds no branch
+
+One defect, read at both ends of a ticket's life: the state of an executor was derived from
+the branch alone, and the files sitting uncommitted in the tree were reported in a column
+beside it rather than being part of the answer. Both halves were reproduced on a fixture
+before anything was changed.
+
+**A ticket closed while part of its work never landed.** With the `Closes:` trailer written
+on an earlier commit and one file still uncommitted, `crew status` printed
+`finishing dirty=1` — two columns contradicting each other — and `crew done` then ran to
+completion: the merge landed, `docs_close` flipped the ticket to `status: done` and appended
+an audit line citing a sha, and the file was still in the executor when the command
+finished. The leftover check that names such a file already existed, but it ran at the very
+END of `crew done`, as the park refusal, which is long after the ticket has been recorded as
+complete. That test is now **check 0**, in front of the merge, for the reason step 2 already
+gives: it tests exactly what is about to land, and a dirty tree means what lands is not what
+the session has. `exec_state()` gained the matching precondition — nothing reads `finishing`
+while the tree still owns work — so the board, the session title and the command agree.
+
+**A parked tree handed one ticket's files to the next ticket.** `exec_free()` matched any
+worktree at a detached HEAD. A tree parked by hand — which is exactly what `crew done` tells
+the operator to do when its own park refuses — still carried the finished ticket's
+uncommitted file, read `idle`, and was handed to the next `crew new`; `git switch -c` then
+carried that file onto the new branch, one `git add -A` away from being committed there.
+Free now means detached **and** clean. A tree that fails the second half drops out of the
+pool, so `crew new` grows instead, which is already the designed answer to "nothing is free"
+— never a silent handover of somebody's work.
+
+`unclean` is the fourth board word, and it earns one by the rule the other three obey:
+something acts on it. Such a tree is out of the pool until someone clears it, and without
+the word the pool would grow with no reason visible on the board. The rule is deliberately
+**not** applied to the main tree, where a fast-pair session works: that tree is shared, and
+`crew done` leaves writes there every run — `docs_close` flips the status and appends the
+audit line without committing either — so reading dirtiness as "still working" would pin
+every fast-pair session at `processing` forever. The main tree keeps its own guard, check 2.
+The existing suite caught that over-reach as a red test before it shipped.
+
+`own_files()` is now the single definition of "what counts as somebody's work", and the park
+refusal reads it too, so the check at the start of `crew done` and the one at its end cannot
+disagree. Six tests were added, each on a known-bad case first and asserting the reason tag:
+80 checks, all green.
+
 ## [0.31.2] — 2026-09-09
 
 ### Changed — the manifest description says the crew layer exists

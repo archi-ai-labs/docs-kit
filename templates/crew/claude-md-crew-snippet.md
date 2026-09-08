@@ -12,11 +12,11 @@ nhiều phiếu. Nhánh nó đang mở là phiếu nó giữ, HEAD tách rời l
 
 **Title phiên** `<repo> · <chỗ> · b<nnn> · <trạng thái> · crew/executor`, do
 `crew name executor` tự đọc: chỗ là `e<k>`, hoặc `main` với fast-pair; sinh ra ở
-`processing`, sang `finishing` khi commit mang trailer.
+`processing`, sang `finishing` khi commit mang trailer **và** cây đã sạch.
 
 **Lệnh:** `scripts/crew new <nnn>` giao phiếu cho một executor rảnh (nhánh
 `work/b<nnn>`), hết cây rảnh thì tự dựng thêm chứ không chặn; `scripts/crew done
-<nnn>` gộp — sáu bước và hai phép kiểm nằm trong ruột lệnh, **không gõ tay sáu
+<nnn>` gộp — sáu bước và ba phép kiểm nằm trong ruột lệnh, **không gõ tay sáu
 lệnh đó**; `scripts/crew lock` trước phần
 chạm máy thật; `scripts/crew status` trước khi nhận thêm phiếu.
 
