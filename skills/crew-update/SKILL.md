@@ -100,3 +100,9 @@ Then report three things: the version now stamped, the counts from step 2, and
 any `.new` left unapplied by the user's own choice. If `scripts/crew` was among
 the updated files, mention that open executor sessions are still running the old
 copy in their worktrees — the file follows the branch, not the session.
+
+**Coming from before 0.31.0**, say this and stop there: the repo has no executor
+pool yet, so `crew new` will refuse until someone runs `scripts/crew executor
+add`; any surviving `../<repo>-b<nnn>` tree still merges by hand and `crew
+status` names it. Do not create the pool or remove a tree yourself — pool size
+is the planner's call and a `-b` tree may hold unmerged work.

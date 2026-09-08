@@ -35,7 +35,7 @@ Gather evidence and show it with the source attached (like `owns-hint:`):
 - test / typecheck commands: `package.json` scripts, `Makefile` targets,
   `pyproject.toml` — quote the line you read them from;
 - dependency dirs that exist: `node_modules`, `vendor`, `.venv`;
-- worktree payload: the gitignored things a fresh checkout will lack — nested
+- executor payload: the gitignored things a fresh checkout will lack — nested
   repos (`find . -maxdepth 3 -name .git -not -path ./.git`), env files
   (`.env*`), dep dirs — proposed as `copy` (mutable), `link` (strictly
   read-only shares), and a `setup_cmd` for whatever needs a command.
@@ -64,7 +64,7 @@ Ask, in up to two rounds of four, offering the detected values as defaults:
 
 1. test command + typecheck command (empty = skip that gate in `crew done`);
 2. dev branch + prod branch;
-3. worktree provisioning — which detected payload goes in `copy`, which in
+3. executor provisioning — which detected payload goes in `copy`, which in
    `link` (read-only only — never link something a ticket edits), and the
    `setup_cmd` if any;
 4. shared resources, as `name: pattern, pattern` lines (empty is fine — locks
@@ -105,10 +105,13 @@ second copy.
 
 ## Step 6 — Hand over
 
-Report in a few lines: what was written where, then the working loop —
-planner writes the first ticket, `scripts/crew new <nnn>` takes it,
-`scripts/crew done <nnn>` lands it, `scripts/crew status` before taking more.
-Point to `.claude/crew/README.md` as the 30-second map, and name what is
-missing out loud: absent roles and a prod branch that does not exist yet stay
-visible in `crew status` until someone wires them. Do not run `crew new`
-yourself; the first ticket is the user's call.
+Report in a few lines: what was written where, then the working loop — the
+planner pre-warms the pool if it wants to (`scripts/crew executor add`, twice by
+default) and writes the first ticket, `scripts/crew new <nnn>` hands it to a free
+executor and creates one if none is free,
+`scripts/crew done <nnn>` lands it and frees that executor, `scripts/crew
+status` before taking more. Point to `.claude/crew/README.md` as the 30-second
+map, and name what is missing out loud: absent roles and a prod branch that does
+not exist yet stay visible in `crew status` until someone wires them. Do not run
+`crew executor add` or `crew new` yourself; the first ticket is the user's call,
+and an empty pool is not a problem — the first `crew new` builds what it needs.

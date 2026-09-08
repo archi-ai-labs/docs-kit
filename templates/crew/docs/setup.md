@@ -33,13 +33,13 @@ chối lịch sự, không gì đổi hình dạng. Đó cũng là cách tắt n
 }
 ```
 
-## Hai luật cho phần dựng cây
+## Hai luật cho phần cấp phát executor
 
 - `link` chỉ dành cho thứ **chỉ-đọc**; thứ gì phiếu có sửa thì `copy`, còn
   repo lồng có sửa thì mở phiếu ở crew của chính repo đó (`worktrees.md`).
 - Sản phẩm phụ của `setup_cmd` phải rơi vào vùng gitignored hoặc vào thư mục
-  đã `copy`, vì `crew done` chỉ tự dọn được những gì nó biết — một tệp lạ
-  chưa commit sẽ giữ cây lại và được nêu đích danh.
+  đã `copy`, vì `crew done` chỉ nhận ra những gì nó tự đắp vào — một tệp lạ
+  chưa commit sẽ giữ executor lại trên nhánh và được nêu đích danh.
 
 ## Khi nào bật `enforce`
 

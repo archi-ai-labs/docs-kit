@@ -9,12 +9,12 @@ nhau thì EXECUTION.md thắng.
 
 ```
 Issue → (lane test, 3 câu — gates.md) → Backlog item
-      → scripts/crew new <nnn>     # cây ../<repo>-b<nnn>, nhánh work/b<nnn>
-      → làm trọn trong cây đó, commit cuối mang "Closes: BACKLOG-<nnn>"
-      → scripts/crew done <nnn>    # merge + 2 phép kiểm + đóng phiếu + dọn cây
+      → scripts/crew new <nnn>     # một executor rảnh mở nhánh work/b<nnn>
+      → làm trọn trong executor đó, commit cuối mang "Closes: BACKLOG-<nnn>"
+      → scripts/crew done <nnn>    # merge + 2 phép kiểm + đóng phiếu + thả executor
 ```
 
-Không có phiếu thì không có cây: `crew new` từ chối id chưa tồn tại trong
+Không có phiếu thì không có nhánh: `crew new` từ chối id chưa tồn tại trong
 `docs/23_backlog/`, vì id cấp trong worktree sẽ trùng nhau một cách tất định.
 
 ## Bảy tệp
@@ -23,7 +23,7 @@ Không có phiếu thì không có cây: `crew new` từ chối id chưa tồn t
 |---|---|
 | `roles.md` | ai làm gì, ai cố ý không làm gì |
 | `tickets.md` | phiếu to bao nhiêu thì chẻ, ba mức thi hành |
-| `worktrees.md` | cây, nhánh, và vì sao gộp là một lệnh |
+| `worktrees.md` | pool executor, nhánh, và vì sao gộp là một lệnh |
 | `resources.md` | tài nguyên dùng chung, khoá, nhịp nhận phiếu |
 | `gates.md` | bốn cổng trước khi hỏi người dùng quyết |
 | `setup.md` | dựng lại hệ từ số 0, chỉnh ngưỡng |

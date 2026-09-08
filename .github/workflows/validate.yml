@@ -703,7 +703,9 @@ jobs:
           CAPS = [("templates/claude-md-snippet.md", 1800,
                    "loaded in every session of every repo that ran docs-init"),
                   ("templates/docs/README.md", 12200,
-                   "the 30-second digest a person reads per repo")]
+                   "the 30-second digest a person reads per repo"),
+                  ("templates/crew/claude-md-crew-snippet.md", 2400,
+                   "loaded in every session of every repo that ran crew-init")]
           bad = 0
           for rel, cap, why in CAPS:
               n = len(pathlib.Path(rel).read_bytes())

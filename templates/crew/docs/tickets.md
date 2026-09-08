@@ -2,15 +2,19 @@
 
 ## Một token cho một phiếu
 
-Số phiếu xuất hiện **nguyên vẹn** ở năm chỗ, nên gõ một con số là tra ra hết:
+Số phiếu xuất hiện **nguyên vẹn** ở bốn chỗ; chỉ cái cây là dùng lại qua nhiều
+phiếu nên nó mang địa chỉ executor:
 
 ```
-BACKLOG-157                      phiếu (docs/23_backlog/)
-../<repo>-b157                   cây làm việc
-work/b157                        nhánh
-<repo> · b157 · crew/executor    tên phiên
-BACKLOG-157                      chủ khoá (crew lock acquire <resource> 157)
+BACKLOG-157                                 phiếu (docs/23_backlog/)
+work/b157                                   nhánh
+BACKLOG-157                                 chủ khoá (crew lock acquire … 157)
+<repo> · e1 · b157 · processing · …         tên phiên
+../<repo>-e1                                cây của executor (dùng lại)
 ```
+
+Nối hai địa chỉ ấy là **nhánh mà executor đang checkout**: e1 đang mở
+`work/b157` tức e1 đang giữ BACKLOG-157, và e1 ở HEAD tách rời tức e1 đang rảnh.
 
 ## Ba mức thi hành
 
@@ -20,27 +24,27 @@ Ghi mức vào frontmatter phiếu bằng trường tuỳ chọn `execution:`.
 | `execution:` | Lane | Nhánh | Cây | Điều kiện vào |
 |---|---|---|---|---|
 | `fast-pair` | fast | nhánh dev trực tiếp | cây chính | ≤ 1 tệp · revert là xong · không chạm contract |
-| `fast` | fast | `work/b<nnn>` | cây riêng | fast lane nhưng lớn hơn mức trên |
-| `full` | full | `work/b<nnn>` | cây riêng | full lane (đã có Decision) |
+| `fast` | fast | `work/b<nnn>` | một executor rảnh | fast lane nhưng lớn hơn mức trên |
+| `full` | full | `work/b<nnn>` | một executor rảnh | full lane (đã có Decision) |
 
 Cả ba mức đều có phiếu — `fast-pair` là *phiếu + nhánh dev*, không phải "bỏ
-phiếu cho nhanh". Nó tiết kiệm ~10 giây dựng cây và một lượt gộp, tức phần lớn
+phiếu cho nhanh". Nó tiết kiệm một lượt gộp và một chỗ trong pool, tức phần lớn
 đời của một bug một dòng.
 
 **Kỷ luật fast-pair** (vì va chạm là có thật, xem `worktrees.md`): sửa xong
 commit ngay trong cùng lượt, không để cây chính bẩn vắt qua lượt khác. Một
 fast-pair đang mở chặn mọi `crew done` ở phép kiểm cây-sạch.
 
-**Chi phí dựng cây là một đầu vào của việc xếp mức, không phải phí ngầm.**
-`crew new` in thời gian dựng cây và ghi dòng `SETUP` vào log; thời gian đó
-lớn hơn phần việc dự kiến thì phiếu xuống `fast-pair`, hoặc gộp nhiều phiếu
-nhỏ làm một cho đáng một lần dựng.
+**Pool tự lớn theo nhu cầu, nên thứ cần canh là lúc thu hẹp lại.** `crew new`
+không còn executor rảnh thì tự dựng thêm và ghi dòng `GROW`; `crew status` cho
+biết pool đang bao nhiêu và có vượt trần đọc chưa. Hết đợt việc dồn thì gỡ bớt
+bằng `scripts/crew executor rm <k>`.
 
 ## Việc không thành phiếu
 
 Phiếu là đơn vị giao việc, không phải sổ ghi mọi thứ cần làm. Giá một phiếu là
-một cây, một phiên và một lượt gộp — `crew new` in thời gian dựng cây ra để bạn
-nhìn thấy con số đó — nên việc rẻ hơn cái giá ấy thì làm tại chỗ.
+một nhánh, một lượt gộp và một chỗ trong pool suốt thời gian nó chạy, nên việc
+rẻ hơn cái giá ấy thì làm tại chỗ.
 
 Không thành phiếu: dọn dẹp tài liệu layer 2 (archive hoặc đóng một Issue, sửa
 trạng thái, sửa typo trong phiếu). Người phát hiện làm ngay kèm dòng audit,

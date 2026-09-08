@@ -27,17 +27,37 @@ five, verbatim:
 | What | Form | Example |
 |---|---|---|
 | Ticket | `BACKLOG-nnn` | `BACKLOG-157` |
-| Worktree | `../<repo>-b<nnn>` | `../myapp-b157` |
 | Branch | `work/b<nnn>` | `work/b157` |
-| Session name | `<repo> · b<nnn> · crew/executor` | `myapp · b157 · crew/executor` |
 | Lock owner | full id | `crew lock acquire e2e-harness 157` → owner `BACKLOG-157` |
+| Executor tree | `../<repo>-e<k>` | `../myapp-e1` |
+| Session name | `<repo> · e<k> · b<nnn> · <state> · crew/executor` | `myapp · e1 · b157 · processing · crew/executor` |
 
 `<nnn>` is the zero-padded number exactly as it appears in `id:` — `crew`
 normalizes `crew new 42` to `b042`.
 
-**Not every job is a ticket.** A ticket costs a worktree, a session and a merge
-— `crew new` prints the provisioning time so the cost is visible — so anything
-cheaper than that is done where it is found. Bookkeeping on Layer 2 documents
+Two addresses, and one thing joins them. The ticket number reaches the ticket,
+its branch and its locks; the executor index reaches the tree and the session
+that lives in it. What pins a ticket to an executor is **the branch that
+executor has checked out**: git already stores it, git refuses to check one
+branch out in two trees, and no file can disagree with it. `crew status` reads
+that pin; nothing writes it. The session title is read off the same three
+things — tree, branch, trailer — so it answers "which executor, which ticket,
+how far along" without opening the board, and it cannot drift from what git
+says. There is deliberately **no idle title**: an executor holding no ticket has
+no session to name. An executor holding no ticket sits at a detached
+HEAD on the dev branch, because "on dev" is the one thing a second worktree may
+not be.
+
+Before 0.31.0 the tree carried the ticket number too, and was built and
+destroyed once per ticket. The cost that ended that, from the origin repo's own
+log: four trees for fifteen tickets, **49 seconds** of provisioning in total —
+small there, but it is thrown away and re-paid every ticket, and it grows with
+the repo. A tree is the part of a ticket that is worth reusing; the branch and
+the session are not.
+
+**Not every job is a ticket.** A ticket costs a branch, a merge and an executor
+slot for as long as it runs, so anything cheaper than that is done where it is
+found. Bookkeeping on Layer 2 documents
 (archiving or closing an Issue, correcting a status, a typo in a ticket) is not
 delegated work: whoever notices does it with the audit line, or it rides along
 with the ticket that produced it. A whole ticket spent archiving one Issue
@@ -45,21 +65,23 @@ trades the full setup cost for a single file edit. The boundary is code: work
 that touches code is a ticket even at one line, and a one-file ticket is
 `fast-pair` (§2), not "not a ticket".
 
-**The ticket exists in the main tree before the worktree does.** `crew new`
-refuses to create a worktree for an id it cannot find under `docs/23_backlog/`.
+**The ticket exists in the main tree before its branch does.** `crew new`
+refuses to open a branch for an id it cannot find under `docs/23_backlog/`.
 This is not ceremony: id allocation is read-then-write ("highest + 1", STANDARD
 §3), and a worktree only sees its own `docs/`, so two worktrees allocating ids
 collide deterministically — git even merges the collision cleanly because the
 file names differ, and the duplicate surfaces only at the next validator run.
 Allocating on the main tree before any worktree exists is what makes the
 collision impossible instead of unlikely. It also makes the Backlog the single
-intake: **no ticket, no tree.**
+intake: **no ticket, no branch.**
 
-**One ticket = one tree = one session, carried to `done`.** No handoffs between
-roles mid-ticket. The measurement that bought this rule: one owner request
-("fix the demo top-up") cut across 4 technical roles took **15h32** wall-clock
-of which **~87 minutes** had commits, and the owner was told "done" 4 separate
-times. The longest stretch was **7h18 of finished work sitting unmerged on a
+**One ticket = one branch = one session, carried to `done`.** 0.31.0 changed
+exactly one thing about that: the *tree* is no longer per ticket. A session is
+still born for a ticket, titled `processing`, and ends `finishing`; what is
+reused is the checkout underneath it. The measurement that bought this rule:
+one owner request ("fix the demo top-up") cut across 4 technical roles took
+**15h32** wall-clock of which **~87 minutes** had commits, and the owner was
+told "done" 4 separate times. The longest stretch was **7h18 of finished work sitting unmerged on a
 branch** — which happened 3 times in 2 days. Cutting tickets by request instead
 of by technical layer is the fix; the first two tickets run under this model
 closed in **15 and 41 minutes**.
@@ -73,16 +95,16 @@ lane splits in two by size:
 | Level | Lane | Branch | Tree | Entry conditions |
 |---|---|---|---|---|
 | `fast-pair` | fast | dev branch directly | main tree | ≤ 1 file · plain revert undoes it · touches no contract |
-| `fast` | fast | `work/b<nnn>` | own worktree | fast lane, but bigger than that |
-| `full` | full | `work/b<nnn>` | own worktree | full lane (Decision exists) |
+| `fast` | fast | `work/b<nnn>` | a free executor | fast lane, but bigger than that |
+| `full` | full | `work/b<nnn>` | a free executor | full lane (Decision exists) |
 
 All three levels have a ticket. `fast-pair` is not "skip the ticket" — it is
-*ticket + dev branch*. What it saves is measured: ~10 seconds of worktree setup
-plus one merge round, which is most of the lifetime of a one-line fix.
+*ticket + dev branch*. What it saves is one merge round and one executor slot,
+which is most of the lifetime of a one-line fix.
 
 The level may be recorded on the Backlog item as an optional `execution:` field
 (`fast-pair | fast | full`). The validator does not check it in 0.26.0; `crew
-new` reads it and refuses to build a worktree for a `fast-pair` item.
+new` reads it and refuses to take an executor for a `fast-pair` item.
 
 **fast-pair discipline (defensive, because the collision is real):** the merge
 procedure's cleanliness check (§6, check 2) requires the main tree's status to
@@ -96,17 +118,25 @@ fast-pair commit moves the dev branch under a pending `--ff-only`. Therefore:
 - `crew done` retries its merge cycle (merge dev → re-test → `--ff-only`) up to
   2 times when the dev branch moved underneath it, then stops and says so.
 
-**A worktree checkout is not a working environment, and the difference is
-measured.** Dep dirs, nested harness repos and env files are gitignored, so a
-fresh tree lacks them; `crew new` puts them back from config — `copy` for
-mutable payload (APFS clonefile where the filesystem offers it, so gigabytes
-cost seconds), `link` for strictly read-only shares, `setup_cmd` for whatever
-needs a command — and logs the total as a `SETUP` line. That number is an
-input to grading: when provisioning dwarfs the ticket itself, the ticket
-belongs in `fast-pair`, or several small tickets belong together. One boundary
-is a rule, not a missing feature: **a ticket that edits a nested repo belongs
-to that repo's own crew** — the outer worktree cannot isolate inner-repo
-edits, and an edit made inside a provisioned copy dies with the tree.
+**A checkout is not a working environment, and the pool pays for that once.**
+Dep dirs, nested harness repos and env files are gitignored, so a fresh tree
+lacks them; `crew executor add` puts them back from config — `copy` for mutable
+payload (APFS clonefile where the filesystem offers it, so gigabytes cost
+seconds), `link` for strictly read-only shares, `setup_cmd` for whatever needs a
+command — and logs the total as a `SETUP` line against the executor, not against
+a ticket.
+
+The saving is that a landed ticket leaves its dependencies behind for the next
+one, and that is also the new hazard: a ticket that moved a lockfile would
+otherwise leave the next ticket testing against the wrong tree. So `crew new`
+re-runs `setup_cmd` when any `resetup_when` file differs from the one this
+executor was last set up with, and skips it when none does. The default list
+covers the usual lockfiles; the stored key is a cache key and never a source of
+truth about who holds what.
+
+One boundary is a rule, not a missing feature: **a ticket that edits a nested
+repo belongs to that repo's own crew** — an executor cannot isolate inner-repo
+edits, and an edit made inside a provisioned copy is not on the branch.
 
 ## 3. Roles — cut by work, not by technical layer
 
@@ -181,12 +211,14 @@ on this layout.
 **Resolution is computed, never guessed:** the main tree is the first entry of
 `git worktree list`, and the state dir is `<parent-of-main>/<basename>-crew`.
 Every `crew` subcommand and both hooks resolve it this way, so the rule works
-identically from the main tree and from any `-b<nnn>` worktree.
+identically from the main tree and from any `-e<k>` executor.
 
 Contents:
 
 ```
 ../<repo>-crew/
+├── assign.lock/             # mkdir mutex, held only while an executor is claimed
+├── keys/<repo>-e<k>         # cksum of the resetup_when files at last setup
 ├── locks/<resource>.lock    # owner id + ISO timestamp, one file per held lock
 ├── log.tsv                  # append-only: ts · event · resource · ticket · seconds
 └── gate.log                 # explain-gate fail-open trail (§8)
@@ -195,6 +227,24 @@ Contents:
 `log.tsv` events: `ACQUIRE` (seconds = time spent waiting), `RELEASE`
 (seconds = time held), `WAIT` (a request that had to queue). The directory is
 never committed anywhere; deleting it loses runtime state only.
+
+
+**Check-then-write is not a claim, and both places that did it were wrong.**
+Measured 2026-09-08, before the fix. Three concurrent `crew new` against a pool
+of two: all three read the same free executor, the last `git switch` won, and in
+**4 runs out of 5 only one ticket landed** while the second executor sat idle and
+a branch was left held by nobody — a command that had already printed success had
+its tree taken. Two concurrent `crew lock acquire` on one resource: **both
+reported success in 5 runs out of 5**, while the file recorded a single owner, so
+two sessions each believed they held the rig.
+
+Both now use an atomic test-and-set from the portability floor: `crew new` wraps
+"who is free" through "the branch is checked out" in a `mkdir` mutex
+(`assign.lock`, bounded wait, released on every exit path including `die`), and
+`crew lock acquire` makes the **write itself** the test via `O_EXCL` (`set -C`),
+same file format as before. Provisioning stays outside the mutex — it can run for
+minutes, and by then the tree already belongs to that ticket. Neither defect is
+visible by reading the code, so `crew_test.sh` races both for real.
 
 ## 5. Locks and pacing — resources are locks, not roles
 
@@ -221,11 +271,47 @@ executors.
 |---|---|---|
 | Cumulative lock wait today = 0 | the rig is idle | taking another heavy ticket is fine |
 | Cumulative lock wait today > 30 min | the lock is the bottleneck | drop one heavy session |
-| Open `-b*` worktrees > 4 | past the reader's ceiling | take nothing more, even light |
+| Pool grew this session | a guessed size was too small | fine while the burst lasts; shrink after |
+| Pool size > 4 | past the reader's ceiling | land something before starting more, even light |
+
+**Executor state is derived, never stored.** `crew status` reads it off git, so
+nothing can go stale and nothing has to be written down:
+
+| State | How it is read | Means |
+|---|---|---|
+| `idle` | detached HEAD | free; no ticket and therefore no session |
+| `processing` | holds `work/b<nnn>` | a session is on that ticket |
+| `finishing` | a commit on the branch carries `Closes: BACKLOG-<nnn>` | declared complete, not yet landed |
+
+The last two are also the session's own two states, and the title carries
+whichever holds — the session is born `processing` and ends `finishing`. Only
+states something **acts on** get a word. `finishing` earns its own because
+the origin repo measured finished work sitting unmerged for **7h18** with no
+board saying so, and the action is "run `crew done`". A fourth state for "taken
+but not started" was considered and dropped: it is a window, not a condition,
+and nothing behaves differently in it. Provisioning is likewise not a state —
+it happens inside `crew new` and is skipped entirely unless a lockfile moved.
+
+Two ceilings, stated rather than papered over. The `dirty=` count excludes
+crew's own provisioned payload, because some of it cannot be gitignored at all
+— a `dir/` rule does not match a symlink — and counting it would report a fresh
+executor as having uncommitted work. And the board reads git, not sessions: it
+cannot tell an executor whose session is open from one whose task chip nobody
+has clicked. That is not a gap, because `crew new` is run BY the executor
+session as its own first step, so an unclicked chip means no ticket was taken
+and the executor honestly reads `idle`.
 
 Heavy ticket (needs a lock) = 1 slot; light ticket = 0 slots; **one slot per
-resource** — the rig only exists once. The 4-session ceiling has a different
-reason: usually one human reads the results. 30 minutes is a starting point to
+resource** — the rig only exists once, and a second executor does not create a
+second rig. The 4-session ceiling has a different reason: usually one human
+reads the results. It is a **warning, never a refusal**: a pool size is a guess,
+so `crew new` with nothing free grows the pool by one and says so, rather than
+blocking a ticket on a number somebody picked in advance. Growth is logged as a
+`GROW` line. Shrinking back is the deliberate act, and it is **one** command
+because otherwise an automatic ratchet only ever turns one way:
+`crew executor prune [floor]` removes the idle trees down to a floor (default 2)
+and keeps every executor that still holds a branch, naming it. `crew executor rm
+<k>` removes exactly one, and refuses while that one holds a branch. 30 minutes is a starting point to
 tune per repo, not a constant; the raw log is kept precisely so the thresholds
 can be re-derived.
 
@@ -249,8 +335,8 @@ six-step merge lives in one command, and sessions **run it, never re-type it**:
 crew done 157
 ```
 
-1. In the worktree: `git merge <dev-branch>` — conflicts are resolved here, in
-   the ticket's own tree, never on the main tree.
+1. In the executor holding `work/b157`: `git merge <dev-branch>` — conflicts
+   are resolved there, never on the main tree.
 2. Typecheck + test commands from config — testing exactly what is about to
    land, post-merge.
 3. **Check 1:** the main tree currently has the dev branch checked out
@@ -266,9 +352,10 @@ crew done 157
 6. Close-out: if a commit on the branch carries `Closes: BACKLOG-157`, run
    `docs_close` (STANDARD §6.1) so `status: done` and the audit line cite the
    sha; otherwise print the reminder and leave the flip to `docs-sync`. Release
-   any locks still held by the ticket, remove the worktree (untracked leftovers
-   that crew itself provisioned are force-cleaned; any other uncommitted file
-   keeps the tree and is named), print the one-line summary.
+   any locks still held by the ticket, then **park** the executor — detach it
+   back onto the dev branch, which is what makes it free again. Its provisioned
+   payload stays; any other uncommitted file keeps the executor on the branch
+   and is named, exactly as the old teardown refused to delete it.
 
 Executors merge their own finished work — no human review gate holds a green
 branch. The gate that was removed was measured first: finished work waited
@@ -421,10 +508,14 @@ command detection tuned on Node manifests.
 | Finished work waiting for merge | 7h18 · 6h55 · overnight — 3× in 2 days | executor merges own work, no review gate (§6) |
 | Ticket graded LIGHT holding the rig | 871 s | grader ≠ fixer (§3) |
 | `p` on first two ops tickets | 0.78 · 0.36 | count lock slots, not tickets — and keep ops out of the executor formula (§5) |
-| First two tickets under this model | 15 min · 41 min | one ticket – one tree – one session (§1) |
+| First two tickets under this model | 15 min · 41 min | one ticket – one branch – one executor (§1) |
 | One manual pass playing the customer | 12 findings, suite green | tester explores, patches nothing (§3) |
 | 93 commits in 2 days | 26 code · 46 docs · 21 rules | the execution layer deserves a standard (this file) |
 | "A string match is not a measurement" | 5 bites in 1 day | procedures are commands (§6); hooks read events (§8) |
+| Worktrees built vs sessions run in one | 4 trees · 49 s total · 0 sessions | the pool is persistent and the pin is the branch (§1) |
+| One lock serialising two parallel trees | 30.7 h waited | an executor is not a second rig (§5) |
+| 3 concurrent claims on a pool of 2 | 1 landed, 4 runs of 5 | claiming an executor is atomic (§4) |
+| 2 concurrent acquires of one resource | both "succeeded", 5 of 5 | the write is the test, via O_EXCL (§4) |
 
 ## 12. When crew itself is wrong
 

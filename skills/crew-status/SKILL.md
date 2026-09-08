@@ -1,6 +1,6 @@
 ---
 name: crew-status
-description: Read-only crew board — open worktrees vs tickets, held locks, and the three pacing signals, straight from scripts/crew status. Never edits anything.
+description: Read-only crew board — executors vs tickets, held locks, and the three pacing signals, straight from scripts/crew status. Never edits anything.
 disable-model-invocation: true
 ---
 
@@ -23,19 +23,28 @@ point to `/docs-kit:crew-init`. That is not an error to work around.
 
 Quote the script's output, then read it back in plain language:
 
-- **worktrees** — each line is a ticket mid-flight. An `orphan` flag is
-  steward work: a tree whose ticket is `done` (or missing) should be removed;
-  a `note:` about an in-progress ticket without a tree means someone closed a
-  laptop mid-ticket.
+- **executors** — three states, all read off git: `idle` (detached, can take a
+  ticket), `processing` (holds the ticket's branch), `finishing` (a commit on it
+  already carries the `Closes:` trailer, so the work is declared done and only
+  the merge is missing — that one has an action, `crew done`). An `orphan` flag
+  is steward work: an executor still holding a branch whose ticket is `done` or
+  missing should be parked. A `note:` about an in-progress ticket no executor
+  holds means someone closed a laptop mid-ticket. A `pre-pool worktree` note is
+  a `-b<nnn>` tree from before 0.31.0: land it, then remove it. The board reads
+  git and not sessions, so `idle` means no ticket is taken — it does not prove
+  a session is open, or that one is not.
 - **locks** — who holds which shared resource and for how long. A lock held
   for hours with no matching activity is usually a forgotten `release`.
 - **pacing** — the three signals of EXECUTION §5, each mapping to exactly one
   action: rig idle → a heavy ticket may start; wait over budget → drop one
-  heavy session; past the reader's ceiling → take nothing more, even light.
+  heavy session; every executor busy → the next ticket will grow the pool, so
+  land one if you would rather it did not; past the reader's ceiling → land
+  something before starting more, and shrink the pool once the burst ends
+  (`crew executor prune`, which only ever touches idle trees).
 
 The thresholds are per-repo config, not truths — if the user questions them,
 point at `.claude/crew/setup.md`, which explains how to re-derive both from
 `log.tsv`.
 
-Change nothing on disk, acquire no locks, remove no worktrees — name what
-should happen and whose hat it belongs to.
+Change nothing on disk, acquire no locks, add or remove no executors — name
+what should happen and whose hat it belongs to.

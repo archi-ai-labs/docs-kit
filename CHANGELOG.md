@@ -5,6 +5,73 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
+## [0.31.0] — 2026-09-08
+
+### Changed — an executor is a place, not a ticket
+
+The crew layer built a worktree per ticket and destroyed it at `crew done`. The origin
+repo's own logs say what that bought. Across the whole life of the project **4 trees were
+built for 15 tickets**, at a total provisioning cost of **49 seconds** — and **zero**
+Claude sessions ever ran inside one of them (24 project directories under
+`~/.claude/projects/`, none of them a `-b<nnn>` tree). A tree whose name changes with
+every ticket cannot hold a session that outlives a ticket, so the isolation the tree
+exists for was paid for and never used. Meanwhile the one attempt at real parallelism —
+two trees created **1 second apart** — was serialised by a single `dev-server` lock for
+**30.7 hours**.
+
+So the tree stops being addressed by the ticket:
+
+- **`crew executor add`** creates `../<repo>-e<k>`, provisions it once, and parks it at a
+  detached HEAD on the dev branch. The default pool is two, plus the main tree for
+  `fast-pair`. Pool size is the planner's call, never an executor's reflex.
+- **`crew new <nnn>`** finds a free executor and opens `work/b<nnn>` there. A pool size
+  is a guess, so it must not block a ticket: with nothing free it **grows the pool by
+  one**, logs a `GROW` line, and warns — never refuses — past the reader ceiling.
+  Shrinking back is the deliberate act, and it is one command because an automatic
+  ratchet otherwise only turns one way: **`crew executor prune [floor]`** removes idle
+  trees down to a floor (default 2) and keeps every executor still holding a branch,
+  naming it. `crew executor rm <k>` removes exactly one and refuses while it holds a
+  branch.
+- **`crew done <nnn>`** merges exactly as before, then **parks** the executor instead of
+  deleting it: detach back onto dev, keep the provisioned payload. The refusal that
+  protected uncommitted work is unchanged — an untracked file crew did not put there
+  keeps the executor on its branch and gets named.
+- **The ticket↔executor pin is the checked-out branch**, not a registry file. Git already
+  stores it and refuses to check one branch out in two trees, so nothing can disagree
+  with it. `crew status` reads that pin; nothing writes it.
+
+Keeping the payload is the saving and also the new hazard, because a ticket that moved a
+lockfile would leave the next one testing against the wrong tree. `crew new` therefore
+re-runs `setup_cmd` when a `resetup_when` file differs from the one that executor was
+last set up with, and skips it when none did — both branches are tested, and both go red
+under mutation.
+
+Session titles follow the tree: `<repo> · e1 · crew/executor`, set once, because the
+session now spans many tickets. The ticket grammar still resolves for anything outside
+the pool.
+
+**Migrating:** a repo updated from an older version has no pool, so `crew new` refuses
+until someone runs `crew executor add`. Any surviving `-b<nnn>` tree still holds real
+work — `crew status` names it, and landing or removing it is a human's call.
+
+### Fixed — two read-then-write races, one of them older than this release
+
+Neither is visible by reading the code, so both were measured and both are now raced in
+CI. **`crew new`**: three concurrent claims against a pool of two landed *one* ticket in
+4 runs out of 5, left the second executor idle, and left a branch held by nobody — a
+command that had already printed success had its tree switched out from under it. The
+claim is now a `mkdir` mutex around "who is free" through "the branch is checked out",
+released on every exit path; provisioning stays outside it.
+
+**`crew lock acquire`** (present since 0.26.0): two concurrent acquires on one resource
+**both reported success in 5 runs out of 5** while the lock file recorded a single owner,
+so two sessions each believed they held the rig — the exact failure the lock exists to
+prevent. The write is now the test, via `O_EXCL` (`set -C`); the file format is unchanged.
+
+Also: the crew `CLAUDE.md` block is now under the always-loaded ratchet (cap 2400 bytes),
+alongside the two files 0.30.0 capped. It caught this release's own growth and was cut
+back rather than the cap raised.
+
 ## [0.30.0] — 2026-09-07
 
 ### Changed — nothing may ask for a `docs-sync` except the hook that knows

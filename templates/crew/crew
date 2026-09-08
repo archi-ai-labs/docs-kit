@@ -10,11 +10,12 @@
 # .docs-kit.json (degrades to defaults without it). No Node, no jq.
 #
 # Subcommands:
-#   crew new <nnn>                       ticket → worktree + branch (+ deps copy)
-#   crew done <nnn>                      merge procedure, close-out, cleanup
+#   crew new <nnn>                       ticket → a free executor (grows the pool if none) 
+#   crew done <nnn>                      merge procedure, close-out, park the executor
+#   crew executor add|rm <k>|prune       the persistent worktree pool
 #   crew lock acquire <res> <nnn> [--wait]
 #   crew lock release <res> <nnn>
-#   crew status                          worktrees · locks · pacing signals
+#   crew status                          executors · locks · pacing signals
 #   crew name <role> [<nnn>]             is this session wearing its name?
 #   crew role <role>                     print a role file (works from a worktree)
 set -u
@@ -26,7 +27,7 @@ note() { echo "crew: $*"; }
 # Main tree = first entry of `git worktree list` (documented git behaviour).
 # Shared state = sibling of the main tree — outside every checkout, so every
 # session sees one set of locks (EXECUTION §4). Computed, never guessed: this
-# exact resolution is what makes the CLI work identically from any -b worktree.
+# exact resolution is what makes the CLI work identically from any -e worktree.
 MAIN="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree /{print substr($0,10); exit}')"
 [ -n "$MAIN" ] || die "not inside a git repository"
 REPO="$(basename "$MAIN")"
@@ -99,27 +100,78 @@ log_line() { # log_line <event> <resource> <ticket> <detail>
   printf '%s\t%s\t%s\t%s\t%s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$1" "$2" "$3" "$4" >> "$STATE/log.tsv"
 }
 
-# ---------------------------------------------------------------- crew new
-cmd_new() {
-  require_on
-  N="$(norm "${1:?usage: crew new <nnn>}")"
-  F="$(ticket_file "$N")"
-  # No ticket, no tree: ids are allocated read-then-write on the main tree, and
-  # a worktree that allocated its own would collide deterministically (EXECUTION §1).
-  [ -n "$F" ] || die "BACKLOG-$N not found under docs/23_backlog — no ticket, no tree (EXECUTION §1)"
-  [ "$(front "$F" status)" = "done" ] && die "BACKLOG-$N is already done"
-  if [ "$(front "$F" execution)" = "fast-pair" ]; then
-    die "BACKLOG-$N is fast-pair: work on the dev branch in the main tree and commit in the same bout — no worktree (EXECUTION §2)"
-  fi
-  DEV="$(cfg dev_branch main)"
-  WT="$(dirname "$MAIN")/${REPO}-b${N}"
-  [ -e "$WT" ] && die "$WT already exists"
-  git -C "$MAIN" worktree add "$WT" -b "work/b$N" "$DEV" || die "worktree add failed"
-  # Provisioning: a checkout is NOT a working environment. Dep dirs, nested
-  # harness repos and env files are gitignored, so they must be put back
-  # deliberately — and the cost of doing so is timed and logged, because it is
-  # an input to grading the ticket (EXECUTION §2).
-  T0="$(date +%s)"
+# ---------------------------------------------------------------- executors
+# The pool is persistent: `<parent>/<repo>-e<k>` trees are created once and kept
+# across tickets. The ticket↔executor pin is NOT a registry file — it is the
+# branch each tree has checked out, which git already stores and cannot let
+# drift. Git also refuses to check out one branch in two worktrees, so "free"
+# is encoded as a detached HEAD at the dev branch, not as sitting on it.
+exec_map() { # → "<path>\t<branch or -->" per executor tree, one line each
+  git -C "$MAIN" worktree list --porcelain | awk -v r="$REPO" '
+    function flush() { if (p != "") { n = p; sub(/.*\//, "", n); if (n ~ pat) print p "\t" b } }
+    BEGIN { gsub(/\./, "\\.", r); pat = "^" r "-e[0-9]+$" }
+    /^worktree /{ flush(); p = substr($0, 10); b = "-" }
+    /^branch /  { b = substr($0, 8); sub(/^refs\/heads\//, "", b) }
+    END { flush() }'
+}
+exec_free() { exec_map | awk -F'\t' '$2 == "-" { print $1; exit }'; }
+
+# Claiming an executor must be ATOMIC. Measured 2026-09-08 with three concurrent
+# `crew new` against a pool of two: all three read the same free tree, the last
+# `git switch` won, and in 4 runs out of 5 only ONE ticket landed while the
+# second executor sat idle and a branch was left held by nobody — a command that
+# had already printed success had its tree taken. `mkdir` is the atomic
+# test-and-set available on the portability floor; the wait is bounded so a
+# crashed claim cannot wedge the repo silently.
+claim_lock() {
+  mkdir -p "$STATE"
+  CL="$STATE/assign.lock"
+  i=0
+  while ! mkdir "$CL" 2>/dev/null; do
+    i=$((i + 1))
+    [ "$i" -ge 15 ] && die "another crew new has held the claim for 15s — if none is running, remove $CL"
+    sleep 1
+  done
+  trap 'rmdir "$STATE/assign.lock" 2>/dev/null || true' EXIT INT TERM
+}
+claim_unlock() {
+  trap - EXIT INT TERM
+  rmdir "$STATE/assign.lock" 2>/dev/null || true
+}
+# Count only what the TICKET left behind. The provisioned payload is crew's own,
+# and some of it cannot be gitignored at all — a `dir/` rule does not match a
+# symlink — so counting it would make a freshly built executor look like it had
+# already started work, and `preparing` would be unreachable in such a repo.
+own_dirty() {
+  git -C "$1" status --porcelain 2>/dev/null | awk '{print $NF}' | while IFS= read -r q; do
+    [ -n "$q" ] || continue
+    q="${q%/}"
+    for c in $(cfg copy "node_modules") $(cfg link "") briefs; do
+      case "$q" in "$c"|"$c"/*) continue 2 ;; esac
+    done
+    echo "$q"
+  done | wc -l | tr -d ' '
+}
+exec_on()   { exec_map | awk -F'\t' -v b="$1" '$2 == b { print $1; exit }'; }
+en()        { n="$(basename "$1")"; echo "${n##*-}"; }   # …/myapp-e2 → e2
+
+# exec_state <tree> <branch> → processing | finishing. Derived, never stored,
+# and computed in ONE place so the board and the session title can never
+# disagree. Only states something ACTS on get a word: `finishing` means the work
+# declared itself done and only the merge is missing (action: crew done), which
+# is the 7h18 of unmerged work the origin repo measured (EXECUTION §5).
+exec_state() {
+  ES_NUM="${2##*/b}"
+  ES_C="$(git -C "$1" log "$(cfg dev_branch main)..$2" --format=%B 2>/dev/null \
+          | grep -c "^Closes: BACKLOG-$ES_NUM" || true)"
+  if [ "${ES_C:-0}" -gt 0 ]; then echo finishing; else echo processing; fi
+}
+
+# A checkout is not a working environment: dep dirs, nested harness repos and
+# env files are gitignored, so they must be put back deliberately. With a
+# persistent pool this is paid once per executor instead of once per ticket.
+provision() { # provision <worktree> <label>
+  WT="$1"; LBL="$2"; T0="$(date +%s)"
   for d in $(cfg copy "node_modules"); do
     if [ -e "$MAIN/$d" ] && [ ! -e "$WT/$d" ]; then
       mkdir -p "$(dirname "$WT/$d")"
@@ -135,21 +187,157 @@ cmd_new() {
       note "linked $d (shared read-only — never link something a ticket edits)"
     fi
   done
-  SETUP="$(cfg setup_cmd "")"
-  if [ -n "$SETUP" ]; then
-    ( cd "$WT" && eval "$SETUP" ) || note "setup_cmd failed — the tree may not test cleanly"
-  fi
   # briefs/ is gitignored on purpose, so a fresh checkout arrives without it.
   if [ -d "$MAIN/briefs" ] && [ ! -e "$WT/briefs" ]; then
     cp -R "$MAIN/briefs" "$WT/briefs"
     note "copied briefs/ (gitignored — it does not follow a worktree on its own)"
   fi
-  ELAPSED=$(( $(date +%s) - T0 ))
-  log_line SETUP - "BACKLOG-$N" "$ELAPSED"
-  note "tree provisioned in ${ELAPSED}s — if that dwarfs the ticket itself, grade it fast-pair or batch tickets (EXECUTION §2)"
-  log_line NEW - "BACKLOG-$N" "$WT"
-  note "worktree : $WT  (branch work/b$N, from $DEV)"
-  note "session  : title it $REPO · b$N · crew/executor  (scripts/crew name executor $N)"
+  run_setup "$WT" "$LBL"
+  log_line SETUP "$LBL" - "$(( $(date +%s) - T0 ))"
+}
+
+# A persistent tree keeps last ticket's dependencies, which is the whole saving
+# and also the whole new hazard: a ticket that moved a lockfile would otherwise
+# leave the next one testing against the wrong tree. So setup_cmd re-runs when
+# a `resetup_when` file changed since this executor was last set up, and is
+# skipped when none did. The key file is a cache key, never a source of truth.
+setup_key() {
+  for f in $(cfg resetup_when "package-lock.json yarn.lock pnpm-lock.yaml requirements.txt go.sum Gemfile.lock Cargo.lock"); do
+    [ -f "$1/$f" ] && cat "$1/$f"
+  done 2>/dev/null | cksum | awk '{print $1 "-" $2}'
+}
+
+run_setup() { # run_setup <worktree> <label>
+  SETUP="$(cfg setup_cmd "")"
+  [ -n "$SETUP" ] || return 0
+  KF="$STATE/keys/$(basename "$1")"
+  KEY="$(setup_key "$1")"
+  if [ -f "$KF" ] && [ "$(cat "$KF")" = "$KEY" ]; then
+    note "deps unchanged since $2 was set up — setup_cmd skipped"
+    return 0
+  fi
+  ( cd "$1" && eval "$SETUP" ) || note "setup_cmd failed — the tree may not test cleanly"
+  mkdir -p "$STATE/keys" && printf '%s\n' "$KEY" > "$KF"
+}
+
+# ---------------------------------------------------------------- crew executor
+cmd_executor() {
+  require_on
+  DEV="$(cfg dev_branch main)"
+  case "${1:-}" in
+    add)
+      K=1
+      while [ -e "$(dirname "$MAIN")/${REPO}-e${K}" ]; do K=$((K + 1)); done
+      WT="$(dirname "$MAIN")/${REPO}-e${K}"
+      git -C "$MAIN" worktree add --detach "$WT" "$DEV" >/dev/null || die "worktree add failed"
+      provision "$WT" "e$K"
+      note "executor e$K at $WT — provisioned once, kept across tickets"
+      ;;
+    rm)
+      K="${2:?usage: crew executor rm <k>}"
+      WT="$(dirname "$MAIN")/${REPO}-e${K#e}"
+      [ -d "$WT" ] || die "no executor at $WT"
+      B="$(exec_map | awk -F'\t' -v w="$WT" '$1 == w { print $2 }')"
+      [ "$B" = "-" ] || die "e${K#e} still holds $B — land it with crew done first"
+      git -C "$MAIN" worktree remove --force "$WT" || die "worktree remove refused — inspect $WT"
+      rm -f "$STATE/keys/$(basename "$WT")"
+      note "executor e${K#e} removed"
+      ;;
+    prune)
+      # Growth is automatic, so shrinking has to be ONE command or the pool only
+      # ratchets up and the reader ceiling becomes decoration. Idle trees only:
+      # one holding a branch is somebody's open ticket, and it is named, never
+      # removed. The floor defaults to the documented starting pool.
+      FLOOR="${2:-2}"
+      case "$FLOOR" in ''|*[!0-9]*) die "usage: crew executor prune [floor]" ;; esac
+      mkdir -p "$STATE"
+      exec_map | awk -F'\t' '$2 != "-" { print $1 }' | while IFS= read -r P; do
+        [ -n "$P" ] && note "kept $(en "$P") — still holds $(git -C "$P" symbolic-ref --short HEAD 2>/dev/null)"
+      done
+      exec_map | awk -F'\t' '$2 == "-" { print $1 }' > "$STATE/.prune"
+      GONE=0
+      while IFS= read -r P; do
+        [ -n "$P" ] || continue
+        [ "$(exec_map | wc -l | tr -d ' ')" -le "$FLOOR" ] && break
+        if git -C "$MAIN" worktree remove --force "$P" 2>/dev/null; then
+          rm -f "$STATE/keys/$(basename "$P")"
+          GONE=$((GONE + 1))
+          note "removed $(en "$P")"
+        else
+          note "could not remove $(en "$P") — inspect $P by hand"
+        fi
+      done < "$STATE/.prune"
+      rm -f "$STATE/.prune"
+      log_line PRUNE - - "removed=$GONE pool=$(exec_map | wc -l | tr -d ' ')"
+      note "pool is now $(exec_map | wc -l | tr -d ' ') (removed $GONE, floor $FLOOR)"
+      ;;
+    *) die "usage: crew executor add|rm <k>|prune [floor]  (the board is: crew status)" ;;
+  esac
+}
+
+# ---------------------------------------------------------------- crew new
+cmd_new() {
+  require_on
+  N="$(norm "${1:?usage: crew new <nnn>}")"
+  F="$(ticket_file "$N")"
+  # No ticket, no branch: ids are allocated read-then-write on the main tree, and
+  # a worktree that allocated its own would collide deterministically (EXECUTION §1).
+  [ -n "$F" ] || die "BACKLOG-$N not found under docs/23_backlog — no ticket, no branch (EXECUTION §1)"
+  [ "$(front "$F" status)" = "done" ] && die "BACKLOG-$N is already done"
+  if [ "$(front "$F" execution)" = "fast-pair" ]; then
+    die "BACKLOG-$N is fast-pair: work on the dev branch in the main tree and commit in the same bout — no executor (EXECUTION §2)"
+  fi
+  DEV="$(cfg dev_branch main)"
+  BR="work/b$N"
+
+  # Everything from "who is free" to "the branch is checked out" is one critical
+  # section: read and claim must not be separable, or two commands claim the
+  # same tree (see claim_lock). Provisioning stays OUTSIDE it — it can run for
+  # minutes, and by then the tree is already this ticket's.
+  claim_lock
+  HOLD="$(exec_on "$BR")"
+  [ -n "$HOLD" ] && { claim_unlock; die "BACKLOG-$N is already open in $(en "$HOLD") ($HOLD)"; }
+  if git -C "$MAIN" show-ref --verify --quiet "refs/heads/$BR"; then
+    claim_unlock
+    die "branch $BR exists but no executor holds it — resume it: git -C <executor> switch $BR"
+  fi
+
+  # The tree is found, not built — that is the change from the per-ticket model.
+  # But a pool size is a GUESS, and a guess must not block a ticket: with none
+  # free, grow by one instead of refusing. Only the `worktree add` runs inside
+  # the mutex, because it is what reserves the name; provisioning can take
+  # minutes and happens after the claim is already this ticket's.
+  WT="$(exec_free)"
+  GREW=0
+  if [ -z "$WT" ]; then
+    K=1
+    while [ -e "$(dirname "$MAIN")/${REPO}-e${K}" ]; do K=$((K + 1)); done
+    WT="$(dirname "$MAIN")/${REPO}-e${K}"
+    git -C "$MAIN" worktree add --detach "$WT" "$DEV" >/dev/null 2>&1 \
+      || { claim_unlock; die "no executor was free and e$K could not be created at $WT"; }
+    GREW=1
+  fi
+  git -C "$WT" switch -c "$BR" "$DEV" >/dev/null 2>&1 \
+    || { claim_unlock; die "could not start $BR in $WT"; }
+  claim_unlock
+
+  if [ "$GREW" -eq 1 ]; then
+    POOL="$(exec_map | wc -l | tr -d ' ')"
+    CAP="$(cfg reader_cap 4)"
+    log_line GROW "$(en "$WT")" "BACKLOG-$N" "pool=$POOL"
+    note "no executor was free, so $(en "$WT") was created for this ticket (pool=$POOL)"
+    # Warn, never block: the ceiling is about one human reading results, and
+    # shrinking is a deliberate act once the burst is over (EXECUTION §5).
+    [ "$POOL" -gt "$CAP" ] \
+      && note "pool is past the reader ceiling of $CAP — shrink it when this burst ends: scripts/crew executor rm <k>"
+    provision "$WT" "$(en "$WT")"
+  else
+    run_setup "$WT" "$(en "$WT")"
+  fi
+
+  log_line NEW "$(en "$WT")" "BACKLOG-$N" "$WT"
+  note "executor : $(en "$WT")  $WT  (branch $BR, from $DEV)"
+  note "session  : title it $REPO · $(en "$WT") · b$N · processing · crew/executor  (scripts/crew name executor)"
   note "finish   : scripts/crew done $N   (from anywhere in the repo)"
 }
 
@@ -160,8 +348,8 @@ cmd_done() {
   DEV="$(cfg dev_branch main)"
   TYPECHECK="$(cfg typecheck_cmd "")"
   TEST="$(cfg test_cmd "")"
-  WT="$(dirname "$MAIN")/${REPO}-b${N}"
-  [ -d "$WT" ] || die "no worktree at $WT — fast-pair tickets close by trailer alone (EXECUTION §2)"
+  WT="$(exec_on "work/b$N")"
+  [ -n "$WT" ] || die "no executor holds work/b$N — fast-pair tickets close by trailer alone (EXECUTION §2)"
 
   tries=0
   while :; do
@@ -242,28 +430,30 @@ cmd_done() {
       fi
     done
   fi
-  if ! git -C "$MAIN" worktree remove "$WT" 2>/dev/null; then
-    # Untracked leftovers are usually the copy/link payload this CLI itself put
-    # there. Force-remove ONLY when nothing outside those paths is dirty —
-    # anything else is uncommitted work: it keeps the tree and gets named.
-    SAFE=1
-    while IFS= read -r p; do
-      [ -n "$p" ] || continue
-      p="${p%/}"
-      INSIDE=0
-      for c in $(cfg copy "node_modules") $(cfg link "") briefs; do
-        case "$p" in "$c"|"$c"/*) INSIDE=1; break ;; esac
-      done
-      [ "$INSIDE" -eq 1 ] || { SAFE=0; note "unmerged leftover: $p"; }
-    done <<LEFTOVERS
+  # Park the executor rather than destroy it. The safety property is the one the
+  # old teardown had: anything untracked that crew did not put there is somebody's
+  # uncommitted work, so it keeps the tree and gets named (EXECUTION §6).
+  SAFE=1
+  while IFS= read -r p; do
+    [ -n "$p" ] || continue
+    p="${p%/}"
+    INSIDE=0
+    for c in $(cfg copy "node_modules") $(cfg link "") briefs; do
+      case "$p" in "$c"|"$c"/*) INSIDE=1; break ;; esac
+    done
+    [ "$INSIDE" -eq 1 ] || { SAFE=0; note "unmerged leftover: $p"; }
+  done <<LEFTOVERS
 $(git -C "$WT" status --porcelain 2>/dev/null | awk '{print $NF}')
 LEFTOVERS
-    if [ "$SAFE" -eq 1 ]; then
-      git -C "$MAIN" worktree remove --force "$WT" 2>/dev/null \
-        || note "worktree remove refused — inspect $WT and remove it by hand"
+  if [ "$SAFE" -eq 1 ]; then
+    if git -C "$WT" switch --detach "$DEV" >/dev/null 2>&1; then
+      git -C "$WT" reset --hard >/dev/null 2>&1
+      note "$(en "$WT") is free — its deps stay in place for the next ticket"
     else
-      note "worktree kept: files above are neither committed nor crew-provisioned — commit or delete them, then: git worktree remove --force $WT"
+      note "could not park $(en "$WT") — park it by hand: git -C $WT switch --detach $DEV"
     fi
+  else
+    note "$(en "$WT") stays on work/b$N: the files above are neither committed nor crew-provisioned — commit or delete them, then: git -C $WT switch --detach $DEV"
   fi
   log_line DONE - "BACKLOG-$N" "files=$ACTUAL"
   note "BACKLOG-$N is on $DEV. Reminder: a clean main tree does not mean nobody is reading it."
@@ -282,7 +472,12 @@ cmd_lock() {
   case "$ACTION" in
     acquire)
       T0="$(date +%s)"
-      while [ -f "$LF" ]; do
+      # The WRITE is the test, via O_EXCL (`set -C`). Check-then-write is not a
+      # lock: measured 2026-09-08, two concurrent acquires on one resource both
+      # reported success in 5 runs out of 5 while the file recorded a single
+      # owner — two sessions each believing they hold the rig is the exact
+      # failure this file exists to prevent. Same file format as before.
+      while ! ( set -C; printf '%s\n%s\n' "$OWNER" "$(date +%s)" > "$LF" ) 2>/dev/null; do
         HOLDER="$(sed -n 1p "$LF")"
         [ "$HOLDER" = "$OWNER" ] && { note "$RES already held by $OWNER"; return 0; }
         if [ "$WAIT" = "--wait" ]; then
@@ -292,7 +487,6 @@ cmd_lock() {
           die "$RES is held by $HOLDER — queue with: crew lock acquire $RES $N --wait"
         fi
       done
-      printf '%s\n%s\n' "$OWNER" "$(date +%s)" > "$LF"
       WAITED=$(( $(date +%s) - T0 ))
       log_line ACQUIRE "$RES" "$OWNER" "$WAITED"
       note "$RES acquired by $OWNER (waited ${WAITED}s)"
@@ -319,26 +513,37 @@ cmd_status() {
 
   echo "crew status — $REPO"
   echo ""
-  echo "worktrees:"
-  OPEN=0
-  git -C "$MAIN" worktree list --porcelain | awk '/^worktree /{print substr($0,10)}' | while read -r P; do
-    B="$(basename "$P")"
-    case "$B" in
-      "$REPO"-b[0-9]*)
-        NUM="${B##*-b}"
-        DIRTYC="$(git -C "$P" status --porcelain 2>/dev/null | wc -l | tr -d ' ')"
-        TF="$(ticket_file "$NUM")"
-        TSTAT="(no ticket)"
-        [ -n "$TF" ] && TSTAT="$(front "$TF" status)"
-        FLAG=""
-        [ -z "$TF" ] && FLAG="  ← orphan: worktree without a Backlog item"
-        [ "$TSTAT" = "done" ] && FLAG="  ← orphan: ticket is done but the tree remains"
-        echo "  BACKLOG-$NUM  work/b$NUM  dirty=$DIRTYC  status=$TSTAT$FLAG"
-        ;;
-    esac
+  # Executor state is DERIVED, never stored: idle is a detached HEAD, and a held
+  # branch is `processing` until its own commit declares the work done. Only the
+  # states something ACTS on are named — `finishing` earns its word because the
+  # origin repo measured finished work sitting unmerged for 7h18 with no board
+  # saying so (EXECUTION §6), while a "just assigned, not started yet" state
+  # would only be a window nobody reacts to.
+  DEVB="$(cfg dev_branch main)"
+  echo "executors:"
+  exec_map | while IFS="$(printf '\t')" read -r P B; do
+    if [ "$B" = "-" ]; then
+      echo "  $(en "$P")  idle"
+    else
+      NUM="${B##*/b}"
+      DIRTYC="$(own_dirty "$P")"
+      STATE="$(exec_state "$P" "$B")"
+      TF="$(ticket_file "$NUM")"
+      TSTAT="(no ticket)"
+      [ -n "$TF" ] && TSTAT="$(front "$TF" status)"
+      FLAG=""
+      [ -z "$TF" ] && FLAG="  ← orphan: branch without a Backlog item"
+      [ "$TSTAT" = "done" ] && FLAG="  ← orphan: ticket is done but the executor still holds the branch"
+      echo "  $(en "$P")  $B  BACKLOG-$NUM  $STATE  dirty=$DIRTYC  ticket=$TSTAT$FLAG"
+    fi
   done
-  OPEN="$(git -C "$MAIN" worktree list --porcelain | awk '/^worktree /{print substr($0,10)}' | grep -c -- "-b[0-9]*$" || true)"
-  [ "$OPEN" -eq 0 ] && echo "  (none)"
+  POOL="$(exec_map | wc -l | tr -d ' ')"
+  [ "$POOL" -eq 0 ] && echo "  (pool empty — scripts/crew executor add)"
+  OPEN="$(exec_map | awk -F'\t' '$2 != "-"' | wc -l | tr -d ' ')"
+  # A tree left over from the per-ticket model is invisible to everything above,
+  # so name it here rather than let it rot unseen.
+  git -C "$MAIN" worktree list --porcelain \
+    | awk '/^worktree /{n=substr($0,10); sub(".*/","",n); if (n ~ /-b[0-9]+$/) print "  note: " n " is a pre-pool worktree — land it, then git worktree remove it"}'
 
   echo ""
   echo "locks:"
@@ -358,14 +563,13 @@ cmd_status() {
     grep -rlE "^status:[[:space:]]*\"?in-progress\"?" "$MAIN/docs/23_backlog" 2>/dev/null | while read -r TF; do
       TID="$(front "$TF" id)"
       NUM="${TID#BACKLOG-}"
-      [ -d "$(dirname "$MAIN")/${REPO}-b${NUM}" ] || echo "  note: $TID is in-progress but has no worktree"
+      [ -n "$(exec_on "work/b$NUM")" ] || echo "  note: $TID is in-progress but no executor holds it"
     done
   fi
 
   # Role/branch readiness — a configured branch that does not exist, or a role
   # declared absent at init, is a gap this board should show, not one a session
   # discovers mid-release.
-  DEVB="$(cfg dev_branch main)"
   PRODB="$(cfg prod_branch production)"
   git -C "$MAIN" show-ref --verify --quiet "refs/heads/$DEVB" \
     || echo "  note: dev_branch '$DEVB' does not exist in this repo"
@@ -384,9 +588,11 @@ cmd_status() {
   echo ""
   echo "pacing:"
   echo "  lock wait today : ${WAITSEC}s (budget ${BUDGET}s)"
-  echo "  open sessions   : $OPEN (ceiling $CAP)"
+  echo "  executors busy  : $OPEN of $POOL (reader ceiling $CAP)"
   if [ "$OPEN" -gt "$CAP" ]; then
     echo "  → past the reader's ceiling: take nothing more, even light tickets"
+  elif [ "$POOL" -gt 0 ] && [ "$OPEN" -ge "$POOL" ]; then
+    echo "  → every executor is busy: the next ticket grows the pool, so land one or expect e$((POOL + 1))"
   elif [ "$WAITSEC" -gt "$BUDGET" ]; then
     echo "  → the lock is the bottleneck: drop one heavy session"
   elif [ "$WAITSEC" -eq 0 ]; then
@@ -458,11 +664,24 @@ cmd_name() {
   ROLE="${1:-}"
   [ -n "$ROLE" ] || die "usage: crew name <role> [<nnn>]"
   TICKET="${2:-}"
-  # Two grammars, one place, project first so any session list sorts by repo.
-  # A ticket session keeps the §1 token verbatim (b157, the same string the
-  # worktree and the branch carry) and adds the hat; a hat session is just the
-  # hat. Never let a role file spell either grammar out again.
-  if [ -n "$TICKET" ]; then
+  # Three grammars, one place, project first so any session list sorts by repo.
+  # A session is still ONE PER TICKET — only the tree is reused — so an executor
+  # session is born processing and ends finishing, and there is deliberately no
+  # idle form: an idle executor has no session to name. All three parts are read
+  # from git rather than typed (tree → e<k>, branch → b<nnn>, trailer → state),
+  # so the cwd beats any ticket argument. A bare b157 still works for anyone
+  # outside the pool, and a hat session is just the hat. Never let a role file
+  # spell any of these out again.
+  HERE="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+  SUF=""
+  case "$(basename "${HERE:-.}")" in "$REPO"-e[0-9]*) SUF="$(en "$HERE")" ;; esac
+  if [ -n "$SUF" ] && [ "$ROLE" = "executor" ]; then
+    HB="$(git -C "$HERE" symbolic-ref --short HEAD 2>/dev/null || true)"
+    case "$HB" in
+      work/b*) WANT="$REPO · $SUF · ${HB#work/} · $(exec_state "$HERE" "$HB") · crew/$ROLE" ;;
+      *) die "$SUF holds no ticket, so there is no executor session to name — take one first: scripts/crew new <nnn>" ;;
+    esac
+  elif [ -n "$TICKET" ]; then
     WANT="$REPO · b$(norm "$TICKET") · crew/$ROLE"
   else
     WANT="$REPO · crew/$ROLE"
@@ -520,6 +739,7 @@ PYNAME
 case "${1:-help}" in
   new)    shift; cmd_new "$@" ;;
   done)   shift; cmd_done "$@" ;;
+  executor) shift; cmd_executor "$@" ;;
   lock)   shift; cmd_lock "$@" ;;
   status) shift; cmd_status "$@" ;;
   name)   shift; cmd_name "$@" ;;

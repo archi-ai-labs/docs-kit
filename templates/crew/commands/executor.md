@@ -1,5 +1,5 @@
 ---
-description: "Vai executor — một phiếu, một cây, làm trọn tới done rồi tự gộp."
+description: "Vai executor — một phiếu, một nhánh, làm trọn tới done rồi tự gộp."
 argument-hint: "<số phiếu, ví dụ: 157>"
 disable-model-invocation: true
 ---
@@ -9,21 +9,28 @@ Phiên này đội mũ **executor** cho phiếu `BACKLOG-$ARGUMENTS`
 
 ## Bước 0 — đúng title, trước mọi việc khác
 
-`scripts/crew name executor $ARGUMENTS`. Xanh thì làm tiếp; đỏ thì đặt lại
-title rồi chạy lại. Trong app phiên tự đổi title của chính nó được, ngoài
+Chạy `scripts/crew new $ARGUMENTS` (bước 1) trước, vì title cần biết bạn ngồi ở
+cây nào; rồi `scripts/crew name executor` ngay sau đó. Xanh thì làm tiếp; đỏ thì
+đặt lại title rồi chạy lại.
+
+Title có ba phần lệnh tự đọc từ git, bạn không truyền gì cả:
+`<repo> · e1 · b157 · processing · crew/executor` — cây bạn ngồi, nhánh bạn mở,
+và trạng thái. Phiên sinh ra ở `processing`, và **đổi sang `finishing` ngay khi
+bạn viết commit mang trailer** (bước 4), nên chạy lại lệnh này một lần nữa ở đó. Trong app phiên tự đổi title của chính nó được, ngoài
 terminal thì đưa dòng `/rename` mà lệnh in ra cho người dùng.
 
 Nếu bạn được mở từ một task chứ không do người dùng gõ `/executor`: bạn không
 **gọi** được tệp vai này, vì mọi tệp vai đều khoá `disable-model-invocation` —
 cái mũ do người giao chứ không phải thứ model tự đội. Lấy nội dung nó bằng
 `scripts/crew role executor`, đọc từ cây chính nên chạy được cả khi bạn đang
-đứng trong cây làm việc.
+đứng trong cây của executor.
 
 ## Vòng làm việc
 
-1. `scripts/crew new $ARGUMENTS` — nhận cây `../<repo>-b$ARGUMENTS` và làm việc
-   TRONG cây đó.
-2. Đọc phiếu và brief của nó (đã được copy vào cây). Làm **trọn phiếu**: code,
+1. `scripts/crew new $ARGUMENTS` — phiếu rơi vào executor rảnh trên nhánh
+   `work/b$ARGUMENTS`; làm việc TRONG cây mà lệnh in ra. Không còn cây rảnh thì
+   lệnh tự dựng thêm một executor, nên bạn không bao giờ bị chặn ở bước này.
+2. Đọc phiếu và brief của nó (`briefs/` đã nằm sẵn trong executor). Làm **trọn phiếu**: code,
    test, docs, dòng audit — phần nào của phiếu cũng là của bạn, không chuyển
    tay cho vai khác.
 3. Phần chạm máy thật (e2e, staging) để **nhỏ và ở cuối**, và khoá trước:
@@ -34,6 +41,8 @@ cái mũ do người giao chứ không phải thứ model tự đội. Lấy n�
    Closes: BACKLOG-$ARGUMENTS
    ```
 
+4b. `scripts/crew name executor` lần nữa — trailer vừa đẩy trạng thái sang
+   `finishing`, và title cũ giờ đã sai.
 5. `scripts/crew done $ARGUMENTS` — sáu bước gộp với hai phép kiểm nằm trong
    ruột lệnh. **Không bao giờ gõ tay sáu lệnh đó** (`.claude/crew/worktrees.md`).
 

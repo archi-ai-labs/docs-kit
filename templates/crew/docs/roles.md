@@ -5,11 +5,11 @@ Ràng buộc chỉ bắt đầu có nghĩa khi các mũ nằm trên các phiên 
 
 | Role | Làm | Ràng buộc đáng tiền nhất |
 |---|---|---|
-| `planner` | đo bug tại chỗ, viết phiếu, xếp lane + mức, khai `scope_files`, giao việc | **không sửa code** |
-| `executor` | một phiếu – một cây – tới `done`; n phiên song song | tự gộp bằng `crew done`, không chờ ai duyệt |
+| `planner` | đo bug tại chỗ, viết phiếu, xếp lane + mức, khai `scope_files`, giao việc, quyết định cỡ pool | **không sửa code** |
+| `executor` | một phiếu – một nhánh – tới `done`; một phiên sống trong một executor | tự gộp bằng `crew done`, không chờ ai duyệt |
 | `tester` | nghiệm thu + test khám phá đóng vai khách | **không vá thứ mình phát hiện** — phát hiện viết thành Issue |
 | `devops` | giữ nhánh production, quan sát bản đang chạy | không nhận phiếu code |
-| `steward` | dựng/dọn cây mồ côi, giữ bảng trạng thái, ghi luật | **không giao việc, không nhận báo cáo** |
+| `steward` | dọn executor mồ côi, giữ bảng trạng thái, ghi luật | **không giao việc, không nhận báo cáo** |
 
 `release.md` trong `.claude/commands/` là một thủ tục devops chạy, không phải
 vai thứ sáu.
@@ -43,15 +43,17 @@ vai cho một vai không tồn tại là một sự thật sai nằm trong repo.
 
 | Loại phiên | Tên | Ví dụ |
 |---|---|---|
-| phiên phiếu (executor) | `<repo> · b<nnn> · crew/executor` | `lop-hoc-zalo · b157 · crew/executor` |
+| phiên executor | `<repo> · e<k> · b<nnn> · <trạng thái> · crew/executor` | `lop-hoc-zalo · e1 · b157 · processing · crew/executor` |
 | phiên mũ (bốn vai còn lại) | `<repo> · crew/<vai>` | `lop-hoc-zalo · crew/steward` |
 
-Tên repo đứng trước để danh sách phiên tự gom theo dự án, và phiên phiếu giữ
-nguyên token `b157` — đúng chuỗi mà cây làm việc và nhánh đang mang, nên gõ một
-con số vẫn tra ra cả năm chỗ (`tickets.md`).
+Tên repo đứng trước để danh sách phiên tự gom theo dự án. Ba phần còn lại đều
+đọc từ git chứ không gõ tay: tên cây cho biết executor nào, nhánh cho biết phiếu
+nào, trailer cho biết trạng thái. Mỗi phiếu vẫn một phiên riêng, sinh ra ở
+`processing` và kết thúc ở `finishing`; executor rảnh thì không có phiên nào để
+đặt tên, nên `crew name` báo lỗi thay vì bịa ra một cái title.
 
-`scripts/crew name <vai> [<nnn>]` đọc **title** của phiên đang chạy rồi so với
-hai dòng trên, và title chưa đúng thì vai chưa bắt đầu.
+`scripts/crew name <vai>` đọc **title** của phiên đang chạy rồi so với hai dòng
+trên, và title chưa đúng thì vai chưa bắt đầu.
 
 Một phiên mang hai nhãn khác nhau, và phép kiểm đọc nhãn nào là chuyện có hậu
 quả thật. `name` nằm trong bản ghi phiên sống, còn title là thứ danh sách phiên

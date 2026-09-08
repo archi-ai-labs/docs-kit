@@ -167,47 +167,102 @@ status: open
 execution: fast-pair
 ---
 EOF
+  for n in 003 004; do
+    printf -- '---\nid: BACKLOG-%s\ndescription: "phiếu %s"\nsource_ref: ISSUE-%s\nstatus: open\n---\n' "$n" "$n" "$n" \
+      > "docs/23_backlog/t$n.md"
+  done
+  echo lock-v1 > package-lock.json
   printf '# audit log\n' > docs/92_audit/LOG.md
-  printf '{"owns": [], "crew": {"dev_branch": "main", "test_cmd": "", "typecheck_cmd": "", "copy": ["harness", ".env"], "link": ["shared-cache"], "setup_cmd": "touch harness/.setup-done", "roles_absent": ["devops"]}}\n' > .docs-kit.json
+  printf '{"owns": [], "crew": {"dev_branch": "main", "test_cmd": "", "typecheck_cmd": "", "copy": ["harness", ".env"], "link": ["shared-cache"], "setup_cmd": "printf x >> harness/.setup-done", "resetup_when": ["package-lock.json"], "roles_absent": ["devops"]}}\n' > .docs-kit.json
   cp "$KIT/templates/crew/crew" scripts/crew && chmod +x scripts/crew
   git add -A && git commit -qm init
 )
 
-# Known-bad first: no ticket, no tree.
+# Known-bad first: no ticket, no branch.
 OUT="$( (cd "$WR" && scripts/crew new 5) 2>&1 )" && RC=0 || RC=$?
-if [ "$RC" -ne 0 ] && has "$OUT" "no ticket, no tree"; then
-  ok "cli: refuses a worktree for a missing ticket"
+if [ "$RC" -ne 0 ] && has "$OUT" "no ticket, no branch"; then
+  ok "cli: refuses a branch for a missing ticket"
 else
   bad "cli: missing-ticket refusal (rc=$RC out: $OUT)"
 fi
 
 OUT="$( (cd "$WR" && scripts/crew new 2) 2>&1 )" && RC=0 || RC=$?
 if [ "$RC" -ne 0 ] && has "$OUT" "fast-pair"; then
-  ok "cli: refuses a worktree for a fast-pair ticket"
+  ok "cli: refuses an executor for a fast-pair ticket"
 else
   bad "cli: fast-pair refusal (rc=$RC out: $OUT)"
 fi
 
-OUT="$( (cd "$WR" && scripts/crew new 1) 2>&1 )" || { bad "cli: crew new 1 failed: $OUT"; }
-WT="$W/repo-b001"
-if [ -d "$WT" ] && [ "$(git -C "$WT" rev-parse --abbrev-ref HEAD)" = "work/b001" ]; then
-  ok "cli: worktree + branch follow the token"
+OUT="$( (cd "$WR" && scripts/crew executor add) 2>&1 )" || bad "cli: executor add failed: $OUT"
+E1="$W/repo-e1"
+if [ -d "$E1" ] && [ "$(git -C "$E1" rev-parse --abbrev-ref HEAD)" = "HEAD" ]; then
+  ok "cli: a fresh executor parks at a detached HEAD, which is how free is encoded"
 else
-  bad "cli: worktree/branch naming"
+  bad "cli: executor add did not park detached"
 fi
-
-if [ -f "$WT/harness/h.txt" ] && [ -f "$WT/.env" ]; then
-  ok "cli: gitignored payload copied into the tree"
+if [ -f "$E1/harness/h.txt" ] && [ -f "$E1/.env" ]; then
+  ok "cli: gitignored payload copied into the executor"
 else
   bad "cli: copy list not provisioned"
 fi
-[ -L "$WT/shared-cache" ] && ok "cli: read-only share is a symlink" \
+[ -L "$E1/shared-cache" ] && ok "cli: read-only share is a symlink" \
   || bad "cli: link list not provisioned"
-[ -f "$WT/harness/.setup-done" ] && ok "cli: setup_cmd ran inside the tree" \
-  || bad "cli: setup_cmd did not run"
+[ "$(cat "$E1/harness/.setup-done" 2>/dev/null)" = "x" ] \
+  && ok "cli: setup_cmd ran once when the executor was built" \
+  || bad "cli: setup_cmd did not run at add"
 grep -q "SETUP" "$W/repo-crew/log.tsv" 2>/dev/null \
-  && ok "cli: provisioning time logged" \
+  && ok "cli: provisioning time logged against the executor" \
   || bad "cli: SETUP line missing from log.tsv"
+
+OUT="$( (cd "$WR" && scripts/crew new 1) 2>&1 )" || bad "cli: crew new 1 failed: $OUT"
+WT="$E1"
+if [ "$(git -C "$WT" rev-parse --abbrev-ref HEAD)" = "work/b001" ]; then
+  ok "cli: the ticket branch opens inside a free executor"
+else
+  bad "cli: branch did not open in the executor"
+fi
+# The pin is the branch, so a second claim on the same ticket must be refused by
+# reading git, not by consulting a file that could disagree with it.
+OUT="$( (cd "$WR" && scripts/crew new 1) 2>&1 )" && RC=0 || RC=$?
+if [ "$RC" -ne 0 ] && has "$OUT" "already open in e1"; then
+  ok "cli: the branch an executor holds is the pin, and it is read back"
+else
+  bad "cli: double-assignment not refused (rc=$RC out: $OUT)"
+fi
+[ "$(cat "$WT/harness/.setup-done" 2>/dev/null)" = "x" ] \
+  && ok "cli: setup_cmd skipped when no lockfile moved" \
+  || bad "cli: setup_cmd re-ran with an unchanged lockfile"
+
+# Executor state is derived from the branch, so walk the lifecycle and assert
+# each shape. A state that never changes proves nothing — all four are checked.
+st() { (cd "$WR" && scripts/crew status) 2>&1 | awk '$1 == "e1" { print $4; exit }'; }
+[ "$(st)" = "processing" ] && ok "state: an executor holding a branch reads processing" \
+  || bad "state: expected processing, got '$(st)'"
+( cd "$WT" && echo half > f.txt && git add f.txt \
+    && git -c user.email=t@t -c user.name=t commit -qm "wip" )
+[ "$(st)" = "processing" ] && ok "state: a commit does not change it — only the trailer does" \
+  || bad "state: expected processing after a plain commit, got '$(st)'"
+
+# A pool size is a guess, so a full pool GROWS rather than blocking the ticket.
+OUT="$( (cd "$WR" && scripts/crew new 3) 2>&1 )" || bad "cli: crew new 3 failed: $OUT"
+if has "$OUT" "no executor was free" && [ -d "$W/repo-e2" ] \
+   && [ "$(git -C "$W/repo-e2" rev-parse --abbrev-ref HEAD)" = "work/b003" ]; then
+  ok "cli: a full pool grows by one instead of blocking the ticket"
+else
+  bad "cli: full-pool growth (out: $OUT)"
+fi
+[ -f "$W/repo-e2/harness/h.txt" ] && [ -L "$W/repo-e2/shared-cache" ] \
+  && ok "cli: the grown executor is provisioned like any other" \
+  || bad "cli: grown executor not provisioned"
+grep -q "GROW" "$W/repo-crew/log.tsv" 2>/dev/null \
+  && ok "cli: growth is logged, so a pool that only grows is visible later" \
+  || bad "cli: GROW line missing from log.tsv"
+OUT="$( (cd "$WR" && scripts/crew executor rm 2) 2>&1 )" && RC=0 || RC=$?
+if [ "$RC" -ne 0 ] && has "$OUT" "still holds work/b003"; then
+  ok "cli: a busy executor cannot be removed"
+else
+  bad "cli: busy-executor removal (rc=$RC out: $OUT)"
+fi
 
 ( cd "$WR" && git checkout -q -b temp )
 OUT="$( (cd "$WR" && scripts/crew done 1) 2>&1 )" && RC=0 || RC=$?
@@ -234,10 +289,34 @@ fi
   git add f.txt
   git -c user.email=t@t -c user.name=t commit -qm "add f" -m "Closes: BACKLOG-001"
 )
+[ "$(st)" = "finishing" ] && ok "state: a Closes: trailer reads finishing, before any merge" \
+  || bad "state: expected finishing, got '$(st)'"
 OUT="$( (cd "$WR" && CREW_DOCS_CLOSE="$KIT/scripts/docs_close.sh" scripts/crew done 1) 2>&1 )" && RC=0 || RC=$?
 [ "$RC" -eq 0 ] || bad "cli: crew done 1 failed (out: $OUT)"
+[ -z "$(st)" ] && ok "state: a parked executor is back to idle" \
+  || bad "state: expected idle, got '$(st)'"
 [ -f "$WR/f.txt" ] && ok "cli: work is on the dev branch" || bad "cli: merge did not land"
-[ ! -d "$WT" ] && ok "cli: worktree removed after done" || bad "cli: worktree still there"
+if [ -d "$WT" ] && [ "$(git -C "$WT" rev-parse --abbrev-ref HEAD)" = "HEAD" ]; then
+  ok "cli: done parks the executor instead of destroying it"
+else
+  bad "cli: executor not parked after done"
+fi
+[ -f "$WT/harness/h.txt" ] && [ -L "$WT/shared-cache" ] \
+  && ok "cli: the payload survives the ticket, which is the whole saving" \
+  || bad "cli: payload lost on park"
+
+# Keeping the payload is the saving AND the hazard: the next ticket would test
+# against the last one's dependencies. The guard is not "it usually re-runs" —
+# it must re-run exactly when a resetup_when file moved, so prove that branch.
+( cd "$WR" && echo lock-v2 > package-lock.json \
+    && git -c user.email=t@t -c user.name=t commit -qam "bump lock" )
+OUT="$( (cd "$WR" && scripts/crew new 4) 2>&1 )" || bad "cli: crew new 4 failed: $OUT"
+if [ "$(cat "$WT/harness/.setup-done" 2>/dev/null)" = "xx" ] && ! has "$OUT" "skipped"; then
+  ok "cli: a moved lockfile re-runs setup_cmd in the reused executor"
+else
+  bad "cli: lockfile drift did not re-provision (out: $OUT)"
+fi
+( cd "$WR" && CREW_DOCS_CLOSE="$KIT/scripts/docs_close.sh" scripts/crew done 4 >/dev/null 2>&1 ) || true
 grep -q "^status: done" "$WR/docs/23_backlog/demo.md" \
   && ok "cli: docs_close flipped status via the trailer" \
   || bad "cli: status not flipped"
@@ -275,6 +354,75 @@ OUT="$( (cd "$WR" && scripts/crew lock release e2e-harness 7) 2>&1 )" \
   && ok "cli: lock released" || bad "cli: lock release ($OUT)"
 grep -q "RELEASE" "$LOGT" && ok "cli: release logged with held time" \
   || bad "cli: release not logged"
+
+# ---------------------------------------------------------------- concurrency
+# Two commands read shared state and then write it, which is the same defect
+# twice, and BOTH were real (measured 2026-09-08 before the fix): three
+# concurrent `crew new` against a pool of two landed one ticket in 4 runs of 5
+# and left the second executor idle with a branch nobody held, and two
+# concurrent `crew lock acquire` on one resource BOTH reported success in 5 of
+# 5. Neither is provable by reading the code, so both are raced here.
+R="$TMP/race"; RR="$R/app"
+mkdir -p "$RR"
+(
+  cd "$RR"
+  git init -q && git checkout -q -b main
+  git config user.email t@t && git config user.name t
+  mkdir -p scripts docs/23_backlog
+  cp "$KIT/templates/crew/crew" scripts/crew && chmod +x scripts/crew
+  printf '{"crew":{"dev_branch":"dev","copy":[],"link":[],"setup_cmd":""}}\n' > .docs-kit.json
+  for n in 157 158 159; do
+    printf -- '---\nid: BACKLOG-%s\nstatus: open\nexecution: fast\n---\n' "$n" > "docs/23_backlog/b$n.md"
+  done
+  echo x > README.md
+  git add -A && git commit -qm init && git branch dev
+  scripts/crew executor add >/dev/null 2>&1
+  scripts/crew executor add >/dev/null 2>&1
+) >/dev/null 2>&1
+( cd "$RR" && scripts/crew new 157 >"$R/o1" 2>&1 ) &
+( cd "$RR" && scripts/crew new 158 >"$R/o2" 2>&1 ) &
+( cd "$RR" && scripts/crew new 159 >"$R/o3" 2>&1 ) &
+wait
+TOOK="$(cat "$R"/o1 "$R"/o2 "$R"/o3 2>/dev/null | grep -c 'executor :' || true)"
+BRN="$(git -C "$RR" branch --list 'work/*' 2>/dev/null | wc -l | tr -d ' ')"
+POOLN="$(ls -d "$R"/app-e[0-9]* 2>/dev/null | wc -l | tr -d ' ')"
+if [ "$TOOK" -eq 3 ] && [ "$BRN" -eq 3 ] && [ "$POOLN" -eq 3 ]; then
+  ok "race: 3 concurrent claims on a pool of 2 all land, growing it to exactly 3"
+else
+  bad "race: crew new (took=$TOOK branches=$BRN pool=$POOLN)"
+fi
+# Distinct trees, distinct branches: growth under contention must not hand two
+# tickets the same index or the same checkout.
+HEADS="$(for d in "$R"/app-e[0-9]*; do git -C "$d" symbolic-ref --short HEAD 2>/dev/null || echo -; done | sort)"
+if [ "$(echo "$HEADS" | wc -l | tr -d ' ')" -eq 3 ] \
+   && [ "$(echo "$HEADS" | sort -u | wc -l | tr -d ' ')" -eq 3 ] \
+   && ! echo "$HEADS" | grep -qx -- '-'; then
+  ok "race: every executor holds a different branch, and none was left empty"
+else
+  bad "race: executor assignment ($(echo "$HEADS" | tr '\n' ' '))"
+fi
+
+# Growth is automatic, so shrinking must be one command — otherwise the pool
+# only ratchets up. Prune takes idle trees only, and stops at the floor.
+( cd "$R/app-e3" && git switch -q --detach dev 2>/dev/null ) || true
+OUT="$( (cd "$RR" && scripts/crew executor prune 1) 2>&1 )"
+POOLN="$(ls -d "$R"/app-e[0-9]* 2>/dev/null | wc -l | tr -d ' ')"
+if [ "$POOLN" -eq 2 ] && has "$OUT" "removed e3" && has "$OUT" "kept e1"; then
+  ok "prune: idle executors go, busy ones are kept and named"
+else
+  bad "prune: (pool=$POOLN out: $OUT)"
+fi
+
+( cd "$RR" && scripts/crew lock acquire rig 157 >"$R/l1" 2>&1 ) &
+( cd "$RR" && scripts/crew lock acquire rig 158 >"$R/l2" 2>&1 ) &
+wait
+HELD="$(cat "$R/l1" "$R/l2" 2>/dev/null | grep -c 'acquired by' || true)"
+QUEUED="$(cat "$R/l1" "$R/l2" 2>/dev/null | grep -c 'is held by' || true)"
+if [ "$HELD" -eq 1 ] && [ "$QUEUED" -eq 1 ]; then
+  ok "race: one resource, two acquires — exactly one holder, the loser is told who"
+else
+  bad "race: lock acquire (held=$HELD queued=$QUEUED)"
+fi
 
 # ---------------------------------------------------------------- session name
 # The title is the last custom-title record in the session transcript, reached
@@ -319,6 +467,42 @@ printf '{"type":"custom-title","customTitle":"%s · b042 · crew/executor"}\n' "
 OUT="$(run_name executor 42)" && RC=0 || RC=$?
 [ "$RC" -eq 0 ] && ok "name: ticket grammar carries the padded token" \
   || bad "name: ticket grammar (rc=$RC, got: $OUT)"
+
+# An executor is titled by its TREE, not its ticket: the pool is persistent, so
+# one session spans many tickets and is named once. Running the check from
+# inside e1 is what selects that grammar, so run it from there for real.
+# A session is one per ticket, so a parked executor has NO session to name and
+# the command must say that rather than invent an idle title.
+OUT="$( (cd "$E1" && CREW_SESSIONS_DIR="$SESS" CREW_PROJECTS_DIR="$TMP/projects" scripts/crew name executor) 2>&1 )" && RC=0 || RC=$?
+if [ "$RC" -ne 0 ] && has "$OUT" "holds no ticket"; then
+  ok "name: a parked executor has no session to name, and the command says so"
+else
+  bad "name: idle executor should refuse (rc=$RC, got: $OUT)"
+fi
+
+# All three parts come from git — no argument is passed, so a pass proves the
+# title was derived. Born processing:
+( cd "$E1" && git switch -q -c work/b042 2>/dev/null )
+en_title() { printf '{"type":"custom-title","customTitle":"%s"}\n' "$1" > "$PROJ/s1.jsonl"; }
+en_title "$RNAME · e1 · b042 · processing · crew/executor"
+OUT="$( (cd "$E1" && CREW_SESSIONS_DIR="$SESS" CREW_PROJECTS_DIR="$TMP/projects" scripts/crew name executor) 2>&1 )" && RC=0 || RC=$?
+[ "$RC" -eq 0 ] && ok "name: a new executor session is born processing" \
+  || bad "name: processing grammar (rc=$RC, got: $OUT)"
+
+# ...and the SAME title goes red once the trailer lands, naming the new state.
+( cd "$E1" && echo z > z.txt && git add z.txt \
+    && git -c user.email=t@t -c user.name=t commit -qm "done" -m "Closes: BACKLOG-042" )
+OUT="$( (cd "$E1" && CREW_SESSIONS_DIR="$SESS" CREW_PROJECTS_DIR="$TMP/projects" scripts/crew name executor) 2>&1 )" && RC=0 || RC=$?
+if [ "$RC" -ne 0 ] && has "$OUT" "b042 · finishing"; then
+  ok "name: the trailer flips the title to finishing, and the old one is red"
+else
+  bad "name: finishing grammar (rc=$RC, got: $OUT)"
+fi
+en_title "$RNAME · e1 · b042 · finishing · crew/executor"
+OUT="$( (cd "$E1" && CREW_SESSIONS_DIR="$SESS" CREW_PROJECTS_DIR="$TMP/projects" scripts/crew name executor) 2>&1 )" && RC=0 || RC=$?
+[ "$RC" -eq 0 ] && ok "name: the retitled session matches again" \
+  || bad "name: finishing match (rc=$RC, got: $OUT)"
+( cd "$E1" && git switch -q --detach master 2>/dev/null || git switch -q --detach main 2>/dev/null )
 
 # Blind checker must not make the role unrunnable (§8 fail-open doctrine).
 OUT="$( (cd "$WR" && CREW_SESSIONS_DIR="$TMP/no-sessions" scripts/crew name steward) 2>&1 )" && RC=0 || RC=$?

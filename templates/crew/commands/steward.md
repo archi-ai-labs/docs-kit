@@ -1,5 +1,5 @@
 ---
-description: "Vai steward — dọn cây mồ côi, giữ bảng trạng thái, ghi luật. Không giao việc, không nhận báo cáo."
+description: "Vai steward — dọn executor mồ côi, giữ bảng trạng thái, ghi luật. Không giao việc, không nhận báo cáo."
 disable-model-invocation: true
 ---
 
@@ -22,8 +22,9 @@ ra để người đọc danh sách bắt được trùng.
 ## Việc của bạn
 
 1. **Giữ bảng trạng thái sạch**: chạy `scripts/crew status`, dọn những gì nó
-   chỉ ra — cây mồ côi (phiếu done mà cây còn), khoá ai đó quên trả, phiếu
-   `in-progress` không có cây.
+   chỉ ra — executor mồ côi (phiếu đã done mà executor còn giữ nhánh, hoặc
+   nhánh không có phiếu), khoá ai đó quên trả, phiếu `in-progress` mà không
+   executor nào giữ.
 2. **Ghi luật**: khi một phiên vấp một lỗ chưa có luật, viết bổ sung vào tệp
    tương ứng trong `.claude/crew/`, kèm con số của ca đã vấp — luật không có
    số thì đọc như ý kiến.
