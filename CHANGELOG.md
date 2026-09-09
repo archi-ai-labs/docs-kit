@@ -5,6 +5,31 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
+## [0.32.1] — 2026-09-10
+
+### Fixed — a figure wider than the column now shows the scrollbar it depends on
+
+`svg_size` draws a wide figure at its natural size and lets `.plot` scroll it, on the rule
+that shrinking to fit is what turns a busy diagram into an unreadable one. The scrolling was
+real — `overflow-x: auto` has been on `.plot` throughout — but on macOS the scrollbar is an
+overlay: it is invisible until something scrolls, and a figure gives no other sign that it
+continues past the right edge. So a reader saw a diagram cut off at a hard vertical line and
+read that as the whole diagram.
+
+Measured on a real project page (`lop-hoc-zalo`, 15 components) rather than a fixture: **six
+figures on one page overflow the 838px column**, hiding 428, 811, 898, 294, 61 and 3 pixels.
+The widest is a flowchart at 1756px, more than twice the column; the ERD is 1286px and loses
+its five right-hand tables. None of that was reachable without knowing to try.
+
+`.plot` now carries a styled `::-webkit-scrollbar` — which is also what stops the overlay
+behaviour and gives the track real layout height, verified at 11px — plus `scrollbar-width`
+and `scrollbar-color` for Firefox. The thumb is draggable, and its length reports how much of
+the figure is off-screen: on that 1756px flowchart it fills 47% of the track. A figure that
+fits the column generates no scrollbar and is untouched.
+
+The rule is mirrored in `design/design-system.html`, which is the visual contract the
+renderer's own docstring points at.
+
 ## [0.32.0] — 2026-09-09
 
 ### Fixed — an executor is free when its tree is clean, not merely when it holds no branch

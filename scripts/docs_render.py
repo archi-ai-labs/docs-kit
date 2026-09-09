@@ -2648,8 +2648,12 @@ a.tag.id.l1:hover, a.tag.id.l2:hover { box-shadow: inset 3px 0 0 var(--mark); }
 .rail .st a:hover { color: var(--mark); }
 .rail .st small { font: 400 11px var(--sans); color: var(--ink-3); margin-top: -4px; }
 .rail .trk { flex: 1; height: 2.5px; margin-top: 7px; background: linear-gradient(90deg, var(--l1), var(--l1-deep)); }
-.plot { border: 1px solid var(--line); border-radius: var(--r); padding: 20px; background-color: var(--well); background-image: linear-gradient(var(--grid-faint) 1px, transparent 1px), linear-gradient(90deg, var(--grid-faint) 1px, transparent 1px); background-size: 24px 24px; margin: 14px 0; overflow-x: auto; }
+.plot { border: 1px solid var(--line); border-radius: var(--r); padding: 20px; background-color: var(--well); background-image: linear-gradient(var(--grid-faint) 1px, transparent 1px), linear-gradient(90deg, var(--grid-faint) 1px, transparent 1px); background-size: 24px 24px; margin: 14px 0; overflow-x: auto; scrollbar-width: thin; scrollbar-color: var(--line-2) var(--film); }
 .plot svg { min-width: 560px; }
+.plot::-webkit-scrollbar { height: 11px; }
+.plot::-webkit-scrollbar-track { background: var(--film); border-top: 1px solid var(--line); }
+.plot::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 6px; border: 2px solid var(--film); }
+.plot::-webkit-scrollbar-thumb:hover { background: var(--ink-3); }
 .plot svg a:hover text { fill: var(--mark); }
 .plot svg a:hover circle { stroke: var(--mark); }
 .figcap { font: 500 11px var(--mono); color: var(--ink-3); margin-top: 12px; }

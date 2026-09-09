@@ -202,8 +202,17 @@ a.tag.id.l1:hover, a.tag.id.l2:hover { box-shadow: inset 3px 0 0 var(--mark); }
   background-color: var(--well);
   background-image: linear-gradient(var(--grid-faint) 1px, transparent 1px),
     linear-gradient(90deg, var(--grid-faint) 1px, transparent 1px);
-  background-size: 24px 24px; margin: 14px 0; overflow-x: auto; }
+  background-size: 24px 24px; margin: 14px 0; overflow-x: auto;
+  scrollbar-width: thin; scrollbar-color: var(--line-2) var(--film); }
 .plot svg { min-width: 560px; }
+/* A figure wider than the column is drawn full size and scrolled, never shrunk.
+   That makes the scrollbar load-bearing: macOS hides an overlay scrollbar until
+   something scrolls, so a reader who never sees one reads a clipped diagram as
+   the whole diagram. This track is always there, and can be dragged. */
+.plot::-webkit-scrollbar { height: 11px; }
+.plot::-webkit-scrollbar-track { background: var(--film); border-top: 1px solid var(--line); }
+.plot::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 6px; border: 2px solid var(--film); }
+.plot::-webkit-scrollbar-thumb:hover { background: var(--ink-3); }
 .plot figcaption, .figcap { font: 500 11px var(--mono); color: var(--ink-3); margin-top: 12px; }
 .flow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin: 10px 0; }
 .fnode { padding: 5px 12px; border: 1.5px solid var(--ink); border-radius: var(--r);
