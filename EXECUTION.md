@@ -65,7 +65,10 @@ delegated work: whoever notices does it with the audit line, or it rides along
 with the ticket that produced it. A whole ticket spent archiving one Issue
 trades the full setup cost for a single file edit. The boundary is code: work
 that touches code is a ticket even at one line, and a one-file ticket is
-`fast-pair` (§2), not "not a ticket".
+`fast-pair` (§2), not "not a ticket". Direction work — a survey, a plan, a
+periodic report — is not a ticket either: it is the navigator's file under
+`92_audit/reports/` (§3), and the measured cost of routing it through the Backlog
+instead is `BACKLOG-017`.
 
 **The ticket exists in the main tree before its branch does.** `crew new`
 refuses to open a branch for an id it cannot find under `docs/23_backlog/`.
@@ -143,8 +146,8 @@ edits, and an edit made inside a provisioned copy is not on the branch.
 
 ## 3. Roles — cut by work, not by technical layer
 
-Five hats plus one procedure. **Hats, not headcount**: a solo repo wears all
-five and loses nothing; the constraints below only start to bind when hats sit
+Six hats plus one procedure. **Hats, not headcount**: a solo repo wears all
+six and loses nothing; the constraints below only start to bind when hats sit
 on different sessions. A hat can also be *not yet worn*: `crew-init` refuses
 to stamp a role no evidence supports (§9 `roles_absent`), and `crew status`
 keeps naming the gap until someone wires it.
@@ -156,7 +159,8 @@ keeps naming the gap until someone wires it.
 | `tester` | acceptance + exploratory testing playing the customer | **patches nothing it finds** — findings become Issues (the STANDARD intake), planner triages them into Backlog |
 | `devops` | holds the production branch, watches the running build | takes no code tickets |
 | `steward` | builds/removes trees, keeps the status board, writes the rules | **assigns no work, receives no reports** |
-| `release.md` | promotion procedure dev → production | a procedure `devops` runs, not a sixth hat |
+| `navigator` | keeps `## Now` equal to the open Backlog, writes the weekly report and the monthly plan into `92_audit/reports/`, routes a change of direction through Proposal → Decision | **writes no Backlog item, takes no ticket** |
+| `release.md` | promotion procedure dev → production | a procedure `devops` runs, not a seventh hat |
 
 "Planner writes no code" is not tidiness — it is the only mechanism that
 catches mis-graded tickets. Measured case: a ticket graded LIGHT ("one file,
@@ -169,6 +173,47 @@ The tester constraint has its own number: one manual acceptance pass playing
 the customer produced **12 findings while the automated suite stayed green**.
 Findings enter as Issues so the intake stays single (§1) and the planner stays
 the only writer of Backlog items.
+
+**"Navigator writes no ticket" protects the same seam twice.** Forward, it keeps
+the single intake: the planner stays the only writer of `23_backlog/`, so ids are
+still allocated in one place and the roadmap cannot become a second ticket system.
+Backward, it keeps the measurement honest — the hat that reports the drift must
+not be the hat that can erase it by rewriting the ticket, which is the planner's
+871-second rule read from the other end.
+
+The gap it fills was invisible because nothing compared the two documents.
+Measured on the origin repo 2026-09-10 (one repo, one day — one data point):
+`00_roadmap/roadmap.md` had not changed in **10 days**, while **10** commits
+carried a `Closes:` trailer, **29** audit lines cited a Backlog id and **5**
+`DONE` lines landed in `log.tsv`. Its `## Now` column named 4 tickets, **4 of 4
+already `done`** and archived, and **neither** of the 2 open tickets appeared in
+any column. Not one check went red, because none existed. The planner hat was
+worn throughout those ten days, which is what rules out folding this into the
+planner: attention there is per ticket, and nobody reports drift against tickets
+they cut themselves.
+
+The second measurement is what fixes the boundary. `BACKLOG-017` on the same repo
+is direction work — a market survey and a six-month roadmap — pushed through the
+Backlog as a code ticket: `scope_files: 0`, three deliverables inside the
+gitignored `briefs/`, and the ticket itself instructing the executor **not to
+close it** because the owner has to approve the report first. That is a ticket the
+ticket system cannot close, holding a slot in the intake, whose output dies with
+the session. Under this hat the same work is a file in `92_audit/reports/` and a
+refresh of `## Next`, and no ticket at all.
+
+**The roadmap has one writer, and the report has one home.** `00_roadmap/roadmap.md`
+belongs to the navigator the way `23_backlog/` belongs to the planner; the planner
+*reads* `## Next` top-down to choose what to ticket and edits nothing. Reports go
+to **`92_audit/reports/`** — a subfolder, and the subfolder is load-bearing:
+`docs_close.py::audit_ids` reads every `*.md` **directly under** `92_audit/` and
+treats any Backlog id it finds as a completion already recorded, so a report
+sitting beside `LOG.md` and naming an open ticket would make that ticket close
+with **no audit line and no message**. Reproduced on a fixture both ways before
+this was written: flat gave `status -> done` alone, the subfolder gave
+`status -> done, audit line`. The same trap survives in the `ref` column of
+`LOG.md` itself, which is why a navigator's audit line cites the report's path
+and never an open id. (The underlying containment check is worth narrowing on its
+own; it is a defect of close-out, not of this hat, and it is not fixed here.)
 
 **A hat is only worn if the session list shows it.** §1 titles a ticket session
 `<repo> · b157 · crew/executor`; a hat session drops the middle field and takes
@@ -190,9 +235,9 @@ transcript, reached from the sessionId in the live entry.
 
 **What the rule does not buy.** Titles are not unique, so nothing here prevents
 two sessions from wearing one hat; it makes the hat visible, and a human reading
-the list is what catches the duplicate. Only `steward.md` runs the check today;
-the other hats state their title and can adopt it when someone measures a
-reason. Fail open holds as everywhere else in this kit — no session entry, no
+the list is what catches the duplicate. `steward.md` and `navigator.md` run the check today — the two hats
+that write into the shared main tree; the other hats state their title and can
+adopt it when someone measures a reason. Fail open holds as everywhere else in this kit — no session entry, no
 transcript, no python3, and the check reports the expected title rather than
 blocking the role.
 
@@ -406,6 +451,26 @@ threshold (S > 6, complexity ≥ 3, or more-than-one-layer) rests on **one data
 point** in the origin repo (median 2–3 files, max 10); this log is how the 6
 stops being folklore.
 
+### 6.1 `crew report` — the numbers are a command, the judgement is not
+
+The same rule that made the merge a command (§6) applies to the weekly report,
+from the other side: a report re-typed from memory keeps the story and loses the
+numbers, and the numbers are the only part that can contradict the story.
+
+`crew report [<period>] [--write]` measures the window and prints it. The window
+runs from the **previous report's commit**, not from a calendar subtraction, so a
+report written late still closes exactly where the last one ended — no commit is
+counted twice and none falls between two reports. `--write` lays down
+`92_audit/reports/<period>.md` with the measured section filled and every
+judgement section empty; the command never writes prose about the project, and it
+**refuses an existing file** (`[report:exists]`), because a report in `92_audit/`
+is append-only and a correction is a new section at the end.
+
+Cadence is derived, not configured: the board asks for a report only when the
+window holds at least one landed ticket, and prints `report : none due` otherwise.
+A config key for it would be a number to fill in wrongly (§9.3) in exchange for
+nothing the activity does not already say.
+
 ## 7. Four gates before asking the user to decide
 
 Gate 0 is STANDARD §5's lane test (three questions since 0.26.0 — the third
@@ -530,6 +595,11 @@ lands as `.new`.
 | `crew-check` skill | its two checks (orphan worktrees, ticket/tree drift) are deterministic, so they live inside `crew status`, not in a skill that would re-derive them |
 | S/C fields in the validator | `scope_files:` and `execution:` stay optional and unchecked until the calibration log (§6) says what the thresholds should be |
 | `brief` crew section | `brief` has its own measured gates; teaching its delegation prompt to name level, tree and branch deserves its own release |
+| A report the machine writes | `crew report --write` fills the measured section and leaves every judgement section empty. Crew does not author prose about the project, for the reason §6.1 gives: the numbers are checkable and the story is not, so they must come from different hands |
+| A monthly nag on the board | the four weekly lines already name the gap; only a state something acts on gets a word (0.32.0's rule) |
+| Reports drawn on the HTML views | `docs_render.py` reads `92_audit/LOG.md` only, and the renderer is not touched this release; the audit line makes the report reachable from `changes.html` until someone draws it |
+| A hook nagging an overdue report | hooks read events (§8) and a calendar is not one; the always-loaded snippet is at 2379 of its 2400-byte cap, so the reminder lives on the board that sessions are already told to run |
+| A `roadmap_owner` / `report_every_days` key | one writer is a rule, not a setting, and the cadence is derived from landed work (§6.1) |
 | Node implementation | the origin repo's `lock.mjs` and hooks assumed Node on every machine; the port floor here is bash 3.2 + python 3.9 (STANDARD's own), so everything shipped is bash/py |
 
 Open gaps carried from the origin repo, still open: executor-mix `p`
@@ -550,6 +620,10 @@ command detection tuned on Node manifests.
 | 93 commits in 2 days | 26 code · 46 docs · 21 rules | the execution layer deserves a standard (this file) |
 | "A string match is not a measurement" | 5 bites in 1 day | procedures are commands (§6); hooks read events (§8) |
 | Worktrees built vs sessions run in one | 4 trees · 49 s total · 0 sessions | the pool is persistent and the pin is the branch (§1) |
+| Roadmap untouched while tickets closed | 10 days · 10 `Closes:` commits · 29 audit lines | the plan needs a writer of its own (§3) |
+| `## Now` against the Backlog | 4 of 4 cited tickets done · 0 of 2 open cited | the board computes the drift, nobody remembers to look (§3) |
+| Direction work cut as a code ticket | `BACKLOG-017`: 0 files, output gitignored, "do not close" | a survey is a report, not a ticket (§1, §3) |
+| Report beside `LOG.md` vs in `reports/` | `status -> done` alone vs `status -> done, audit line` | the subfolder is what keeps close-out honest (§3) |
 | One lock serialising two parallel trees | 30.7 h waited | an executor is not a second rig (§5) |
 | 3 concurrent claims on a pool of 2 | 1 landed, 4 runs of 5 | claiming an executor is atomic (§4) |
 | 2 concurrent acquires of one resource | both "succeeded", 5 of 5 | the write is the test, via O_EXCL (§4) |

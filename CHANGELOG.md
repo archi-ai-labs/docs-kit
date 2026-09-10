@@ -5,6 +5,96 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
+## [0.34.0] — 2026-09-10
+
+### Added — `navigator`, the hat that keeps the plan and the work in the same story
+
+Crew had five hats and no one of them owned the plan. `docs/00_roadmap/roadmap.md` is
+Layer 1, and STANDARD has always said it is "kept aligned with approved Decisions" — but
+alignment was nobody's job, nothing compared the roadmap with the Backlog, and so the
+column could rot without a single check going red.
+
+**Measured on the origin repo, 2026-09-10** (one repo on one day — one data point, and it
+is labelled as one in EXECUTION §11). `roadmap.md` had not changed in **10 days**. In those
+same ten days **10** commits carried a `Closes:` trailer, **29** audit lines cited a Backlog
+id, and **5** `DONE` lines landed in `log.tsv`. The `## Now` column named four tickets:
+**4 of 4 were already `done`** and sitting in `_archive/`, and **neither** of the two open
+tickets appeared in any column. Every check in the kit was green throughout. The planner hat
+was worn for all ten days, which is what rules out folding this into the planner — attention
+there is per ticket, and nobody reports drift against tickets they cut themselves.
+
+The second measurement fixes the boundary rather than the need. `BACKLOG-017` on that repo is
+direction work — a market survey and a six-month roadmap — pushed through the Backlog as a
+code ticket: `scope_files: 0`, three deliverables inside the gitignored `briefs/`, and the
+ticket itself telling the executor **not to close it** because the owner has to approve the
+report first. A ticket the ticket system cannot close, holding a slot in the single intake,
+whose output dies with the session. Under the new hat that same work is a file in
+`92_audit/reports/` plus a refresh of `## Next`, and no ticket at all.
+
+- **The constraint is `writes no Backlog item, takes no ticket`**, and it protects one seam
+  from both sides. Forward: the planner stays the only writer of `23_backlog/`, so the
+  roadmap cannot become a second ticket system and ids keep being allocated in one place.
+  Backward: the hat that measures the drift must not be the hat that can erase it by
+  rewriting the ticket — the planner's 871-second rule read from the other end. What the
+  navigator wants done enters through an **Issue**, the door the tester already uses.
+- **One writer per document.** `00_roadmap/roadmap.md` belongs to the navigator the way
+  `23_backlog/` belongs to the planner. `planner.md` gains the matching prohibition and, in
+  exchange, a step 0: read `## Next` top-down before choosing what to ticket. A ticket cut
+  outside that column stays perfectly legal and simply gets counted — `crew report` prints
+  `off-roadmap`, and an open ticket the roadmap has not caught up with is a **measure of
+  unplanned work, not a fault**. The four columns do not share one door either: `## Now`
+  mirrors ticket status and costs one audit line, `## Next` / `## Later` need an `ISSUE-` or
+  `DECISION-` id, and `## Explicitly not doing` moves **only by Decision**, because putting a
+  line there ends a discussion and taking it out reopens one.
+- **`scripts/crew report [<period>] [--write]`** — the same rule that made the merge a
+  command (§6), applied to the report: one re-typed from memory keeps the story and loses the
+  numbers, and the numbers are the only part that can contradict the story. It measures
+  landed tickets, audit lines, `crew done` count, declared-vs-actual size calls, lock wait,
+  the `## Now` comparison, open tickets in no column, and plan bullets carrying no id. The
+  window runs from the **previous report's commit**, not from a calendar subtraction, so a
+  report written late still closes exactly where the last one ended — nothing double-counted,
+  nothing lost between two reports. `--write` fills the measured section and leaves every
+  judgement section empty; crew never authors prose about the project. It **refuses an
+  existing file** (`[report:exists]`), because a report here is append-only and a correction
+  is a new section at the end.
+- **A `direction:` block on `crew status`**, two lines, derived from git and `docs/`, no state
+  file and no config key. It reports the column against the Backlog and whether this ISO week
+  has a report, and it draws an arrow only for a state something acts on — 0.32.0's rule. The
+  quiet form has no arrows at all. `report : none due` when the window holds no landed ticket,
+  so a quiet week owes nobody anything: **the cadence is derived from work, not configured**.
+  With `navigator` in `roles_absent` the block is absent entirely and the existing
+  `role ... declared absent` note is its only trace.
+
+**Reports live in `92_audit/reports/`, and the subfolder is load-bearing.**
+`docs_close.py::audit_ids` reads every `*.md` **directly under** `92_audit/` and treats any
+Backlog id it finds there as a completion already recorded. So a report beside `LOG.md` naming
+an open ticket makes that ticket later close with **no audit line and no message** — the
+`severity: silent` class EXECUTION §12 says outranks a refusal. Reproduced on a fixture both
+ways before a line of this release was written: flat printed `status -> done` alone, the
+subfolder printed `status -> done, audit line`. Both halves are now a check. The same trap
+survives in `LOG.md`'s own `ref` column, which is why a navigator's audit line cites the
+report's **path** and never an open id, said out loud in `navigator.md`, `roles.md` and
+STANDARD §4. **The underlying containment check is still wrong and is deliberately not fixed
+here** — narrowing it changes what closing a ticket means, which deserves its own release; on
+the origin repo `BACKLOG-016` is already in that state today.
+
+**What this release deliberately does not do.** No new folder (the profile axis, the 12/17
+counts and `docs-init` all stay put) and no renderer change — `docs_render.py` reads
+`92_audit/LOG.md` only, so reports are reachable from `changes.html` through their audit line
+until someone draws them. No hook: hooks read events and a calendar is not one. No monthly nag,
+because four weekly lines already name the gap. And **no line in the CLAUDE.md crew snippet**,
+which stays at 2379 of its 2400-byte cap — the hat is typed by a human and the reminder lives
+on a board sessions are already told to run, so spending the last 21 bytes there would have
+forced a cut elsewhere for nothing.
+
+`crew_scaffold.sh` needed no code change at all: it globs `templates/crew/commands/*.md`, so
+`navigator.md` stamps itself and `--skip navigator` already worked. Both halves of that claim
+are asserted rather than assumed. `/docs-kit:crew-update` carries the hat into a repo that
+already runs crew; because it never interviews, the hat arrives on, and the first
+`crew status` after it will very likely name a stale column and a missing report — drift that
+was already there. Crew test suite **80 → 100 checks**, and the four new mechanisms were
+mutation-tested: reverting each one turns exactly its own check red.
+
 ## [0.32.1] — 2026-09-10
 
 ### Fixed — a figure wider than the column now shows the scrollbar it depends on

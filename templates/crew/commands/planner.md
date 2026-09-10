@@ -17,7 +17,12 @@ Phiên này đội mũ **planner** của tầng crew (`.claude/crew/roles.md`).
 3. **Chẻ phiếu** nếu `S > 6`, `C ≥ 3`, hoặc phiếu chạm nhiều hơn một tầng kỹ
    thuật — phiếu ôm trọn một YÊU CẦU thì tốt hơn hai phiếu mỗi bên một nửa
    theo tầng.
-4. **Giao việc** bằng token: "nhận `BACKLOG-157`" là đủ khi người nhận là một
+4. **Đọc cột `## Next`** trong `docs/00_roadmap/roadmap.md` từ trên xuống trước
+   khi chọn phiếu tiếp theo — đó là thứ tự navigator đã xếp. Cắt một phiếu ngoài
+   cột ấy là chuyện bình thường (bug khẩn có thật), nhưng nói ra trong thân
+   phiếu, vì `crew report` đếm số phiếu chạy ngoài lộ trình và con số đó lên báo
+   cáo tuần.
+5. **Giao việc** bằng token: "nhận `BACKLOG-157`" là đủ khi người nhận là một
    phiên đang mở, vì mọi thứ khác suy ra từ con số. Kiểm `scripts/crew status`
    trước khi giao thêm phiếu nặng.
 
@@ -63,6 +68,12 @@ từ cây chính, tính ra bằng git, nên không phụ thuộc hai điều đ�
 Một phiếu tốn một nhánh, một lượt gộp và một chỗ trong pool suốt thời gian nó
 chạy. Việc nào rẻ hơn cái giá đó thì làm tại chỗ, đừng đóng gói.
 
+Cũng không thành phiếu: **việc định hướng** — khảo sát, lộ trình, báo cáo. Một
+phiếu `scope_files: 0` mà kết quả nằm trong `briefs/` đã gitignore là hình dạng
+sai; đó là việc của navigator và sống ở `docs/92_audit/reports/<kỳ>.md`. Ca đã
+xảy ra là `BACKLOG-017` ở repo gốc: nó chiếm một chỗ trong cửa nhận đơn, và
+chính phiếu phải ghi rằng executor không được đóng nó.
+
 Cụ thể là **dọn dẹp tài liệu layer 2**: archive hoặc đóng một Issue, sửa trạng
 thái, sửa typo trong một phiếu. Người phát hiện làm ngay kèm dòng audit, hoặc
 nó đi kèm phiếu đã sinh ra nó. Một phiếu chỉ để archive một Issue là chiếm một
@@ -77,6 +88,9 @@ Ranh giới: có chạm code thì mới là phiếu, và phiếu một tệp th�
   hiện xếp mức sai (ca 871 giây trong `roles.md`): executor phải là người báo
   ngược con số thật, và con số đó phải đến tay người xếp mức là bạn.
 - Không tự nhận phiếu mình vừa viết.
+- **Không sửa `docs/00_roadmap/roadmap.md`** — đó là tệp của navigator. Phiếu bạn
+  vừa viết sẽ lên cột `## Now` ở lượt báo cáo kế tiếp, và một phiếu đang mở chưa
+  có trên roadmap là **số đo việc ngoài kế hoạch**, không phải một lỗi cần vá.
 
 Khi executor báo một phiếu nặng hơn mức đã xếp, cập nhật phiếu và ghi một dòng
 audit — con số ngược chiều là dữ liệu quý nhất bạn có.

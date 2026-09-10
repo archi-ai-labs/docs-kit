@@ -161,7 +161,7 @@ plugin on by default.
 | `/docs-kit:explain` | Explain one Layer-2 document or chain — or a mechanism this repo runs on — to the four-gates standard: at least one drawing in either lane, trade-offs with numbers, ids as links, and one level-2 check question to close. | No |
 | `/docs-kit:crew-init` | Turn ON the crew execution layer: interview for commands, branches and lockable resources, write the `crew` key, stamp `scripts/crew` + the role commands + the operating docs. One-time per repo; refuses a role no evidence supports. | Yes (asks first) |
 | `/docs-kit:crew-update` | Carry a kit update into a repo that already runs crew. No interview, no config writes. A file the scaffold itself wrote and nobody touched is replaced in place — decided by the sha256 manifest, not a guess — and an edited one lands as `.new` with its diff in front of you. | Yes (kit-owned files) |
-| `/docs-kit:crew-status` | Read-only crew board — executors against tickets, held locks, and the three pacing signals. | No |
+| `/docs-kit:crew-status` | Read-only crew board — executors against tickets, held locks, whether the roadmap still matches the Backlog, and the three pacing signals. | No |
 | `/docs-kit:brief` | Turn settled decisions into a delegation prompt for a coding agent — gates on a decision-freeze check first. In a repo that has `docs/`, also records the work as an Issue and routes it through Layer 2 before writing the prompt. The one skill Claude may invoke on its own. | Yes (`docs/`, only after you confirm) |
 
 **Typical flow:** `docs-init` once → work → `docs-sync` at the end of a session →

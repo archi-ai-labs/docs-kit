@@ -42,6 +42,16 @@ Quote the script's output, then read it back in plain language:
   something before starting more, and shrink the pool once the burst ends
   (`crew executor prune`, which only ever touches idle trees).
 
+- **direction** — two lines about the plan, both derived from git and `docs/`.
+  `roadmap Now` compares the ids in the roadmap's `## Now` column against the
+  Backlog: `done` counts cited tickets that are finished or missing, and a
+  `not listed` line names open tickets that no column mentions. `report` says
+  whether this ISO week has a file under `docs/92_audit/reports/`; `none due`
+  means the window holds no landed ticket, so nobody owes one. Both arrows are
+  navigator work — sync the column, or `scripts/crew report --write`. The whole
+  block is absent when `navigator` sits in `roles_absent`, which is a declared
+  choice rather than a fault, and the `role ... declared absent` note is its trace.
+
 The thresholds are per-repo config, not truths — if the user questions them,
 point at `.claude/crew/setup.md`, which explains how to re-derive both from
 `log.tsv`.

@@ -55,8 +55,14 @@ A role with NO evidence **must be raised with the user — warn first, then ask;
 this is a hard requirement, not a courtesy.** Three honest answers: it exists
 (collect the missing command or branch), it does not yet (record it in
 `roles_absent`, skip its command file), or the user defers (same as not-yet,
-said out loud). `planner`, `executor` and `steward` need no check — a repo
-with a Backlog and a git tree has them by construction.
+said out loud). `planner`, `executor`, `steward` and `navigator` need no check
+— a repo with a Backlog, a git tree and a `00_roadmap/` (core in every profile)
+has them by construction. The reason `tester` and `devops` need evidence is that
+their duties rest on infrastructure outside the docs model; the navigator's only
+tools are git and `docs/`. **A roadmap still identical to the seed is not missing
+evidence — it is the navigator's first job**, the same way an empty executor pool
+is `crew new`'s, so gating the hat on it would withhold it from exactly the repo
+that needs it most.
 
 ## Step 2 — Interview (AskUserQuestion, text fallback)
 
@@ -110,8 +116,12 @@ planner pre-warms the pool if it wants to (`scripts/crew executor add`, twice by
 default) and writes the first ticket, `scripts/crew new <nnn>` hands it to a free
 executor and creates one if none is free,
 `scripts/crew done <nnn>` lands it and frees that executor, `scripts/crew
-status` before taking more. Point to `.claude/crew/README.md` as the 30-second
-map, and name what is missing out loud: absent roles and a prod branch that does
-not exist yet stay visible in `crew status` until someone wires them. Do not run
+status` before taking more. Then the weekly loop, which is the navigator's:
+`scripts/crew report --write` measures the window and lays down
+`docs/92_audit/reports/<week>.md` with its judgement sections empty, and the same
+hat then syncs the roadmap's `## Now` column. Point to `.claude/crew/README.md`
+as the 30-second map, and name what is missing out loud: absent roles and a prod
+branch that does not exist yet stay visible in `crew status` until someone wires
+them, and so does a `## Now` column that has stopped matching the Backlog. Do not run
 `crew executor add` or `crew new` yourself; the first ticket is the user's call,
 and an empty pool is not a problem — the first `crew new` builds what it needs.

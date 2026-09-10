@@ -1,6 +1,6 @@
-# roles — năm vai, chia theo VIỆC không theo tầng
+# roles — sáu vai, chia theo VIỆC không theo tầng
 
-Vai là mũ, không phải đầu người: repo một người đội cả năm mũ và không mất gì.
+Vai là mũ, không phải đầu người: repo một người đội cả sáu mũ và không mất gì.
 Ràng buộc chỉ bắt đầu có nghĩa khi các mũ nằm trên các phiên khác nhau.
 
 | Role | Làm | Ràng buộc đáng tiền nhất |
@@ -10,9 +10,10 @@ Ràng buộc chỉ bắt đầu có nghĩa khi các mũ nằm trên các phiên 
 | `tester` | nghiệm thu + test khám phá đóng vai khách | **không vá thứ mình phát hiện** — phát hiện viết thành Issue |
 | `devops` | giữ nhánh production, quan sát bản đang chạy | không nhận phiếu code |
 | `steward` | dọn executor mồ côi, giữ bảng trạng thái, ghi luật | **không giao việc, không nhận báo cáo** |
+| `navigator` | giữ cột `## Now` khớp Backlog, viết báo cáo tuần và kế hoạch tháng vào `docs/92_audit/reports/`, phát hiện thành Issue | **không viết phiếu, không nhận phiếu** |
 
 `release.md` trong `.claude/commands/` là một thủ tục devops chạy, không phải
-vai thứ sáu.
+vai thứ bảy.
 
 ## Vì sao planner không được sửa code
 
@@ -28,6 +29,47 @@ Một lượt kiểm tay đóng vai khách tìm ra **12 phát hiện trong khi b
 động vẫn xanh**. Giá trị của tester nằm ở con mắt ngoài, và vá ngay là đổi con
 mắt ngoài lấy một bản vá. Phát hiện đi vào hệ bằng cửa nhận sẵn có: tester viết
 Issue, planner triage thành Backlog và xếp mức.
+
+## Vì sao navigator không viết phiếu
+
+Cơ chế được bảo vệ là: **người đo độ lệch không được là người xoá được độ lệch
+bằng cách viết lại phiếu.** Nếu navigator vừa xếp lộ trình vừa cắt phiếu thì
+lộ trình thành một hệ phiếu thứ hai, và cỡ một phiếu do chính người muốn nó
+xong quyết định — đúng chỗ mà luật "người xếp mức ≠ người sửa" của planner tồn
+tại để chặn.
+
+Số đo ở repo gốc ngày 2026-09-10, một repo một ngày nên nói rõ là một điểm dữ
+liệu: `docs/00_roadmap/roadmap.md` không đổi suốt **10 ngày**, trong khi 10
+commit mang trailer `Closes: BACKLOG-`, 29 dòng audit dẫn id phiếu và 5 dòng
+`DONE` vào `log.tsv`. Cột `## Now` gọi tên 4 phiếu, **cả 4 đã `done`** và đã
+nằm trong `_archive/`, còn **cả 2 phiếu đang mở không xuất hiện ở cột nào**.
+Không phép kiểm nào đỏ, vì trước 0.34.0 không có gì so hai tài liệu ấy với
+nhau. Mũ planner đã được đội suốt mười ngày đó và vẫn không ai báo, nên gộp
+việc này vào planner là phương án đã bị chính số đo bác bỏ.
+
+Số đo thứ hai, cho vế "không nhận phiếu": `BACKLOG-017` ở repo ấy là việc định
+hướng (khảo sát thị trường, lộ trình 6 tháng) bị đẩy qua Backlog thành một
+phiếu code — `scope_files: 0`, ba deliverable nằm trong `briefs/` đã gitignore,
+và chính phiếu ghi rằng executor **không được đóng** nó vì report cần chủ dự án
+duyệt. Đó là một phiếu mà hệ phiếu không đóng được, chiếm một chỗ trong cửa
+nhận đơn, và kết quả thì hết phiên là mất. Có navigator thì cùng việc ấy là
+`docs/92_audit/reports/2026-09.md` cộng một lượt làm mới cột `## Next`, không
+phiếu nào cả.
+
+## Ai cầm bút trên roadmap.md
+
+Một tài liệu một người viết, đúng như `docs/23_backlog/` là của planner:
+`docs/00_roadmap/roadmap.md` là của navigator. Planner **đọc** cột `## Next` từ
+trên xuống để chọn phiếu tiếp theo, nhưng không sửa tệp; executor và `crew done`
+chỉ lật `status:` của phiếu, và bảng biến cái lật đó thành một dòng nhìn thấy
+được cho tới khi navigator đồng bộ lại.
+
+Lý do không cho executor tự sửa cột `## Now` lúc đóng phiếu: n nhánh `work/`
+chạy song song sẽ cùng sửa một tệp Layer 1, đúng va chạm mà kit đã từ chối
+`merge=union` để tránh — và vai có ít bối cảnh về hướng đi nhất lại là vai sửa.
+
+Luật này là kỷ luật, không phải khoá. Thứ làm một người viết thứ hai lộ ra là
+title phiên và khối `direction:` trên bảng, giống hệt luật tự khai của steward.
 
 ## Vai chưa tồn tại thì khai vắng, đừng stamp ma
 
@@ -45,7 +87,7 @@ vai cho một vai không tồn tại là một sự thật sai nằm trong repo.
 |---|---|---|
 | phiên executor trong pool | `<repo> · e<k> · b<nnn> · <trạng thái> · crew/executor` | `lop-hoc-zalo · e1 · b157 · processing · crew/executor` |
 | phiên executor fast-pair | `<repo> · main · b<nnn> · <trạng thái> · crew/executor` | `lop-hoc-zalo · main · b010 · processing · crew/executor` |
-| phiên mũ (bốn vai còn lại) | `<repo> · crew/<vai>` | `lop-hoc-zalo · crew/steward` |
+| phiên mũ (năm vai còn lại) | `<repo> · crew/<vai>` | `lop-hoc-zalo · crew/navigator` |
 
 Tên repo đứng trước để danh sách phiên tự gom theo dự án. Ba phần còn lại đều
 đọc từ git chứ không gõ tay: tên cây cho biết executor nào, nhánh cho biết phiếu
@@ -67,8 +109,9 @@ sang đọc title: bản ghi `custom-title` cuối cùng trong transcript của 
 
 Luật này mua được cái gì và không mua được cái gì, nói thẳng ra: title không
 duy nhất, nên nó **không** chặn được hai phiên cùng đội một mũ. Nó chỉ làm cái
-mũ hiện ra, và người đọc danh sách mới là thứ bắt được trùng. Hiện chỉ
-`steward.md` bắt buộc chạy phép kiểm; các vai khác mới dừng ở mức khai tên.
+mũ hiện ra, và người đọc danh sách mới là thứ bắt được trùng. Hiện
+`steward.md` và `navigator.md` bắt buộc chạy phép kiểm — hai vai ghi thẳng vào
+cây chính dùng chung; các vai khác mới dừng ở mức khai tên.
 
 ## Steward và cây bút luật
 

@@ -392,6 +392,16 @@ inserted, edited, or deleted** (validated against git HEAD). Line format:
 YYYY-MM-DD | what happened | ref (IDs or "-") | deviation from Decision/Backlog ("-" if none) | why
 ```
 
+A crew repo also keeps periodic review reports here, one per period, under
+**`92_audit/reports/`** — `YYYY-Www.md` for a week, `YYYY-MM.md` for a month
+(EXECUTION §3, the navigator hat). The append-only rule covers them: it is
+checked against the whole folder, not just `LOG.md`. They are not rendered and
+not indexed. The subfolder is not cosmetic — `docs_close` reads every `*.md`
+*directly* under `92_audit/` to decide whether a completion was already
+recorded, so a report beside `LOG.md` naming an open Backlog id would suppress
+that item's audit line when it finishes. For the same reason, a report's own
+audit line cites the report's **path** in the `ref` column, never an open id.
+
 ### Layer 3 folders (`30/40/50/60/70/93`) — Reference
 No traceability fields, no required frontmatter. Free-form content on the
 folder's topic. The validator does not check these folders.
