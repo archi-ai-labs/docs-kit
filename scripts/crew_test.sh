@@ -806,6 +806,151 @@ has "$OUT" "vs ghost  : that branch does not exist here" \
   || bad "main tree: ghost dev_branch (got: $OUT)"
 printf '{"owns": [], "crew": {"dev_branch": "dev"}}\n' > "$MT/.docs-kit.json"
 
+# ---------------------------------------------------------------- main is a place
+# `main` is where every fast-pair ticket runs (EXECUTION §2), but exec_map matches
+# `^<repo>-e[0-9]+$` only, so the main tree never appeared among the executors and
+# the board called a working rig "pool empty". Worse, the in-progress sweep at the
+# foot of the board looks a ticket up by its `work/b<nnn>` branch — which a
+# fast-pair ticket has none of, by design — so it raised "no executor holds it"
+# about the one state the design wants. Known-bad first, both shapes.
+MP="$TMP/mainplace"
+mkdir -p "$MP/docs/23_backlog" "$MP/docs/92_audit" "$MP/scripts"
+(
+  cd "$MP"
+  git init -q && git checkout -q -b dev
+  git config user.email t@t && git config user.name t
+  cp "$KIT/templates/crew/crew" scripts/crew && chmod +x scripts/crew
+  printf '{"owns": [], "crew": {"dev_branch": "dev"}}\n' > .docs-kit.json
+  printf '# Audit log\n' > docs/92_audit/LOG.md
+  git add -A && git commit -qm init
+)
+mkticket() { # mkticket <dir> <nnn> <status> <execution|->
+  # mkdir first: git removes the folder when the last ticket in it is git rm'd,
+  # and a printf into a missing folder fails silently enough to make a later
+  # assertion pass for the wrong reason.
+  mkdir -p "$1/docs/23_backlog"
+  printf -- '---\nid: BACKLOG-%s\ndescription: "x"\nsource_ref: ISSUE-001\nstatus: %s\n' "$2" "$3" \
+    > "$1/docs/23_backlog/t$2.md"
+  [ "$4" = "-" ] || printf 'execution: %s\n' "$4" >> "$1/docs/23_backlog/t$2.md"
+  printf -- '---\n' >> "$1/docs/23_backlog/t$2.md"
+  ( cd "$1" && git add -A && git commit -qm "ticket $2" >/dev/null )
+}
+mp() { (cd "$MP" && scripts/crew status) 2>&1; }
+
+# KNOWN-BAD: one fast-pair ticket in progress. The rig is working; the board must
+# not call it empty, and must not raise the orphan note about it.
+mkticket "$MP" 042 in-progress fast-pair
+OUT="$(mp)"
+if has "$OUT" "  main  dev  BACKLOG-042  processing" \
+   && has "$OUT" "ticket=in-progress"; then
+  ok "main place: a fast-pair ticket puts main in the executors list"
+else
+  bad "main place: no main row (got: $(printf '%s' "$OUT" | sed -n '/executors:/,/^$/p'))"
+fi
+! has "$OUT" "BACKLOG-042 is in-progress but no executor holds it" \
+  && ok "main place: the orphan note is not raised about a fast-pair ticket" \
+  || bad "main place: false orphan note survived"
+! has "$OUT" "(pool empty" \
+  && ok "main place: a rig running one ticket is not reported empty" \
+  || bad "main place: still says pool empty while main holds a ticket"
+
+# The branch column stays the BRANCH. For main that is the dev branch, and the
+# fact that it is not `work/b042` is itself what says fast-pair — no extra column.
+has "$OUT" "  main  dev  " \
+  && ok "main place: the branch column carries the dev branch, not the level" \
+  || bad "main place: branch column (got: $OUT)"
+
+# THE INVERSE, which is what stops the fix from silencing a real signal: a
+# `full` ticket in progress with no executor holding it is still an orphan.
+mkticket "$MP" 077 in-progress full
+OUT="$(mp)"
+has "$OUT" "BACKLOG-077 is in-progress but no executor holds it" \
+  && ok "main place: a full ticket with no tree is still called an orphan" \
+  || bad "main place: the orphan note was silenced for a full ticket too"
+
+# A ticket with NO execution: field must behave as before — the field is optional
+# (EXECUTION §3), so a repo that never wrote it cannot start losing the note.
+( cd "$MP" && git rm -q docs/23_backlog/t077.md && git commit -qm rm >/dev/null )
+mkticket "$MP" 099 in-progress -
+OUT="$(mp)"
+has "$OUT" "BACKLOG-099 is in-progress but no executor holds it" \
+  && ok "main place: a ticket with no execution field keeps the old behaviour" \
+  || bad "main place: missing execution field changed the verdict"
+
+# Nothing in progress on main → main is idle, in the same shape an executor uses.
+( cd "$MP" && git rm -q docs/23_backlog/t042.md docs/23_backlog/t099.md && git commit -qm rm >/dev/null )
+OUT="$(mp)"
+has "$OUT" "  main  idle" \
+  && ok "main place: with no fast-pair ticket, main reads idle like any slot" \
+  || bad "main place: idle form (got: $(printf '%s' "$OUT" | sed -n '/executors:/,/^$/p'))"
+
+# Two fast-pair edits at once break the discipline that each is committed in the
+# same bout (EXECUTION §2), so the board names both rather than picking one.
+mkticket "$MP" 043 in-progress fast-pair
+mkticket "$MP" 044 in-progress fast-pair
+OUT="$(mp)"
+if has "$OUT" "BACKLOG-043" && has "$OUT" "BACKLOG-044" \
+   && has "$OUT" "two fast-pair tickets are open at once"; then
+  ok "main place: two open fast-pair tickets are both listed and called out"
+else
+  bad "main place: second fast-pair ticket (got: $(printf '%s' "$OUT" | sed -n '/executors:/,/^$/p'))"
+fi
+
+# ---------------------------------------------------------------- name knows the level
+# `crew name executor <nnn>` read only "which tree am I in", never "which tree
+# should this ticket be in". Measured before the fix: from the main tree, a
+# `full` ticket was blessed as `<repo> · main · b077 · processing · crew/executor`
+# — so a session that skipped `crew new` got told its title was right and went on
+# to edit the shared tree, where check 2 then blocks every crew done in flight.
+NL="$TMP/namelevel"
+mkdir -p "$NL/docs/23_backlog" "$NL/scripts"
+(
+  cd "$NL"
+  git init -q && git checkout -q -b dev
+  git config user.email t@t && git config user.name t
+  cp "$KIT/templates/crew/crew" scripts/crew && chmod +x scripts/crew
+  printf '{"owns": [], "crew": {"dev_branch": "dev"}}\n' > .docs-kit.json
+  git add -A && git commit -qm init
+)
+nm() { (cd "$NL" && scripts/crew name executor "$1") 2>&1; }
+
+# KNOWN-BAD: a full ticket named from the main tree.
+mkticket "$NL" 077 open full
+OUT="$(nm 077)"
+if has "$OUT" "[name:place]" && has "$OUT" "BACKLOG-077 is full"; then
+  ok "name level: a full ticket named from the main tree is refused, and says why"
+else
+  bad "name level: full ticket from main (got: $OUT)"
+fi
+has "$OUT" "scripts/crew new 077" \
+  && ok "name level: the refusal names the command that fixes it" \
+  || bad "name level: refusal has no next step (got: $OUT)"
+
+# `fast` is the same shape and must be refused too — it is the level people reach
+# for most, and it also takes a worktree.
+mkticket "$NL" 078 open fast
+has "$(nm 078)" "[name:place]" \
+  && ok "name level: a fast ticket is refused from the main tree as well" \
+  || bad "name level: fast ticket was allowed from the main tree"
+
+# THE ALLOWED CASE: fast-pair belongs in the main tree, so it must still name.
+mkticket "$NL" 042 in-progress fast-pair
+OUT="$(nm 042)"
+if ! has "$OUT" "[name:place]" && has "$OUT" "· main · b042 ·"; then
+  ok "name level: a fast-pair ticket still names from the main tree"
+else
+  bad "name level: fast-pair was refused (got: $OUT)"
+fi
+
+# FAIL OPEN: no execution: field means the level was never recorded, and the kit
+# does not guess. Refusing here would break every repo written before the field.
+mkticket "$NL" 099 open -
+OUT="$(nm 099)"
+! has "$OUT" "[name:place]" \
+  && ok "name level: a ticket with no execution field is not refused" \
+  || bad "name level: missing field was treated as a violation"
+
+
 # ---------------------------------------------------------------- navigator
 # The sixth hat reads two documents nothing used to compare, so every check here
 # starts from a KNOWN-BAD board and asserts the words a human acts on — not the
@@ -1032,6 +1177,87 @@ OUT="$( (cd "$NV" && CREW_SESSIONS_DIR="$TMP/no-sessions" scripts/crew name navi
 [ "$RC" -eq 0 ] && has "$OUT" "$(basename "$NV") · crew/navigator" \
   && ok "navigator: the hat's session title follows the existing grammar" \
   || bad "navigator: crew name navigator (rc=$RC, got: $OUT)"
+
+# ---------------------------------------------------------------- title nag
+# Step 4b of the executor hat — re-run `crew name` after the trailer, because the
+# state just moved from processing to finishing — is the step most often skipped,
+# so sessions end sitting at a title the session list then reports as work still
+# in flight. The board is unaffected (it derives state from git); the LIST is what
+# goes wrong, and nothing looked at it. Known-bad first.
+NG="$TMP/titlenag"
+mkdir -p "$NG/docs/23_backlog" "$NG/scripts"
+(
+  cd "$NG"
+  git init -q && git checkout -q -b dev
+  git config user.email t@t && git config user.name t
+  cp "$KIT/templates/crew/crew" scripts/crew && chmod +x scripts/crew
+  printf '{"owns": [], "crew": {"dev_branch": "dev"}}\n' > .docs-kit.json
+  git add -A && git commit -qm init >/dev/null
+)
+mkticket "$NG" 043 in-progress fast-pair
+# The trailer is what moves the state, so write one: pair_state now reads finishing.
+( cd "$NG" && echo x > f && git add -A && git commit -qm "work
+
+Closes: BACKLOG-043" >/dev/null )
+
+NGT="$TMP/nagtranscripts"; mkdir -p "$NGT"
+mktitle() { printf '{"type":"custom-title","customTitle":"%s"}\n' "$1" > "$NGT/$2.jsonl"; }
+run_nag() { # run_nag <cwd> <transcript> → the systemMessage, decoded
+  # json.dumps escapes the title separator (U+00B7) to \u00b7, so asserting on
+  # the raw wire form would test the encoder, not the message a reader sees.
+  # Silence stays silence: no output in, empty string out.
+  printf '{"session_id":"t1","cwd":"%s","transcript_path":"%s"}' "$1" "$2" \
+    | bash "$KIT/scripts/hook_title_nag.sh" \
+    | python3 -c 'import json,sys
+raw = sys.stdin.read().strip()
+print(json.loads(raw).get("systemMessage", "") if raw else "", end="")'
+}
+
+# KNOWN-BAD: the trailer is written, so git says finishing; the title still says
+# processing. This is the exact shape that was reported as forgotten.
+mktitle "titlenag · main · b043 · processing · crew/executor" stale
+OUT="$(run_nag "$NG" "$NGT/stale.jsonl")"
+if has "$OUT" "b043 · finishing · crew/executor" && has "$OUT" "/rename"; then
+  ok "title nag: a stale processing title is caught, with the /rename line"
+else
+  bad "title nag: stale title (got: $OUT)"
+fi
+# It must show BOTH halves — a nag that prints only the right answer leaves the
+# reader guessing what was wrong with theirs.
+has "$OUT" "now  : titlenag · main · b043 · processing" \
+  && ok "title nag: it prints the wrong title beside the right one" \
+  || bad "title nag: only one half shown (got: $OUT)"
+
+# THE QUIET FORM: the title already matches, so there is nothing to say.
+mktitle "titlenag · main · b043 · finishing · crew/executor" fresh
+[ -z "$(run_nag "$NG" "$NGT/fresh.jsonl")" ] \
+  && ok "title nag: a correct title is silent" \
+  || bad "title nag: fired on a correct title"
+
+# Not a crew session at all — every other session in the machine passes through
+# this hook, and none of them may be nagged.
+mktitle "just some session about billing" plain
+[ -z "$(run_nag "$NG" "$NGT/plain.jsonl")" ] \
+  && ok "title nag: a non-crew title is silent" \
+  || bad "title nag: fired on a non-crew session"
+
+# A repo with no scripts/crew is not a crew repo, whatever its title says.
+NOC="$TMP/nocrew"; mkdir -p "$NOC"
+( cd "$NOC" && git init -q && git config user.email t@t && git config user.name t \
+  && git commit -q --allow-empty -m init >/dev/null )
+[ -z "$(run_nag "$NOC" "$NGT/stale.jsonl")" ] \
+  && ok "title nag: a repo without scripts/crew is silent" \
+  || bad "title nag: fired in a repo that does not run crew"
+
+# FAIL OPEN, and this is the case the guard added earlier makes reachable: a
+# `full` ticket named from the main tree makes `crew name --want` refuse. The
+# hook must go quiet, not relay a refusal it cannot act on.
+mkticket "$NG" 077 in-progress full
+mktitle "titlenag · main · b077 · processing · crew/executor" refused
+[ -z "$(run_nag "$NG" "$NGT/refused.jsonl")" ] \
+  && ok "title nag: a title crew name refuses to compute is silent, not relayed" \
+  || bad "title nag: relayed a refusal (got: $(run_nag "$NG" "$NGT/refused.jsonl"))"
+
 
 # ---------------------------------------------------------------- summary
 echo ""

@@ -519,9 +519,10 @@ a layer-2 document or chain (Issue, Backlog, Proposal, Decision) — and every
 other topic waits to be typed; `gates.md` in stamped repos keeps the law and
 points there for the method.
 
-## 8. Enforcement — two hooks, warn first, block by flag
+## 8. Enforcement — three hooks, warn first, block by flag
 
-Two PreToolUse hooks ship in 0.26.0, both inheriting STANDARD §8's doctrine
+Two PreToolUse hooks ship in 0.26.0 and one Stop hook in 0.37.0, all inheriting
+STANDARD §8's doctrine
 verbatim: deterministic, no LLM, **warn-only until tuned in practice**, silent
 unless the repo opts in (a `.docs-kit.json` whose `crew` key exists).
 
@@ -537,6 +538,17 @@ unless the repo opts in (a `.docs-kit.json` whose `crew` key exists).
    wrapper script slips through unlogged. It measures the cooperative and
    misses the forgetful — that is its honest ceiling, same as a lock file
    someone creates by hand.
+
+3. **title-nag** (on `Stop`, 0.37.0): the session title is the only place this
+   model is visible from OUTSIDE a session. `crew status` derives every state
+   from git, so the board stays right whatever the title says — the user's
+   session list does not. An executor moves from `processing` to `finishing` the
+   moment it writes the trailer, and re-running `crew name` there (step 4b of the
+   hat) was reported as the most-skipped step, so sessions ended reading as work
+   still in flight. The hook asks `crew name <role> --want` rather than deriving
+   the grammar again: three parts read from git, one place, and this release adds
+   the flag precisely so nothing else spells them out. Silent on a non-crew
+   title, on a repo with no `scripts/crew`, and whenever `--want` refuses.
 
 Promotion to blocking is **per repo, per hook, by flag** — `"crew": {"enforce":
 true}` turns explain-gate's warning into a deny; resource-guard stays warn-only
@@ -611,6 +623,9 @@ lands as `.new`.
 | Reports drawn on the HTML views | `docs_render.py` reads `92_audit/LOG.md` only, and the renderer is not touched this release; the audit line makes the report reachable from `changes.html` until someone draws it |
 | A hook nagging an overdue report | hooks read events (§8) and a calendar is not one; the always-loaded snippet is at 2379 of its 2400-byte cap, so the reminder lives on the board that sessions are already told to run |
 | A `roadmap_owner` / `report_every_days` key | one writer is a rule, not a setting, and the cadence is derived from landed work (§6.1) |
+| A hook that blocks a stale title | title-nag warns and never denies: a title is a label on work already done, so blocking a session from ending over one would cost more than the wrong label does (§12) |
+| `crew handoff <nnn>` generating the prompt | the template in the planner hat is filled by hand this release. A generator would make title and scope right by construction instead of by memory, which is strictly better and is exactly why it deserves its own release with its own measurement |
+| A `PR` step in `crew done` | there is none to record: the merge is `--ff-only` onto the dev branch and the executor's report says so in as many words, because an empty PR field reads as "forgot to fill in" rather than "by design" |
 | Node implementation | the origin repo's `lock.mjs` and hooks assumed Node on every machine; the port floor here is bash 3.2 + python 3.9 (STANDARD's own), so everything shipped is bash/py |
 
 Open gaps carried from the origin repo, still open: executor-mix `p`

@@ -204,6 +204,19 @@ exec_state() {
 # and appends the audit line without committing either. Reading dirtiness as
 # "still working" here would pin every fast-pair session at `processing`
 # forever. The main tree gets its own guard instead: check 2 of `crew done`.
+# pair_tickets → the nnn of every Backlog item that is in-progress AND declares
+# `execution: fast-pair`. Every other executor is found from its branch, but a
+# fast-pair ticket has no work branch by design, so it must be found from the
+# other side: the ticket itself says where it runs.
+pair_tickets() {
+  grep -rlE "^status:[[:space:]]*\"?in-progress\"?" "$MAIN/docs/23_backlog" 2>/dev/null \
+    | while IFS= read -r f; do
+        [ "$(front "$f" execution)" = "fast-pair" ] || continue
+        pt="$(front "$f" id)"
+        echo "${pt#BACKLOG-}"
+      done
+}
+
 pair_state() {
   if has_closer "$MAIN" "$1" -50 "$(cfg dev_branch main)"; then echo finishing; else echo processing; fi
 }
@@ -816,6 +829,29 @@ cmd_status() {
   # not started yet" state would only be a window nobody reacts to.
   DEVB="$(cfg dev_branch main)"
   echo "executors:"
+  # main is a slot like any other: it is where every fast-pair ticket runs
+  # (EXECUTION §2). exec_map cannot see it — that matches `<repo>-e<k>` — so the
+  # row is built from the ticket side instead. The branch column stays the
+  # BRANCH; for main that is the dev branch, and the fact that it is not
+  # `work/b<nnn>` is itself what says fast-pair, so the level needs no column.
+  # The dirty count is PLAIN porcelain, the same number the main tree block
+  # reports: one tree must not carry two different dirty counts on one board.
+  MPD="$(git -C "$MAIN" status --porcelain 2>/dev/null | grep -c .)" || MPD=0
+  MPT="$(pair_tickets)"
+  if [ -z "$MPT" ]; then
+    echo "  main  idle"
+  else
+    echo "$MPT" | while IFS= read -r PT; do
+      [ -n "$PT" ] || continue
+      PTF="$(ticket_file "$PT")"
+      PTS="(no ticket)"
+      [ -n "$PTF" ] && PTS="$(front "$PTF" status)"
+      echo "  main  $DEVB  BACKLOG-$PT  $(pair_state "$PT")  dirty=$MPD  ticket=$PTS"
+    done
+    MPN="$(echo "$MPT" | grep -c .)" || MPN=0
+    [ "$MPN" -gt 1 ] \
+      && echo "  ← two fast-pair tickets are open at once; each is meant to be committed in the same bout (EXECUTION §2)"
+  fi
   exec_map | while IFS="$(printf '\t')" read -r P B; do
     if [ "$B" = "-" ]; then
       DIRTYC="$(own_dirty "$P")"
@@ -842,7 +878,9 @@ cmd_status() {
     fi
   done
   POOL="$(exec_map | wc -l | tr -d ' ')"
-  [ "$POOL" -eq 0 ] && echo "  (pool empty — scripts/crew executor add)"
+  # "pool empty" is about the e-slots, but printed while main holds a ticket it
+  # reads as "nothing is running" — the sentence this release exists to stop.
+  [ "$POOL" -eq 0 ] && [ -z "$MPT" ] && echo "  (pool empty — scripts/crew executor add)"
   OPEN="$(exec_map | awk -F'\t' '$2 != "-"' | wc -l | tr -d ' ')"
   # A tree left over from the per-ticket model is invisible to everything above,
   # so name it here rather than let it rot unseen.
@@ -867,6 +905,10 @@ cmd_status() {
     grep -rlE "^status:[[:space:]]*\"?in-progress\"?" "$MAIN/docs/23_backlog" 2>/dev/null | while read -r TF; do
       TID="$(front "$TF" id)"
       NUM="${TID#BACKLOG-}"
+      # A fast-pair ticket has no work branch to hold, so this lookup was always
+      # going to miss it — and the note then raised an alarm about the one state
+      # the design wants. main's own row above already reports it.
+      [ "$(front "$TF" execution)" = "fast-pair" ] && continue
       [ -n "$(exec_on "work/b$NUM")" ] || echo "  note: $TID is in-progress but no executor holds it"
     done
   fi
@@ -1200,8 +1242,20 @@ session_file() {
 
 cmd_name() {
   ROLE="${1:-}"
-  [ -n "$ROLE" ] || die "usage: crew name <role> [<nnn>]"
-  TICKET="${2:-}"
+  [ -n "$ROLE" ] || die "usage: crew name <role> [<nnn>] [--want]"
+  # --want prints the computed title and nothing else. It exists so the Stop hook
+  # can compare a session's title against the truth WITHOUT re-deriving the
+  # grammar: three parts read from git, one place, and nothing else spelling them
+  # out again. Everything below is unchanged for a call without the flag.
+  WANTONLY=0
+  TICKET=""
+  shift
+  for a in "$@"; do
+    case "$a" in
+      --want) WANTONLY=1 ;;
+      *)      TICKET="$a" ;;
+    esac
+  done
   # Three grammars, one place, project first so any session list sorts by repo.
   # A session is still ONE PER TICKET — only the tree is reused — so an executor
   # session is born processing and ends finishing, and there is deliberately no
@@ -1227,12 +1281,32 @@ cmd_name() {
     [ -n "$TICKET" ] \
       || die "an executor session belongs to one ticket — pass its number: scripts/crew name executor <nnn>"
     PN="$(norm "$TICKET")"
+    # The comment above ASSUMED fast-pair; this checks it. The three parts of a
+    # title are read from git, which answers "which tree am I in" and never
+    # "which tree should this ticket be in". Measured before this guard: from the
+    # main tree, a `full` ticket was blessed as `<repo> · main · b077 ·
+    # processing · crew/executor`, so a session that skipped `crew new` was told
+    # its title was correct and went on to edit the shared tree — where check 2
+    # then refuses every crew done in flight. Fail open on a missing field:
+    # `execution:` is optional (EXECUTION §3) and the kit does not guess a level
+    # nobody recorded.
+    NTF="$(ticket_file "$PN")"
+    NLVL=""
+    [ -n "$NTF" ] && NLVL="$(front "$NTF" execution)"
+    case "$NLVL" in
+      fast|full)
+        note "[name:place] BACKLOG-$PN is $NLVL: it belongs in an executor worktree, not the main tree"
+        die "take one first: scripts/crew new $PN — then name this session from the tree that prints"
+        ;;
+    esac
     WANT="$REPO · main · b$PN · $(pair_state "$PN") · crew/$ROLE"
   elif [ -n "$TICKET" ]; then
     WANT="$REPO · b$(norm "$TICKET") · crew/$ROLE"
   else
     WANT="$REPO · crew/$ROLE"
   fi
+
+  [ "$WANTONLY" = "1" ] && { printf '%s\n' "$WANT"; return 0; }
 
   skip() { note "name: $1 — check skipped"; note "name: this session should be titled: $WANT"; }
 

@@ -63,6 +63,77 @@ cho phiên tự mở: nó sẽ chuyển sang cây executor ngay ở bước đ�
 bỏ `.claude/` vào `.gitignore` thì cây đó không có tệp nào cả. `crew role` đọc
 từ cây chính, tính ra bằng git, nên không phụ thuộc hai điều đó.
 
+## Mẫu giao việc
+
+Mỗi người giao một kiểu thì phiên nhận việc phải đoán, mà nó không hỏi được ai.
+Dùng đúng khối dưới đây.
+
+**Đừng chép vào prompt ba thứ này.** `scripts/crew role executor` đã mang đủ, và
+chép lại vừa tốn context vừa lệch đi khi tệp vai đổi:
+
+- vòng làm việc sáu bước và luật `crew done`;
+- ngữ pháp title cùng cách tự đổi title;
+- luật khoá tài nguyên và trailer `Closes:`.
+
+**Cũng đừng dán nội dung tệp gốc.** Đưa đường dẫn thôi — executor ngồi trong cây
+riêng và đọc được cả repo, nên dán vào chỉ làm phiên mới trả tiền context hai lần
+cho cùng một thứ.
+
+**Tiêu đề task chính là title phiên.** Chép nguyên văn:
+
+```
+<repo> · <chỗ> · b<nnn> · processing · crew/executor
+```
+
+`<chỗ>` là `main` với phiếu `fast-pair`. Phiếu `fast`/`full` thì ghi `e?`, vì cây
+do `crew new` chọn; bước 0 của executor sửa lại sau khi nhận cây.
+
+**Prompt cho `fast` / `full`:**
+
+```
+Bạn nhận BACKLOG-<nnn>, mức <fast|full>.
+
+Hai lệnh đầu, đúng thứ tự này:
+    scripts/crew new <nnn>       # chọn cây, mở nhánh — làm việc TRONG cây nó in ra
+    scripts/crew role executor   # luật vai
+
+Phiếu : docs/23_backlog/<tệp>.md
+Brief : briefs/<tệp>.md
+Đọc thêm: <đường dẫn, không dán nội dung>
+
+Trong phạm vi : <một câu, khớp scope_files đã khai>
+Ngoài phạm vi : <việc gần kề mà executor KHÔNG được đụng>
+Xong khi      : <điều kiện đo được>
+```
+
+`crew new` nằm trong prompt dù bước 1 của tệp vai đã có nó, và đây là ngoại lệ
+duy nhất của luật "đừng chép lại". Lý do đo được: `crew name executor` tính chỗ
+từ câu hỏi "tôi đang ngồi ở cây nào", nên trước 0.37.0 nó xác nhận
+`<repo> · main · b077 · processing · crew/executor` là đúng cho một phiếu `full`.
+Phiên bỏ qua `crew new` được bảo là title hợp lệ rồi sửa thẳng vào cây chính dùng
+chung, và check 2 chặn mọi `crew done` đang chờ. Từ 0.37.0 lệnh từ chối ca đó,
+nhưng một dòng trong prompt rẻ hơn là trông vào lưới đỡ.
+
+**Prompt cho `fast-pair`:**
+
+```
+Bạn nhận BACKLOG-<nnn>, mức fast-pair.
+
+Đừng chạy `scripts/crew new`, đừng dựng cây: sửa thẳng trên nhánh dev ở cây
+chính và commit ngay trong cùng lượt. Bước 5 cũng bỏ.
+
+    scripts/crew role executor
+
+<các ô còn lại như trên>
+```
+
+**Hai lỗi mẫu này chặn thêm**, đều đã là luật rời rạc trong tệp này:
+
+- Prompt viết "gõ `/executor`" — tệp vai khoá `disable-model-invocation`, phiên
+  tự mở không gọi được.
+- Prompt trỏ `.claude/commands/…` — executor đứng ở cây khác, và repo nào bỏ
+  `.claude/` vào `.gitignore` thì cây đó không có tệp nào cả.
+
 ## Việc KHÔNG thành phiếu
 
 Một phiếu tốn một nhánh, một lượt gộp và một chỗ trong pool suốt thời gian nó

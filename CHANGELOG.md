@@ -5,6 +5,109 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
+## [0.37.0] — 2026-09-10
+
+### Fixed — the title check asked where you are, never where the ticket belongs
+
+`crew name executor <nnn>` reads its three parts from git, which answers "which
+tree am I sitting in". It never asked the other question. Measured on a fixture
+before the change: a ticket declaring `execution: full` — a level that requires a
+worktree — was named from the **main tree** and the command replied
+
+```
+the executor hat is 'namelevel · main · b077 · processing · crew/executor'
+```
+
+So a session that skipped `crew new` was told its title was correct, and went on
+to edit the shared main tree, where `crew done`'s check 2 then refuses every
+merge in flight. The guard now reads the ticket's `execution` field and refuses
+`fast` and `full` from the main tree with `[name:place]`, naming the command that
+fixes it. **It fails open on a missing field**: `execution:` is optional (§3), so
+a repo that never recorded a level cannot start failing — that case is a shipped
+test, not an intention.
+
+### Added — the board counts the tree every fast-pair ticket runs in
+
+`main` is where every `fast-pair` ticket executes (§2), but `exec_map` matches
+`^<repo>-e[0-9]+$`, so the main tree was never in the executors list. Measured on
+a repo whose only work was one in-progress fast-pair ticket, the board printed
+both of these at once:
+
+```
+executors:
+  (pool empty — scripts/crew executor add)
+  note: BACKLOG-042 is in-progress but no executor holds it
+```
+
+The rig was working. The first line said nothing was running, and the second
+raised an alarm about the one state the design wants — the orphan sweep looks a
+ticket up by its `work/b<nnn>` branch, which a fast-pair ticket has none of, by
+design. Now:
+
+```
+executors:
+  main  dev  BACKLOG-042  processing  dirty=0  ticket=in-progress
+  e1    idle
+```
+
+- **The branch column stays the branch.** For `main` that is the dev branch, and
+  the fact that it is not `work/b<nnn>` is itself what says fast-pair, so the
+  level earns no column of its own.
+- **The dirty count is plain porcelain**, the same number the `main tree:` block
+  reports. One tree carrying two different dirty counts on one board would be
+  worse than the gap this closes.
+- **The orphan note still fires for `fast` and `full`**, and for a ticket with no
+  `execution` field at all. Both are shipped tests: a fix that silenced a real
+  signal to quiet a false one would be a trade, not a repair.
+- Two open fast-pair tickets are both listed and called out, because each is
+  meant to be committed in the same bout (§2).
+
+### Added — a session that ends with the wrong title is told so, once
+
+The session title is the only place this model is visible from outside a session.
+`crew status` derives every state from git, so the board is right whatever the
+title says; the user's session list is not. An executor moves from `processing`
+to `finishing` the moment it writes the trailer, and re-running `crew name` there
+— step 4b of the hat — was reported as the step most often skipped, so sessions
+ended reading as work still in flight.
+
+`hook_title_nag` is a third hook on `Stop`, warn-only like the other two (§8). It
+prints both halves and the `/rename` line:
+
+```
+crew: this session's title no longer matches what git says.
+  now  : nagsmoke · main · b043 · processing · crew/executor
+  true : nagsmoke · main · b043 · finishing · crew/executor
+```
+
+**It does not re-derive the grammar.** `crew name` gains a `--want` flag that
+prints the computed title and nothing else, and the hook only compares strings —
+the CLI carries a comment forbidding anything else from spelling the three parts
+out again, and a hook that quietly disagreed with the command would be the worst
+possible way to break it. Silent on a non-crew title, on a repo with no
+`scripts/crew`, and whenever `--want` refuses, which is what the new `[name:place]`
+guard makes reachable.
+
+### Added — one shape for handing a ticket over, and one for handing it back
+
+Both hats grew a fill-in template, because a handoff written freehand differs per
+planner and the receiving session cannot ask anyone what was meant.
+
+- **`planner`** gets the handoff block, and an explicit list of what NOT to copy:
+  the six-step loop, the title grammar and the lock rules all arrive through
+  `scripts/crew role executor`, and copying them costs context twice and drifts
+  when the hat changes. Source files are named by path, never pasted.
+  `scripts/crew new <nnn>` is the one deliberate exception to that rule, for the
+  reason the first entry above measures.
+- **`executor`** gets the closing report: five sections, tables, with the numbers
+  taken from what the tooling already measured — sha and trailer from the commit,
+  `declared=`/`actual=` from `crew done`'s `SIZE` line, lock time from its
+  `released lock` line. The flow drawing uses the kit's own ```` ```flow ```` fence
+  rather than ad-hoc ASCII. Two fields are deliberately never blank: **PR** says
+  "none — crew merges directly", because an empty field reads as *forgotten*
+  rather than *by design*, and **to prod** always appears, because dev and prod
+  are the pair most often confused.
+
 ## [0.36.0] — 2026-09-10
 
 ### Added — the board says which branch the whole pool is sitting on

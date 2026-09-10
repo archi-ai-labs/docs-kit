@@ -49,10 +49,92 @@ cái mũ do người giao chứ không phải thứ model tự đội. Lấy n�
 4b. `scripts/crew name executor` lần nữa — trailer vừa đẩy trạng thái sang
    `finishing`, và title cũ giờ đã sai. Nếu lệnh vẫn đọc ra `processing` thì cây
    còn file chưa commit; đó là điều kiện của `finishing`, không phải lỗi.
+    **Đây là bước bị quên nhiều nhất.** Bảng `crew status` không sao cả vì nó
+    tính trạng thái từ git, nhưng *danh sách phiên* thì đọc title, nên một title
+    cũ báo cho người ngoài rằng việc vẫn đang chạy. Từ 0.37.0 có hook Stop nhắc
+    lúc phiên dừng, kèm sẵn dòng `/rename` — nhưng nhắc là lưới đỡ, không phải
+    lịch trình.
+
 5. `scripts/crew done $ARGUMENTS` — sáu bước gộp với ba phép kiểm nằm trong
    ruột lệnh. **Không bao giờ gõ tay sáu lệnh đó** (`.claude/crew/worktrees.md`).
    Check 0 chặn ngay từ đầu nếu cây của bạn còn file chưa commit, vì thứ được
    gộp phải đúng bằng thứ bạn đang có.
+
+6. **Báo cáo cuối** theo mẫu dưới đây, đúng năm mục và đúng thứ tự ấy. Đây là
+   thứ duy nhất người giao việc đọc được mà không phải mở repo.
+
+## Mẫu báo cáo cuối
+
+Số ở mục 1, 3, 4 lấy từ thứ máy đã đo, đừng gõ lại theo trí nhớ: sha và trailer
+từ commit, `declared=`/`actual=` từ dòng `SIZE` mà `crew done` ghi, thời gian giữ
+khoá từ dòng `released lock`.
+
+`<base>` là gốc URL của repo, lấy bằng lệnh chứ đừng gõ tay:
+
+```
+git remote get-url origin \
+  | sed -e 's|\.git$||' -e 's|.*[:/]\([^/][^/]*/[^/][^/]*\)$|https://github.com/\1|'
+```
+
+Lệnh này giả định remote là GitHub. Repo dùng máy chủ khác, hoặc chưa có remote
+(`crew done` báo `push skipped`), thì để sha dạng chữ thường — một liên kết sai
+tệ hơn không có liên kết.
+
+````
+## BACKLOG-<nnn> — <một câu việc đã làm>
+
+**1. Việc đã làm**
+
+| Việc | Tệp chạm | Kết quả |
+|---|---|---|
+| <việc 1> | [path/a.ts:88](path/a.ts:88) | <xong / một phần> |
+
+**2. Luồng đổi thế nào**
+
+```flow
+title: trước
+a -> b : <bước cũ>
+```
+
+```flow
+title: sau
+a -> c : <bước mới>
+c -> b : <bước thêm>
+```
+
+Luồng không đổi thì bỏ hai khối vẽ, viết một dòng:
+`Luồng không đổi — chỉ sửa trong một bước sẵn có.`
+
+**3. Bằng chứng**
+
+| Loại | Xem ở đâu | Kết quả |
+|---|---|---|
+| Commit | [`<sha ngắn>`](<base>/commit/<sha>) | mang trailer `Closes: BACKLOG-<nnn>` |
+| Kiểm thử | [<tệp test>](<đường dẫn>) | <n passed, m failed> |
+| Phạm vi | dòng `SIZE` của `crew done` | khai `<S>` · thật `<N>` tệp |
+| Khoá | `<tài nguyên>` | giữ `<n>`s |
+
+**4. Git**
+
+| | |
+|---|---|
+| Nhánh | [`work/b<nnn>`](<base>/tree/work/b<nnn>) — hoặc "không có, phiếu `fast-pair`" |
+| Gộp vào | [`<dev_branch>` @ `<sha>`](<base>/commit/<sha>) |
+| PR | không có — crew gộp thẳng, luồng này không dùng PR |
+| Lên prod | **chưa** — `<prod_branch>` chưa đụng, release là việc của devops |
+
+**5. Việc còn lại**
+
+| Việc | Vì sao chưa làm | Ai tiếp |
+|---|---|---|
+| <việc> | <blocker hoặc ngoài phạm vi> | <vai> |
+
+Không còn gì thì ghi đúng một dòng: `Không còn việc nào.`
+````
+
+Hai ô cố ý cứng. **PR** ghi thẳng "không có" chứ không bỏ trống, vì ô trống đọc
+như quên điền còn câu ấy nói rõ đây là thiết kế. **Lên prod** luôn xuất hiện kể
+cả khi hiển nhiên, vì đó là chỗ dễ lẫn nhất giữa dev và prod.
 
 ## Luật riêng của vai
 

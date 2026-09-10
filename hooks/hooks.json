@@ -43,6 +43,14 @@
             "timeout": 30
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/hook_title_nag.sh\""
+          }
+        ]
       }
     ]
   }
