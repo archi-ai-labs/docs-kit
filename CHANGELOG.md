@@ -5,6 +5,80 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
+## [0.35.0] — 2026-09-10
+
+### Fixed — a ticket that was *mentioned* in the audit log closed without an audit line
+
+`docs_close` skips a completion it has already recorded, and `audit_ids` decided that by
+containment: any `BACKLOG-nnn` appearing anywhere in any `*.md` directly under `92_audit/`
+counted. Mentioned and recorded are not the same thing, and the gap between them is silent.
+
+**Measured on a real repo, 2026-09-10.** An audit line written when a Decision was approved
+named, in its ref column, the two tickets that Decision **opened**:
+
+```
+… | Duyệt PROPOSAL-008 thành DECISION-008, mở BACKLOG-015 và BACKLOG-016 | DECISION-008 (PROPOSAL-008, ISSUE-023, BACKLOG-015, BACKLOG-016) | … | …
+```
+
+From that moment `need_audit` was False for `BACKLOG-016` forever. Reproduced on a fixture:
+a later `Closes: BACKLOG-016` trailer flipped `status: done`, appended **nothing**, and
+reported `CLOSE BACKLOG-016 — status -> done`. There is no missing word in that line to
+notice, no warning, and no exit code — it reads exactly like a correct close-out while
+STANDARD §6's completion trigger goes unmet. That is the `severity: silent` class EXECUTION
+§12 ranks above a refusal.
+
+**A line records a completion when its ref column *leads* with the id.** That is the shape
+this script writes (`BACKLOG-001 (DECISION-000)`) and the shape people already write by hand;
+STANDARD §4 now says so outright, because a convention a script depends on is not a
+convention any more.
+
+The rule was chosen by measuring three candidates against sixteen real finished tickets
+rather than by argument:
+
+| Candidate | Finished items still recognised | Poisoned id cleared |
+|---|---|---|
+| id anywhere in the ref column | 16 of 16 | no — it is in the ref column |
+| ref column **and** a commit sha in `why` | 2 of 16 | yes |
+| **id leads the ref column** | **16 of 16** | **yes** |
+
+The sha rule is the one worth naming, because it looks right and is not: hand-written audit
+lines are explicitly valid (§6.1) and carry no sha, so it would have appended fourteen
+duplicate lines on the first run. On the repo the defect was found in, the fix changes the
+recorded set by exactly one id — the poisoned one — and nothing becomes newly recorded.
+
+- **Both failure directions are now loud.** A line written in some other shape is not
+  recognised, so the script appends its own line naming the commit — a visible extra record
+  instead of a silent missing one. The ceilings are written into the function rather than
+  left to be discovered: a literal `|` inside the *what happened* column shifts the fields,
+  and an id recorded as a chain member of another line is not seen.
+- **Both audit-line shapes are honoured.** The bare five fields of §4, and the same fields
+  wrapped in pipes as a markdown table row. Stripping that wrapper is not cosmetic — keeping
+  it shifts every column by one, so *what happened* would be read as the ref. That shape was
+  already in the test suite and is now asserted on purpose.
+- **A line is only a record if it leads with its date.** A table header, a separator row, or
+  a planning table in the same file has a ref-shaped third field; the date is what separates
+  a record from a row that merely looks like one.
+- **`archive` gets stricter in the safe direction.** Step 6 refuses to archive a done item
+  whose audit line is missing, and it reads the same set — so an item whose only trace was a
+  mention now stays in the hot folder instead of being filed away untraceable. Behaviour on
+  both real repos is unchanged in every mode.
+- **The glob stays non-recursive and stays a glob.** Non-recursive because a crew repo keeps
+  periodic reports in `92_audit/reports/` precisely so prose full of ids cannot reach this
+  function; a glob rather than `LOG.md` alone because a repo that splits a long log by year
+  still has real records in the older file.
+
+Numbered 0.35.0 because two releases were already in flight when this was written: 0.33.0
+(the `docs-init` product doc) sat uncommitted in the main tree and 0.34.0 (the `navigator`
+hat) on its own branch. This fix depends on neither and can land in any order; only
+`CHANGELOG.md` and `plugin.json` will conflict, and the navigator release relies on the
+`92_audit/reports/` subfolder staying outside this function's non-recursive glob, which it
+does.
+
+New CI step, **`A mentioned id is not a recorded completion`**, known-bad case first: the
+mention must not suppress the line, then a hand-written line, a table-shaped line, and prose
+that must not count. Five mutations — reverting to containment, accepting any id in the ref
+column, demanding a sha, keeping the wrapper pipes, dropping the date guard — each turn it red.
+
 ## [0.33.0] — 2026-09-10
 
 ### Fixed — `docs-init` writes the Product doc, and the validator says so until someone does
@@ -54,6 +128,7 @@ Scope, deliberately: `00_roadmap/`, `30_conventions/` and `93_qa/` also ship see
 and they are left alone. Those are free-form documents whose seed is visibly a seed — a `>`
 blockquote telling you what to write. `01_products/` is the only *typed* folder whose seed
 satisfies its own frontmatter contract and is rendered as real content downstream.
+
 
 ## [0.32.1] — 2026-09-10
 

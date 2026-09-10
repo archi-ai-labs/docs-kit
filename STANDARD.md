@@ -392,6 +392,16 @@ inserted, edited, or deleted** (validated against git HEAD). Line format:
 YYYY-MM-DD | what happened | ref (IDs or "-") | deviation from Decision/Backlog ("-" if none) | why
 ```
 
+**The ref column leads with the id the line is about.** A line recording that
+`BACKLOG-012` finished writes `BACKLOG-012 (DECISION-003)`; a line about a
+Decision that opened two tickets leads with the Decision. This was always the
+convention and is now load-bearing: `docs_close` reads the first id of the ref
+column to decide whether a completion has already been recorded, so an id that
+appears anywhere else on the line — in the prose, in the reason, later in the ref
+column as a chain member — is a mention, not a record. Wrapping the five fields
+in pipes as a markdown table row is accepted; the wrapper is stripped before the
+columns are read.
+
 ### Layer 3 folders (`30/40/50/60/70/93`) — Reference
 No traceability fields, no required frontmatter. Free-form content on the
 folder's topic. The validator does not check these folders.
@@ -463,9 +473,14 @@ afterwards from a diff.
 
 Rules that make it safe to run over the whole history on every invocation:
 
-- **Idempotent.** A completion already recorded — `status: done` *and* the id cited
-  in `92_audit/` — is skipped. No state is kept about where the last run stopped,
-  because state that can be wrong is worse than a scan that costs a second.
+- **Idempotent.** A completion already recorded — `status: done` *and* an audit
+  line whose ref column **leads** with the id (§4) — is skipped. No state is kept
+  about where the last run stopped, because state that can be wrong is worse than
+  a scan that costs a second. "Leads with" rather than "mentions" is the whole
+  rule: a line that names a ticket for any other reason, such as the Decision
+  that opened it, used to count as its completion and so suppressed the real
+  line forever. Hand-written lines are recognised on the same terms as generated
+  ones — the test is the ref column, never the presence of a sha.
 - **First commit per id wins.** A later commit naming the same id is a follow-up
   fix, not a second completion.
 - **A trailer naming an id no Backlog item has is reported, never invented.** The

@@ -614,6 +614,96 @@ jobs:
             || { echo "::error::the tree docs_close wrote does not validate."; exit 1; }
           echo "OK — trailer recorded once, nothing invented, tree still valid"
 
+      # The idempotence above rests on audit_ids, and until 0.35.0 that function
+      # asked "is this id mentioned anywhere under 92_audit/". Mentioned is not
+      # recorded: a Decision-approval line naming the tickets that Decision
+      # OPENED made those tickets, months later, close with `status: done` and NO
+      # audit line — and the report said `status -> done`, which reads like a
+      # correct close-out. Silent, so it outranks a refusal (EXECUTION §12).
+      # The known-bad case runs first, then the two shapes that must keep working.
+      - name: A mentioned id is not a recorded completion
+        run: |
+          work="$(mktemp -d)"
+          git -C "$work" init -q
+          git -C "$work" config user.email ci@example.com
+          git -C "$work" config user.name ci
+          bash scripts/docs_scaffold.sh "$work" >/dev/null
+          mk() {  # mk <id> <status>
+            sed -e "s/^id: BACKLOG-000/id: BACKLOG-$1/" -e "s/^status: .*/status: $2/" \
+              "$work/docs/23_backlog/BACKLOG-000-example.md" \
+              > "$work/docs/23_backlog/BACKLOG-$1-x.md"
+          }
+          mk 016 open
+          # THE KNOWN-BAD LINE: 016 sits in the ref column, but the line is about
+          # the Decision that opened it, not about its completion.
+          printf '2026-09-09 | duyet PROPOSAL-008 thanh DECISION-008, mo BACKLOG-016 | DECISION-008 (PROPOSAL-008, BACKLOG-016) | - | phien duyet\n' \
+            >> "$work/docs/92_audit/LOG.md"
+          git -C "$work" add -A && git -C "$work" commit -qm scaffold
+          : > "$work/feature.ts"
+          git -C "$work" add -A
+          git -C "$work" commit -qm "chan 400" -m "Closes: BACKLOG-016"
+          out="$(bash scripts/docs_close.sh --apply "$work")"
+          case "$out" in
+            *"CLOSE BACKLOG-016 — status -> done, audit line"*) ;;
+            *) echo "::error::a mention suppressed the audit line — got: $out"; exit 1 ;;
+          esac
+          grep -q 'BACKLOG-016 (DECISION-000).*commit' "$work/docs/92_audit/LOG.md" \
+            || { echo "::error::the completion line was not appended."; exit 1; }
+          # Still idempotent once the real line exists.
+          before="$(wc -l < "$work/docs/92_audit/LOG.md")"
+          bash scripts/docs_close.sh --apply "$work" >/dev/null
+          [ "$before" = "$(wc -l < "$work/docs/92_audit/LOG.md")" ] \
+            || { echo "::error::re-running appended a duplicate."; exit 1; }
+          # A HAND-WRITTEN completion line is explicitly valid (§6.1) and must be
+          # recognised, or every hand-recorded item grows a second line. This is
+          # the assertion that rules out "ref column plus a commit sha", which
+          # matched 2 of 16 finished items on the repo the defect was found in.
+          mk 020 open
+          printf '2026-09-10 | chan 400 xong | BACKLOG-020 (DECISION-000) | - | lam tay, khong sha\n' \
+            >> "$work/docs/92_audit/LOG.md"
+          git -C "$work" add -A && git -C "$work" commit -qm hand
+          git -C "$work" commit -q --allow-empty -m "later" -m "Closes: BACKLOG-020"
+          before="$(wc -l < "$work/docs/92_audit/LOG.md")"
+          out="$(bash scripts/docs_close.sh --apply "$work")"
+          [ "$before" = "$(wc -l < "$work/docs/92_audit/LOG.md")" ] \
+            || { echo "::error::a hand-written audit line was not recognised — got: $out"; exit 1; }
+          grep -q '^status: done' "$work/docs/23_backlog/BACKLOG-020-x.md" \
+            || { echo "::error::status was not flipped for the hand-recorded item."; exit 1; }
+          # Prose must not record anything — neither a plain sentence nor, and
+          # this is the one that bites, a pipe-separated row that is not an audit
+          # line at all. A table header or a planning table in the same file has
+          # a ref-shaped third field; only the leading date makes a row a record.
+          mk 030 open
+          {
+            printf 'BACKLOG-030 is discussed here in prose, outside any audit line.\n'
+            printf '| date | what happened | ref | deviation | why |\n'
+            printf '| --- | --- | --- | --- | --- |\n'
+            printf 'du kien | phieu ke tiep | BACKLOG-030 | - | chua lam\n'
+          } >> "$work/docs/92_audit/LOG.md"
+          git -C "$work" add -A && git -C "$work" commit -qm prose
+          git -C "$work" commit -q --allow-empty -m "third" -m "Closes: BACKLOG-030"
+          out="$(bash scripts/docs_close.sh --apply "$work")"
+          case "$out" in
+            *"CLOSE BACKLOG-030 — status -> done, audit line"*) ;;
+            *) echo "::error::prose outside an audit line counted as a record — got: $out"; exit 1 ;;
+          esac
+          # The same five fields written as a markdown table row, wrapped in
+          # pipes because it renders. Stripping the wrapper matters: keeping it
+          # shifts every column by one and the `what happened` text gets read as
+          # the ref, which is a silent misread rather than a visible failure.
+          mk 040 open
+          printf '| 2026-09-11 | chan 400 xong | BACKLOG-040 | - |\n' \
+            >> "$work/docs/92_audit/LOG.md"
+          git -C "$work" add -A && git -C "$work" commit -qm table
+          git -C "$work" commit -q --allow-empty -m "fourth" -m "Closes: BACKLOG-040"
+          before="$(wc -l < "$work/docs/92_audit/LOG.md")"
+          out="$(bash scripts/docs_close.sh --apply "$work")"
+          [ "$before" = "$(wc -l < "$work/docs/92_audit/LOG.md")" ] \
+            || { echo "::error::a table-shaped audit line was not recognised — got: $out"; exit 1; }
+          bash scripts/docs_validate.sh "$work/docs" >/dev/null \
+            || { echo "::error::the tree docs_close wrote does not validate."; exit 1; }
+          echo "OK — mention ignored; hand-written, table-shaped and prose cases all correct"
+
       # The Stop hook's whole job changed in 0.25.0: it asks MAP.tsv which document
       # claims an edited file instead of matching path-shape globs. The two cases
       # that made the old one unusable are asserted first — a repo that only has a

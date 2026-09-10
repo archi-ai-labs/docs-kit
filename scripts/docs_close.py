@@ -41,6 +41,14 @@ from docs_render import parse_frontmatter  # noqa: E402
 
 TRAILER_RE = re.compile(r"^\s*closes:\s*(.+)$", re.I | re.M)
 ID_RE = re.compile(r"\b(BACKLOG-[0-9]{3,})\b")
+# Any layer-2 id, whatever its prefix (STANDARD §3). Needed to find which id an
+# audit line is *about*, which is the first one in its ref column regardless of
+# kind — a line led by DECISION-008 is not a Backlog item's completion.
+ANY_ID_RE = re.compile(r"\b([A-Z]+-[0-9]{3,})\b")
+# An audit line leads with its date (STANDARD §4). Prose in the same file — the
+# header, the format reminder, a paragraph naming an id — must not be read as a
+# record of anything.
+AUDIT_DATE_RE = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
 AUDIT_SEP = "|"
 
 
@@ -124,11 +132,64 @@ def trailers(root):
     return found
 
 
-def audit_ids(docs_root):
-    """Ids already cited anywhere in the audit log.
+def audit_columns(line):
+    """Split one audit-log line into its columns, or [] if it is not one.
 
-    Cheap containment, not parsing: the log is append-only prose in five columns
-    and the only question here is whether a completion has already been recorded.
+    Two shapes are in the wild and both are honoured. STANDARD §4 writes the bare
+    form, `date | what | ref | deviation | why`, which is what this script appends.
+    People also write the same five fields as a markdown table row, wrapped in
+    pipes, because it renders — so the leading and trailing separator is stripped
+    before splitting rather than treated as an empty first column. Getting that
+    wrong shifts every column by one, which is a silent misread of the ref.
+    """
+    t = line.strip()
+    if not t or AUDIT_SEP not in t:
+        return []
+    if t.startswith(AUDIT_SEP):
+        t = t[1:]
+    if t.endswith(AUDIT_SEP):
+        t = t[:-1]
+    return [c.strip() for c in t.split(AUDIT_SEP)]
+
+
+def audit_ids(docs_root):
+    """Backlog ids whose COMPLETION the audit log already records.
+
+    This used to be cheap containment — any `BACKLOG-nnn` anywhere in any file
+    here counted. That conflates *mentioned* with *recorded*, and the difference
+    is not academic. Measured 2026-09-10 on a real repo: an audit line for a
+    Decision approval named the two tickets that Decision OPENED, in its ref
+    column, months before either finished. From then on `need_audit` was False
+    for both, so the next `Closes:` trailer flipped `status: done` and appended
+    nothing, reporting `CLOSE BACKLOG-nnn — status -> done` — a close-out that
+    reads exactly like a correct one while STANDARD §6's completion trigger goes
+    unmet. Silent, which EXECUTION §12 ranks above a refusal.
+
+    So a line records a completion only when the id is the line's SUBJECT: the
+    first id of any kind in the ref column (STANDARD §4). That is the shape this
+    script writes — `BACKLOG-001 (DECISION-000)` — and the shape people already
+    write by hand.
+
+    Why not "ref column plus a commit sha in the why column": hand-written audit
+    lines are explicitly valid (§6.1) and carry no sha. On the repo above that
+    rule matched 2 of 16 finished items, so the next run would have appended
+    fourteen duplicate lines. The subject rule matched 16 of 16, and neither of
+    the two open tickets — including the poisoned one.
+
+    Two ceilings, stated rather than papered over. A line whose *what happened*
+    column contains a literal `|` shifts the columns, so the wrong field is read
+    as the ref; that can only lose a record, never invent the old bug back, and
+    losing one costs a visible extra line rather than a silent missing one. And
+    an id recorded in some other shape — `DECISION-009 (BACKLOG-020)` for a line
+    that really is that Backlog item's completion — is not seen, so this script
+    appends its own line naming the commit. Both failure directions are now
+    loud: the old one was quiet.
+
+    The glob stays non-recursive and stays a glob. Non-recursive because a crew
+    repo keeps its periodic reports in `92_audit/reports/` precisely so prose
+    full of ids cannot reach this function; a glob rather than `LOG.md` alone
+    because a repo that splits a long log by year still has real records in the
+    older file.
     """
     seen = set()
     folder = docs_root / "92_audit"
@@ -136,9 +197,19 @@ def audit_ids(docs_root):
         return seen
     for p in sorted(folder.glob("*.md")):
         try:
-            seen.update(ID_RE.findall(p.read_text(encoding="utf-8", errors="replace")))
+            text = p.read_text(encoding="utf-8", errors="replace")
         except Exception:
             continue
+        for line in text.split("\n"):
+            cols = audit_columns(line)
+            # date, what happened, ref — everything after the ref is irrelevant
+            # here, and some repos write the line as a four-column markdown table
+            # without the `why`, so do not insist on all five.
+            if len(cols) < 3 or not AUDIT_DATE_RE.match(cols[0]):
+                continue
+            subject = ANY_ID_RE.search(cols[2])
+            if subject and subject.group(1).startswith("BACKLOG-"):
+                seen.add(subject.group(1))
     return seen
 
 
