@@ -253,8 +253,9 @@ STANDARD §10.
 
 ## 🔒 Enforcement
 
-Two hooks, both **deterministic, warn-only, and silent in repos without a `docs/`
-skeleton**. No LLM runs inside a hook.
+Two hooks for the docs layer, both **deterministic, warn-only, and silent in repos
+without a `docs/` skeleton**. No LLM runs inside a hook. The crew layer adds three
+of its own, silent in a repo with no `scripts/crew` — see EXECUTION §8.
 
 - **PostToolUse** (Edit/Write) — editing `docs/02_architecture/`,
   `docs/03_business-logic/` or `docs/04_api/` prints a reminder that layer 1 is
