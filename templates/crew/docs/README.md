@@ -53,5 +53,6 @@ ngưỡng trong `resources.md` và `tickets.md` mới chỉ đo trên vài phi�
 ## Trạng thái nằm ở đâu
 
 `../<repo>-crew/` — ngoài mọi bản checkout, nên mọi phiên nhìn chung một bảng
-khoá. `scripts/crew status` đọc nó và trả lời bốn câu: cây nào đang mở, khoá nào
-đang giữ, lộ trình còn khớp thực tế không, và có nên nhận thêm phiếu không.
+khoá. `scripts/crew status` đọc nó và trả lời năm câu: cây chính đang đứng ở
+nhánh nào, cây nào đang mở, khoá nào đang giữ, lộ trình còn khớp thực tế không,
+và có nên nhận thêm phiếu không.

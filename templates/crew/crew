@@ -567,6 +567,85 @@ cmd_lock() {
   esac
 }
 
+# ---------------------------------------------------------------- main tree
+# What the MAIN tree has checked out, and how far it sits from the dev branch.
+#
+# WHY THIS IS ON THE BOARD: `crew done` merges onto whatever the main tree holds
+# at that moment, so its check 1 refuses when that is not the dev branch and its
+# check 2 refuses when the tree is dirty. Both were reachable only by starting a
+# merge and reading the refusal — the board never said which branch was under
+# the whole pool, and the main tree is the one checkout nothing else here lists.
+# So this asks check 1's and check 2's questions before a ticket is in flight.
+#
+# It prints the branch NAME rather than only a verdict, because the person
+# reading is the one who knows whether being on that branch is deliberate.
+main_tree_block() {
+  MT_DEV="$(cfg dev_branch main)"
+  MT_CUR="$(git -C "$MAIN" symbolic-ref --short HEAD 2>/dev/null || echo '(detached)')"
+  # Plain porcelain, deliberately NOT own_files(): check 2 counts every
+  # uncommitted file in the main tree, provisioned payload included, so a board
+  # that filtered would promise a merge the merge itself refuses.
+  MT_DIRTY="$(git -C "$MAIN" status --porcelain 2>/dev/null | grep -c . || true)"
+  MT_STATE=clean
+  [ "${MT_DIRTY:-0}" -gt 0 ] && MT_STATE="${MT_DIRTY} uncommitted"
+
+  echo "main tree:"
+  if [ "$MT_CUR" = "$MT_DEV" ]; then
+    printf '  %-10s: %s\n' "branch" "$MT_CUR = dev_branch · $MT_STATE"
+  else
+    printf '  %-10s: %s\n' "branch" "$MT_CUR ≠ dev_branch '$MT_DEV' · $MT_STATE"
+  fi
+
+  # Two different questions wear the same words. On the dev branch, "in sync"
+  # means in step with the remote; anywhere else it means "is this work already
+  # in dev". Compare against whichever the answer is actually about, and label
+  # the line with which one it was — the counts are meaningless otherwise.
+  # `row` keeps the label column the same width as `branch` above; an unaligned
+  # board is one people stop reading.
+  row() { printf '  %-10s: %s\n' "$1" "$2"; }
+  MT_REF=""
+  MT_NAME=""
+  if [ "$MT_CUR" = "$MT_DEV" ]; then
+    MT_LBL="vs remote"
+    MT_REF="$(git -C "$MAIN" rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null || true)"
+    MT_NAME=" $MT_REF"
+    [ -n "$MT_REF" ] || row "$MT_LBL" "'$MT_CUR' tracks nothing here — nothing to compare"
+  else
+    MT_LBL="vs $MT_DEV"
+    if git -C "$MAIN" show-ref --verify --quiet "refs/heads/$MT_DEV"; then
+      MT_REF="$MT_DEV"
+      # The label already names it, so do not say it twice.
+      MT_NAME=""
+    else
+      row "$MT_LBL" "that branch does not exist here"
+    fi
+  fi
+  if [ -n "$MT_REF" ]; then
+    # `rev-list --left-right --count REF...HEAD` prints "<behind> <ahead>": the
+    # left side is what REF has and HEAD does not.
+    MT_AB="$(git -C "$MAIN" rev-list --left-right --count "$MT_REF...HEAD" 2>/dev/null || true)"
+    if [ -z "$MT_AB" ]; then
+      row "$MT_LBL" "cannot compare with $MT_REF — no common history"
+    else
+      MT_BEHIND="$(printf '%s' "$MT_AB" | awk '{print $1+0}')"
+      MT_AHEAD="$(printf '%s' "$MT_AB" | awk '{print $2+0}')"
+      if [ "$MT_AHEAD" -eq 0 ] && [ "$MT_BEHIND" -eq 0 ]; then
+        row "$MT_LBL" "in step with${MT_NAME:- $MT_REF}"
+      else
+        row "$MT_LBL" "$MT_AHEAD ahead, $MT_BEHIND behind$MT_NAME"
+      fi
+    fi
+  fi
+
+  # One arrow, naming the checks by the number `crew done` prints, so the board
+  # and the refusal say the same thing.
+  MT_WHY=""
+  [ "$MT_CUR" = "$MT_DEV" ] || MT_WHY="check 1 wants '$MT_DEV' checked out"
+  [ "${MT_DIRTY:-0}" -gt 0 ] && MT_WHY="${MT_WHY:+$MT_WHY, }check 2 wants it clean"
+  [ -n "$MT_WHY" ] && echo "  → crew done refuses here: $MT_WHY"
+  return 0
+}
+
 # ---------------------------------------------------------------- direction
 # The roadmap is Layer 1 STATE and the Backlog is what is being done; until
 # 0.34.0 nothing compared the two, so the plan could go stale without one check
@@ -725,6 +804,8 @@ cmd_status() {
   TODAY="$(date '+%Y-%m-%d')"
 
   echo "crew status — $REPO"
+  echo ""
+  main_tree_block
   echo ""
   # Executor state is DERIVED, never stored: idle is a detached HEAD over a clean
   # tree, and a held branch is `processing` until its own commit declares the work

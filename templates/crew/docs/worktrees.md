@@ -35,6 +35,12 @@ rảnh xuống tới sàn (mặc định 2) và giữ nguyên mọi executor cò
 kèm gọi tên chúng ra. `scripts/crew executor rm <k>` gỡ đúng một cái, và từ chối
 khi cái đó còn giữ nhánh.
 
+**Cây chính đứng ở nhánh nào thì `crew done` gộp vào đó.** Đây là lý do lệnh có
+check 1, và cũng là lý do `scripts/crew status` in nhánh của cây chính ngay dòng
+đầu: đứng nhầm nhánh thì mọi lượt gộp đều bị từ chối, mà trước 0.36.0 chỉ lúc
+chạy gộp mới biết. Bảng còn đếm cây chính đi trước hay sau nhánh dev bao nhiêu
+commit, nên nhìn mắt là thấy đã đồng bộ hay chưa.
+
 **Cái ghim phiếu ↔ executor là nhánh đang checkout**, không phải một tệp
 registry. Git đã lưu sẵn quan hệ đó, và git cấm hai cây cùng mở một nhánh, nên
 không tệp nào cãi lại được. Executor rảnh nằm ở HEAD tách rời, bởi "đứng trên

@@ -428,6 +428,16 @@ crew done 157
    dirty files are listed by name (see §2 fast-pair). Known limit, stated
    rather than papered over: a clean tree does **not** mean nobody is reading
    it mid-review.
+
+**Both of these checks are now on the board.** `crew status` opens with the main
+tree's branch, whether that is the dev branch, and its uncommitted count, so the
+two ways a merge gets refused are visible before a ticket is in flight rather
+than at the moment one tries to land. It counts with plain `status --porcelain`,
+the same way check 2 does and deliberately not the filtered `own_files()` an
+executor row uses — filtering there would report a clean tree and then let the
+merge refuse, which is worse than not reporting. It also prints how far the main
+tree is from dev: against the remote when it is on dev, against dev itself when
+it is on anything else, because "in sync" is a different question in each case.
 5. `git -C <main> merge --ff-only work/b157`, then push dev branch and work
    branch (skipped with a note when no remote exists). If the dev branch moved:
    back to step 1, at most twice.
@@ -596,6 +606,7 @@ lands as `.new`.
 | S/C fields in the validator | `scope_files:` and `execution:` stay optional and unchecked until the calibration log (§6) says what the thresholds should be |
 | `brief` crew section | `brief` has its own measured gates; teaching its delegation prompt to name level, tree and branch deserves its own release |
 | A report the machine writes | `crew report --write` fills the measured section and leaves every judgement section empty. Crew does not author prose about the project, for the reason §6.1 gives: the numbers are checkable and the story is not, so they must come from different hands |
+| A board that fixes the branch | the main-tree line reports and never runs `git checkout`: whether sitting on another branch is deliberate is the one thing the board cannot know, and a status command that moves HEAD under a running session is not a status command |
 | A monthly nag on the board | the four weekly lines already name the gap; only a state something acts on gets a word (0.32.0's rule) |
 | Reports drawn on the HTML views | `docs_render.py` reads `92_audit/LOG.md` only, and the renderer is not touched this release; the audit line makes the report reachable from `changes.html` until someone draws it |
 | A hook nagging an overdue report | hooks read events (§8) and a calendar is not one; the always-loaded snippet is at 2379 of its 2400-byte cap, so the reminder lives on the board that sessions are already told to run |

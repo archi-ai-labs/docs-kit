@@ -697,6 +697,115 @@ OUT="$( (cd "$WR" && scripts/crew role ghost) 2>&1 )" && RC=0 || RC=$?
 [ "$RC" -ne 0 ] && has "$OUT" "no role file" && ok "role: an unstamped role is red, and says so" \
   || bad "role: unstamped (rc=$RC, got: $OUT)"
 
+# ---------------------------------------------------------------- main tree
+# The board now answers `crew done`'s check 1 and check 2 before a merge is
+# attempted, so the known-bad shapes come first: a main tree parked on the wrong
+# branch, and a dirty one. Both used to be discoverable only by running the merge.
+MT="$TMP/mainbranch"
+mkdir -p "$MT/docs/23_backlog" "$MT/docs/92_audit" "$MT/scripts"
+(
+  cd "$MT"
+  git init -q && git checkout -q -b dev
+  git config user.email t@t && git config user.name t
+  cp "$KIT/templates/crew/crew" scripts/crew && chmod +x scripts/crew
+  printf '{"owns": [], "crew": {"dev_branch": "dev"}}\n' > .docs-kit.json
+  printf '# Audit log\n' > docs/92_audit/LOG.md
+  printf -- '---\nid: BACKLOG-001\ndescription: "x"\nsource_ref: ISSUE-001\nstatus: open\n---\n' \
+    > docs/23_backlog/t001.md
+  git add -A && git commit -qm init
+)
+mt() { (cd "$MT" && scripts/crew status) 2>&1; }
+
+# KNOWN-BAD 1: parked on a branch that is not dev. check 1 would refuse.
+( cd "$MT" && git checkout -q -b sidequest && echo a > f && git add -A && git commit -qm side )
+OUT="$(mt)"
+if has "$OUT" "branch    : sidequest ≠ dev_branch 'dev'" \
+   && has "$OUT" "check 1 wants 'dev' checked out"; then
+  ok "main tree: a tree on the wrong branch is named, and cites check 1"
+else
+  bad "main tree: wrong branch (got: $(printf '%s' "$OUT" | sed -n '3,6p'))"
+fi
+# ...and it says how far that branch has drifted from dev, which is the whole
+# reason the branch name alone is not enough.
+has "$OUT" "vs dev    : 1 ahead, 0 behind" \
+  && ok "main tree: distance from dev is counted, not just the branch name" \
+  || bad "main tree: ahead/behind vs dev (got: $OUT)"
+
+# KNOWN-BAD 2: on dev but dirty. check 2 would refuse. Plain porcelain, not
+# own_files — check 2 counts the payload too, so a filtered board would promise
+# a merge the merge refuses.
+( cd "$MT" && git checkout -q dev && echo dirt > untracked.txt )
+OUT="$(mt)"
+if has "$OUT" "branch    : dev = dev_branch · 1 uncommitted" \
+   && has "$OUT" "check 2 wants it clean" \
+   && ! has "$OUT" "check 1"; then
+  ok "main tree: a dirty tree cites check 2 alone"
+else
+  bad "main tree: dirty case (got: $(printf '%s' "$OUT" | sed -n '3,6p'))"
+fi
+
+# The count must be PLAIN porcelain, not own_files(). own_files filters the
+# provisioned payload by name — `briefs` is in that list unconditionally — but
+# check 2 counts every uncommitted file there is. A board that filtered would
+# report a clean tree and then watch the merge refuse, which is worse than not
+# reporting at all. `briefs/` is the realistic shape: a repo that runs
+# /docs-kit:brief without gitignoring the folder has it untracked in the main
+# tree, where own_dirty sees nothing and check 2 sees a blocker.
+( cd "$MT" && git checkout -q dev && rm -f untracked.txt && mkdir -p briefs && echo b > briefs/x.md )
+OUT="$(mt)"
+if has "$OUT" "branch    : dev = dev_branch · 1 uncommitted" \
+   && has "$OUT" "check 2 wants it clean"; then
+  ok "main tree: the dirty count is check 2's, not the executor's filtered one"
+else
+  bad "main tree: payload-filtered count leaked in (got: $(printf '%s' "$OUT" | sed -n '3,6p'))"
+fi
+( cd "$MT" && rm -rf briefs && echo dirt > untracked.txt )
+
+# Both wrong at once names both, in the order crew done hits them.
+( cd "$MT" && git checkout -q sidequest )
+OUT="$(mt)"
+has "$OUT" "check 1 wants 'dev' checked out, check 2 wants it clean" \
+  && ok "main tree: both refusals named together, in check order" \
+  || bad "main tree: combined arrow (got: $OUT)"
+
+# THE QUIET FORM: on dev, clean, nothing to act on — no arrow at all.
+( cd "$MT" && git checkout -q dev && rm -f untracked.txt )
+OUT="$(mt)"
+if has "$OUT" "branch    : dev = dev_branch · clean" \
+   && ! has "$OUT" "crew done refuses here"; then
+  ok "main tree: a tree ready to merge draws no arrow"
+else
+  bad "main tree: quiet form (got: $(printf '%s' "$OUT" | sed -n '3,6p'))"
+fi
+
+# No remote is the common case in a fresh repo, and it must print the fact
+# rather than a zero that reads as "in sync" (§8 fail open).
+has "$OUT" "vs remote : 'dev' tracks nothing here" \
+  && ok "main tree: no upstream states the fact instead of inventing a verdict" \
+  || bad "main tree: no-upstream line (got: $OUT)"
+
+# With an upstream, the comparison is against the remote — a different question
+# wearing the same words, so it must name which one it answered.
+(
+  cd "$TMP" && git init -q --bare mainremote.git >/dev/null 2>&1
+  cd "$MT" && git remote add origin "$TMP/mainremote.git" \
+    && git push -q -u origin dev >/dev/null 2>&1
+  echo b > g && git add -A && git commit -qm ahead
+)
+OUT="$(mt)"
+has "$OUT" "vs remote : 1 ahead, 0 behind origin/dev" \
+  && ok "main tree: on dev, the comparison is against the remote" \
+  || bad "main tree: upstream compare (got: $OUT)"
+
+# A dev_branch naming a branch that does not exist must not be reported as a
+# clean comparison against nothing.
+printf '{"owns": [], "crew": {"dev_branch": "ghost"}}\n' > "$MT/.docs-kit.json"
+OUT="$(mt)"
+has "$OUT" "vs ghost  : that branch does not exist here" \
+  && ok "main tree: a dev_branch that does not exist says so" \
+  || bad "main tree: ghost dev_branch (got: $OUT)"
+printf '{"owns": [], "crew": {"dev_branch": "dev"}}\n' > "$MT/.docs-kit.json"
+
 # ---------------------------------------------------------------- navigator
 # The sixth hat reads two documents nothing used to compare, so every check here
 # starts from a KNOWN-BAD board and asserts the words a human acts on — not the

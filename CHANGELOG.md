@@ -5,6 +5,63 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
+## [0.36.0] — 2026-09-10
+
+### Added — the board says which branch the whole pool is sitting on
+
+`crew done` merges onto whatever the main tree has checked out. Its check 1 refuses when
+that is not the dev branch and its check 2 refuses when the tree is dirty — and until now
+both were reachable only by starting a merge and reading the refusal. The main tree was the
+one checkout nothing on the board listed: executors show their branch, the main tree showed
+nothing at all, so "are we still on dev?" had no answer short of running `git status` by hand
+in another window.
+
+```
+main tree:
+  branch    : dev = dev_branch · clean
+  vs remote : 2 ahead, 0 behind origin/dev
+```
+
+- **It prints the branch NAME, not only a verdict.** Whether sitting on another branch is
+  deliberate is the one thing the board cannot know, so it reports and the reader judges.
+- **"In sync" is two different questions and the label says which one was answered.** On the
+  dev branch the comparison is against the remote; on any other branch it is against dev
+  itself, because there the question is "is this work already in dev". A branch with no
+  upstream prints that fact rather than a zero that would read as *in step*.
+- **The dirty count is check 2's, not the executor rows'.** Executor rows use `own_files()`,
+  which filters the provisioned payload by name — `briefs` unconditionally, plus everything
+  in `copy` and `link` — because a freshly built executor would otherwise look like it had
+  started work. Check 2 counts every uncommitted file there is. A board that filtered here
+  would report a clean tree and then let the merge refuse, so this one uses plain
+  `status --porcelain`. That distinction is a check of its own, and the mutation that swaps
+  the two turns it red.
+- **One arrow, and only when a merge would actually be refused**, naming the checks by the
+  same numbers `crew done` prints so the board and the refusal never say different things. A
+  tree on dev and clean draws no arrow at all.
+
+### Changed — `crew-init` asks for the two branches on their own, and says what each one costs
+
+The interview already collected a dev branch and a prod branch, but as two bare names inside
+a list of four questions, with the detection rule unstated. A user picking from bare branch
+names is guessing. These two answers are not settings — they are where work lands — so they
+now get their own step (1.5, ahead of role readiness, which reads the prod answer).
+
+- **The question states the consequence.** `dev_branch` is what every executor cuts
+  `work/b<nnn>` from and what `crew done` merges back into, and the main tree must hold it or
+  the merge refuses. `prod_branch` is what devops holds, advanced only by `/release` with
+  `--ff-only` so its history stays a prefix of dev's, never taking a direct commit.
+- **The options are the repo's real branches with their evidence** — last commit date and
+  upstream, with the currently checked-out one marked — and the suggestion says which rule
+  produced it rather than appearing from nowhere.
+- **A one-branch repo is a real answer**, and saying so out loud stops the equal values from
+  later reading as a mistyped config. Naming a branch that does not exist either creates it
+  in front of the user or is recorded with the warning that `crew status` will keep printing
+  the gap — the §9.3 error class again.
+
+Suite **100 → 109 checks**. Three mutations — never citing check 1, filtering the dirty count
+through `own_files()`, comparing against the wrong reference — each turn exactly their own
+check red.
+
 ## [0.34.0] — 2026-09-10
 
 ### Added — `navigator`, the hat that keeps the plan and the work in the same story

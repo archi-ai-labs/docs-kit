@@ -23,6 +23,16 @@ point to `/docs-kit:crew-init`. That is not an error to work around.
 
 Quote the script's output, then read it back in plain language:
 
+- **main tree** — which branch the shared checkout has, and how far it is from
+  dev. This is the one tree nothing else on the board lists, and `crew done`
+  merges onto whatever it holds, so the two lines answer that command's check 1
+  (be on the dev branch) and check 2 (be clean) before anyone starts a merge.
+  On the dev branch the comparison is against the remote; on any other branch it
+  is against dev, because "in sync" means a different thing in each case and the
+  label says which one was answered. The arrow appears only when a merge would
+  actually be refused, and it names the checks by the same numbers `crew done`
+  prints. Read the branch name yourself — the board cannot know whether sitting
+  on another branch was deliberate.
 - **executors** — three states, all read off git: `idle` (detached, can take a
   ticket), `processing` (holds the ticket's branch), `finishing` (a commit on it
   already carries the `Closes:` trailer, so the work is declared done and only
