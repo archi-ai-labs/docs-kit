@@ -16,6 +16,7 @@
 #   crew lock acquire <res> <nnn> [--wait]
 #   crew lock release <res> <nnn>
 #   crew status                          executors · locks · pacing signals
+#   crew report [<period>] [--write]     the week's numbers for the navigator's report
 #   crew name <role> [<nnn>]             is this session wearing its name?
 #   crew role <role>                     print a role file (works from a worktree)
 set -u
@@ -566,6 +567,235 @@ cmd_lock() {
   esac
 }
 
+# ---------------------------------------------------------------- main tree
+# What the MAIN tree has checked out, and how far it sits from the dev branch.
+#
+# WHY THIS IS ON THE BOARD: `crew done` merges onto whatever the main tree holds
+# at that moment, so its check 1 refuses when that is not the dev branch and its
+# check 2 refuses when the tree is dirty. Both were reachable only by starting a
+# merge and reading the refusal — the board never said which branch was under
+# the whole pool, and the main tree is the one checkout nothing else here lists.
+# So this asks check 1's and check 2's questions before a ticket is in flight.
+#
+# It prints the branch NAME rather than only a verdict, because the person
+# reading is the one who knows whether being on that branch is deliberate.
+main_tree_block() {
+  MT_DEV="$(cfg dev_branch main)"
+  MT_CUR="$(git -C "$MAIN" symbolic-ref --short HEAD 2>/dev/null || echo '(detached)')"
+  # Plain porcelain, deliberately NOT own_files(): check 2 counts every
+  # uncommitted file in the main tree, provisioned payload included, so a board
+  # that filtered would promise a merge the merge itself refuses.
+  MT_DIRTY="$(git -C "$MAIN" status --porcelain 2>/dev/null | grep -c . || true)"
+  MT_STATE=clean
+  [ "${MT_DIRTY:-0}" -gt 0 ] && MT_STATE="${MT_DIRTY} uncommitted"
+
+  echo "main tree:"
+  if [ "$MT_CUR" = "$MT_DEV" ]; then
+    printf '  %-10s: %s\n' "branch" "$MT_CUR = dev_branch · $MT_STATE"
+  else
+    printf '  %-10s: %s\n' "branch" "$MT_CUR ≠ dev_branch '$MT_DEV' · $MT_STATE"
+  fi
+
+  # Two different questions wear the same words. On the dev branch, "in sync"
+  # means in step with the remote; anywhere else it means "is this work already
+  # in dev". Compare against whichever the answer is actually about, and label
+  # the line with which one it was — the counts are meaningless otherwise.
+  # `row` keeps the label column the same width as `branch` above; an unaligned
+  # board is one people stop reading.
+  row() { printf '  %-10s: %s\n' "$1" "$2"; }
+  MT_REF=""
+  MT_NAME=""
+  if [ "$MT_CUR" = "$MT_DEV" ]; then
+    MT_LBL="vs remote"
+    MT_REF="$(git -C "$MAIN" rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null || true)"
+    MT_NAME=" $MT_REF"
+    [ -n "$MT_REF" ] || row "$MT_LBL" "'$MT_CUR' tracks nothing here — nothing to compare"
+  else
+    MT_LBL="vs $MT_DEV"
+    if git -C "$MAIN" show-ref --verify --quiet "refs/heads/$MT_DEV"; then
+      MT_REF="$MT_DEV"
+      # The label already names it, so do not say it twice.
+      MT_NAME=""
+    else
+      row "$MT_LBL" "that branch does not exist here"
+    fi
+  fi
+  if [ -n "$MT_REF" ]; then
+    # `rev-list --left-right --count REF...HEAD` prints "<behind> <ahead>": the
+    # left side is what REF has and HEAD does not.
+    MT_AB="$(git -C "$MAIN" rev-list --left-right --count "$MT_REF...HEAD" 2>/dev/null || true)"
+    if [ -z "$MT_AB" ]; then
+      row "$MT_LBL" "cannot compare with $MT_REF — no common history"
+    else
+      MT_BEHIND="$(printf '%s' "$MT_AB" | awk '{print $1+0}')"
+      MT_AHEAD="$(printf '%s' "$MT_AB" | awk '{print $2+0}')"
+      if [ "$MT_AHEAD" -eq 0 ] && [ "$MT_BEHIND" -eq 0 ]; then
+        row "$MT_LBL" "in step with${MT_NAME:- $MT_REF}"
+      else
+        row "$MT_LBL" "$MT_AHEAD ahead, $MT_BEHIND behind$MT_NAME"
+      fi
+    fi
+  fi
+
+  # One arrow, naming the checks by the number `crew done` prints, so the board
+  # and the refusal say the same thing.
+  MT_WHY=""
+  [ "$MT_CUR" = "$MT_DEV" ] || MT_WHY="check 1 wants '$MT_DEV' checked out"
+  [ "${MT_DIRTY:-0}" -gt 0 ] && MT_WHY="${MT_WHY:+$MT_WHY, }check 2 wants it clean"
+  [ -n "$MT_WHY" ] && echo "  → crew done refuses here: $MT_WHY"
+  return 0
+}
+
+# ---------------------------------------------------------------- direction
+# The roadmap is Layer 1 STATE and the Backlog is what is being done; until
+# 0.34.0 nothing compared the two, so the plan could go stale without one check
+# going red. Measured on the origin repo 2026-09-10: `00_roadmap/roadmap.md`
+# untouched for 10 days while 10 commits carried a `Closes:` trailer and 29
+# audit lines landed; its `## Now` column named 4 tickets, all 4 already `done`
+# and archived, and neither open ticket appeared in any column.
+#
+# Every number below is DERIVED from git and docs/. No state file, no config
+# key, and no clock of its own: `CREW_NOW` overrides the epoch so the test suite
+# does not depend on the day it runs.
+ROADMAP="$MAIN/docs/00_roadmap/roadmap.md"
+REPORTS="$MAIN/docs/92_audit/reports"
+
+now_epoch() { echo "${CREW_NOW:-$(date +%s)}"; }
+
+# tok <epoch> <fmt> — GNU date takes -d @<seconds>, BSD date takes -r <seconds>.
+# GNU is tried first on purpose: its `-r` reads a FILE, so asking BSD first
+# would make the answer depend on whether a file with that name happens to
+# exist. Empty on failure — a line that cannot compute its verdict prints the
+# fact without one rather than inventing it (the §8 fail-open doctrine).
+tok() {
+  date -u -d "@$1" "+$2" 2>/dev/null || date -u -r "$1" "+$2" 2>/dev/null || echo ""
+}
+
+# now_ids — Backlog ids cited in the roadmap's `## Now` column, in file order.
+now_ids() {
+  [ -f "$ROADMAP" ] || return 0
+  awk '/^## Now/{f=1;next} /^## /{f=0} f' "$ROADMAP" \
+    | grep -oE 'BACKLOG-[0-9]+' | LC_ALL=C sort -u
+}
+
+# open_ids — every Backlog item still open or in-progress. Read from `id:` and
+# never from a filename: STANDARD §3 has no exception for that anywhere else.
+open_ids() {
+  [ -d "$MAIN/docs/23_backlog" ] || return 0
+  grep -rlE '^status:[[:space:]]*"?(open|in-progress)"?' "$MAIN/docs/23_backlog" 2>/dev/null \
+    | while read -r f; do front "$f" id; done \
+    | grep -E '^BACKLOG-[0-9]+$' | LC_ALL=C sort -u
+}
+
+# last_report <regex> — newest report file matching a grammar, name only. The
+# grammars sort lexically because both are zero-padded, so `sort | tail -1` is
+# the newest without parsing a date.
+last_report() {
+  [ -d "$REPORTS" ] || return 0
+  ls "$REPORTS" 2>/dev/null | grep -E "$1" | LC_ALL=C sort | tail -1
+}
+
+count() { grep -c 'BACKLOG-' 2>/dev/null || true; }
+
+# closes_since <sha-or-empty> — commits declaring a completion. A trailer naming
+# a ticket that does not exist still counts here: this measures what the repo
+# said it finished, and `docs_close` is the half that checks the claim.
+closes_since() {
+  if [ -n "$1" ]; then
+    git -C "$MAIN" log "$1..HEAD" --grep='Closes: BACKLOG-' --format=%H 2>/dev/null
+  else
+    git -C "$MAIN" log --since=@"$2" --grep='Closes: BACKLOG-' --format=%H 2>/dev/null
+  fi
+}
+
+# report_sha <file> — the commit that last touched a report, or empty when the
+# file is untracked. Empty is the honest answer: an uncommitted report has not
+# closed a window yet.
+report_sha() {
+  [ -n "$1" ] || return 0
+  git -C "$MAIN" log -1 --format=%H -- "$REPORTS/$1" 2>/dev/null
+}
+
+# roadmap_stats — one tab-separated line, so the board and `crew report` read the
+# same numbers from one definition instead of two that drift:
+#   listed <TAB> done <TAB> open <TAB> present <TAB> ids open but not in Now
+# "done" counts a cited ticket that is `done` OR has no file at all: both mean
+# the column is naming something that is not being worked on.
+roadmap_stats() {
+  RS_N="$(now_ids)"; RS_O="$(open_ids)"
+  RS_NSP=" $(echo $RS_N) "
+  RS_L=0; RS_D=0; RS_OC=0; RS_P=0; RS_M=""
+  for i in $RS_N; do
+    RS_L=$((RS_L + 1))
+    RS_TF="$(ticket_file "${i#BACKLOG-}")"
+    RS_ST="missing"
+    [ -n "$RS_TF" ] && RS_ST="$(front "$RS_TF" status)"
+    case "$RS_ST" in done|missing) RS_D=$((RS_D + 1)) ;; esac
+  done
+  for i in $RS_O; do
+    RS_OC=$((RS_OC + 1))
+    case "$RS_NSP" in
+      *" $i "*) RS_P=$((RS_P + 1)) ;;
+      *) RS_M="${RS_M:+$RS_M }$i" ;;
+    esac
+  done
+  printf '%s\t%s\t%s\t%s\t%s\n' "$RS_L" "$RS_D" "$RS_OC" "$RS_P" "$RS_M"
+}
+
+# direction_block — two lines on the board, a third only when an id is missing,
+# and an arrow only for a state something ACTS on. Same rule the executor states
+# earned in 0.32.0: a word for `finishing` because `crew done` answers it, no
+# word for "assigned but not started" because nothing does.
+direction_block() {
+  echo ""
+  echo "direction:"
+  if [ ! -f "$ROADMAP" ]; then
+    echo "  roadmap     : docs/00_roadmap/roadmap.md missing — /docs-kit:docs-upgrade adds the seed"
+    return 0
+  fi
+  # Read the columns with cut, NOT with `IFS=<tab> read <<heredoc`: the
+  # assignment in front of `read` is still in effect while the heredoc's command
+  # substitution runs, so `for i in $ids` inside roadmap_stats would split on
+  # tabs instead of newlines and silently count one item. Measured: a Now column
+  # naming two tickets reported "1 listed · 1 done".
+  D_STATS="$(roadmap_stats)"
+  D_L="$(printf '%s' "$D_STATS" | cut -f1)"
+  D_D="$(printf '%s' "$D_STATS" | cut -f2)"
+  D_O="$(printf '%s' "$D_STATS" | cut -f3)"
+  D_P="$(printf '%s' "$D_STATS" | cut -f4)"
+  D_M="$(printf '%s' "$D_STATS" | cut -f5)"
+  D_AGE="uncommitted"
+  D_CT="$(git -C "$MAIN" log -1 --format=%ct -- docs/00_roadmap/roadmap.md 2>/dev/null)"
+  [ -n "$D_CT" ] && D_AGE="$(( ( $(now_epoch) - D_CT ) / 86400 ))d ago"
+  echo "  roadmap Now : $D_L listed · $D_D done · $D_P of $D_O open present · edited $D_AGE"
+  [ -n "$D_M" ] && echo "  not listed  : $D_M"
+
+  D_WK="$(tok "$(now_epoch)" %G-W%V)"
+  D_LAST="$(last_report '^[0-9][0-9][0-9][0-9]-W[0-9][0-9]\.md$')"
+  D_SHA="$(report_sha "$D_LAST")"
+  D_CLOSES="$(closes_since "$D_SHA" $(( $(now_epoch) - 604800 )) | wc -l | tr -d ' ')"
+  D_SINCE="in the last 7 days"
+  [ -n "$D_LAST" ] && D_SINCE="since reports/$D_LAST"
+  D_DUE=0
+  if [ -z "$D_WK" ]; then
+    # No portable date here. Report the fact, refuse the verdict.
+    echo "  report      : newest is ${D_LAST:-none} — this box cannot compute the ISO week"
+  elif [ -f "$REPORTS/$D_WK.md" ]; then
+    echo "  report      : reports/$D_WK.md"
+  elif [ "$D_CLOSES" -eq 0 ]; then
+    echo "  report      : none due — nothing closed a ticket $D_SINCE"
+  else
+    echo "  report      : none for $D_WK — $D_CLOSES commit(s) closed a ticket $D_SINCE"
+    D_DUE=1
+  fi
+
+  if [ "$D_D" -gt 0 ] || [ -n "$D_M" ]; then
+    echo "  → the Now column is not the Backlog: navigator syncs docs/00_roadmap/roadmap.md"
+  fi
+  [ "$D_DUE" -eq 1 ] && echo "  → a week has landed work and no report: scripts/crew report --write"
+  return 0
+}
+
 # ---------------------------------------------------------------- crew status
 cmd_status() {
   require_on
@@ -574,6 +804,8 @@ cmd_status() {
   TODAY="$(date '+%Y-%m-%d')"
 
   echo "crew status — $REPO"
+  echo ""
+  main_tree_block
   echo ""
   # Executor state is DERIVED, never stored: idle is a detached HEAD over a clean
   # tree, and a held branch is `processing` until its own commit declares the work
@@ -651,6 +883,15 @@ cmd_status() {
     echo "  note: role '$r' declared absent at init — its duties fall to whoever is around (.claude/crew/roles.md)"
   done
 
+  # Direction — the plan against the work (EXECUTION §3, the navigator hat).
+  # Skipped entirely when the hat was declared absent: the note just above is
+  # then the whole trace, and nagging for a report nobody wears the hat for is
+  # the noise that gets a board switched off.
+  case " $(cfg roles_absent "") " in
+    *" navigator "*) ;;
+    *) direction_block ;;
+  esac
+
   # Pacing — three signals, not a formula (EXECUTION §5).
   WAITSEC=0
   if [ -f "$STATE/log.tsv" ]; then
@@ -672,6 +913,231 @@ cmd_status() {
   else
     echo "  → within budget: keep the current mix"
   fi
+}
+
+# ---------------------------------------------------------------- crew report
+# crew report [<period>] [--write] — the measured half of the navigator's weekly
+# or monthly report.
+#
+# WHY A COMMAND AND NOT A PARAGRAPH IN THE ROLE FILE: the same reason `crew done`
+# is a command (§6). A report re-typed from memory keeps the story and loses the
+# numbers, and the numbers are the only part that can contradict the story. So
+# the machine measures and the hat judges — this prints, and `--write` lays down
+# a file whose top half is already filled and whose bottom half is blank.
+#
+# It never writes prose about the project: the skeleton's judgment sections ship
+# empty on purpose. And it refuses to touch an existing report, because a report
+# in `92_audit/` is append-only — corrections are a new section at the end, and
+# the validator's [audit-append] check enforces that against git HEAD.
+report_header() {
+  cat <<'SKELH'
+
+> Tệp này nằm trong `docs/92_audit/`, tức tầng Review: nó quan sát Layer 1–2 và
+> **chỉ được nối thêm**. Sửa một dòng đã commit ở đây làm `docs-check` đỏ ở phép
+> kiểm `[audit-append]`. Cần đính chính thì nối thêm mục `## Đính chính` ở cuối
+> chứ đừng viết đè lên dòng cũ.
+SKELH
+}
+
+# report_body <week|month> — the judgment half, shipped empty on purpose. The
+# section numbers differ between the two kinds because the month carries one
+# extra pair (last month's plan, this month's order), and a report whose numbers
+# skip is a report somebody will assume lost a section.
+report_body() {
+  cat <<'SKELB'
+
+## 2. Việc đã hạ cánh
+
+- _Mỗi phiếu một dòng: id, nó đổi được gì, và điều bất ngờ nếu có._
+
+## 3. Lệch so với lộ trình
+
+- _Phiếu nào chạy ngoài cột `## Now`, và phiếu nào nằm trong `## Now` mà tuần
+  này không ai động tới. Mục 1 nói CÓ lệch hay không; mục này nói vì sao._
+SKELB
+  if [ "$1" = month ]; then
+    cat <<'SKELM'
+
+## 4. Kế hoạch tháng trước, đối chiếu
+
+- _Từng dòng đã xếp cho tháng trước: xong, trượt, hay bỏ — kèm lý do nếu trượt._
+
+## 5. Thứ tự tháng này
+
+- _Mỗi dòng một id và tuần dự kiến. Không dài hơn số phiếu tháng trước đã hạ
+  cánh cộng một, vì một danh sách dài hơn sức làm thì tháng sau không đối chiếu
+  được với cái gì._
+
+## 6. Cần chủ dự án quyết
+
+- _Câu hỏi kèm phương án và cái giá của từng phương án. Không có thì ghi thẳng
+  "không có"._
+
+## 7. Đổi hướng thì đi đường nào
+
+- _Đồng bộ cột `## Now` chỉ cần một dòng audit. Còn chuyển một dòng sang
+  `## Explicitly not doing`, hay bỏ một hướng đang làm, là kết thúc một cuộc
+  bàn: đi qua Proposal → Decision rồi mới sửa roadmap._
+SKELM
+  else
+    cat <<'SKELW'
+
+## 4. Kế hoạch tuần tới
+
+- _Mỗi dòng một id đã có, hoặc một Issue để planner cắt phiếu. Không xếp nhiều
+  hơn số phiếu tuần này đã hạ cánh cộng một._
+
+## 5. Cần chủ dự án quyết
+
+- _Câu hỏi kèm phương án và cái giá của từng phương án. Không có thì ghi thẳng
+  "không có"._
+
+## 6. Đổi hướng thì đi đường nào
+
+- _Đồng bộ cột `## Now` chỉ cần một dòng audit. Còn chuyển một dòng sang
+  `## Explicitly not doing`, hay bỏ một hướng đang làm, là kết thúc một cuộc
+  bàn: đi qua Proposal → Decision rồi mới sửa roadmap._
+SKELW
+  fi
+}
+
+cmd_report() {
+  require_on
+  PERIOD=""
+  WRITE=0
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --write) WRITE=1 ;;
+      -*) die "unknown flag: $1 (usage: crew report [<period>] [--write])" ;;
+      *) PERIOD="$1" ;;
+    esac
+    shift
+  done
+  NOWE="$(now_epoch)"
+  [ -n "$PERIOD" ] || PERIOD="$(tok "$NOWE" %G-W%V)"
+  [ -n "$PERIOD" ] \
+    || die "cannot compute the ISO week on this box — name the period: scripts/crew report 2026-W37"
+  case "$PERIOD" in
+    [0-9][0-9][0-9][0-9]-W[0-9][0-9]) KIND=week;  GRAM='^[0-9][0-9][0-9][0-9]-W[0-9][0-9]\.md$' ;;
+    [0-9][0-9][0-9][0-9]-[0-9][0-9])  KIND=month; GRAM='^[0-9][0-9][0-9][0-9]-[0-9][0-9]\.md$' ;;
+    *) die "a period is a week (2026-W37) or a month (2026-09), not '$PERIOD'" ;;
+  esac
+  TARGET="$REPORTS/$PERIOD.md"
+  if [ "$WRITE" -eq 1 ] && [ -e "$TARGET" ]; then
+    die "[report:exists] docs/92_audit/reports/$PERIOD.md already exists — a report is append-only, so add a '## Đính chính' section to it by hand instead of rewriting it"
+  fi
+
+  # The window is the previous report's COMMIT, not a calendar subtraction: a
+  # report written late still closes its window exactly where the last one ended,
+  # so no commit is counted twice and none falls between two reports.
+  LAST="$(last_report "$GRAM" | grep -v "^$PERIOD\.md$" || true)"
+  SHA="$(report_sha "$LAST")"
+  BACK=604800
+  [ "$KIND" = month ] && BACK=2592000
+  if [ -n "$SHA" ]; then
+    WINDOW="$(git -C "$MAIN" rev-parse --short "$SHA" 2>/dev/null)..HEAD (since reports/$LAST)"
+    FROMD="$(git -C "$MAIN" log -1 --format=%cs "$SHA" 2>/dev/null)"
+  else
+    WINDOW="the last $((BACK / 86400)) days (no earlier report to close a window)"
+    FROMD="$(tok $(( NOWE - BACK )) %Y-%m-%d)"
+  fi
+
+  SHAS="$(closes_since "$SHA" $(( NOWE - BACK )))"
+  NCLOSE="$(printf '%s' "$SHAS" | grep -c . || true)"
+  CIDS=""
+  if [ -n "$SHAS" ]; then
+    CIDS="$(printf '%s\n' "$SHAS" | while read -r s; do
+      git -C "$MAIN" log -1 --format=%B "$s" 2>/dev/null | grep -oE 'Closes:[[:space:]]*BACKLOG-[0-9]+'
+    done | grep -oE 'BACKLOG-[0-9]+' | LC_ALL=C sort -u | tr '\n' ' ')"
+  fi
+  NIDCOUNT=0
+  [ -n "$CIDS" ] && NIDCOUNT="$(printf '%s' "$CIDS" | wc -w | tr -d ' ')"
+
+  AUDIT="- (no earlier report to diff a window against)"
+  if [ -n "$SHA" ]; then
+    AUDIT="$(git -C "$MAIN" diff "$SHA..HEAD" -- docs/92_audit/LOG.md 2>/dev/null \
+      | grep -c '^+.*BACKLOG-' || true) appended to LOG.md citing a Backlog id"
+  fi
+
+  DONEC=0; SIZEBAD=0; SIZEN=0; WAIT=0
+  if [ -f "$STATE/log.tsv" ] && [ -n "$FROMD" ]; then
+    DONEC="$(awk -F'\t' -v d="$FROMD" '$1 >= d && $2=="DONE"' "$STATE/log.tsv" | grep -c . || true)"
+    SIZEN="$(awk -F'\t' -v d="$FROMD" '$1 >= d && $2=="SIZE"' "$STATE/log.tsv" | grep -c . || true)"
+    SIZEBAD="$(awk -F'\t' -v d="$FROMD" '$1 >= d && $2=="SIZE" {
+        split($5, a, " "); split(a[1], dd, "="); split(a[2], aa, "=");
+        if (dd[2] != aa[2]) n++
+      } END {print n+0}' "$STATE/log.tsv")"
+    WAIT="$(awk -F'\t' -v d="$FROMD" '$1 >= d && $2=="ACQUIRE" {s+=$5} END {print s+0}' "$STATE/log.tsv")"
+  fi
+
+  R_STATS="$(roadmap_stats)"
+  R_L="$(printf '%s' "$R_STATS" | cut -f1)"
+  R_D="$(printf '%s' "$R_STATS" | cut -f2)"
+  R_O="$(printf '%s' "$R_STATS" | cut -f3)"
+  R_P="$(printf '%s' "$R_STATS" | cut -f4)"
+  R_M="$(printf '%s' "$R_STATS" | cut -f5)"
+
+  OFF=""
+  if [ -f "$ROADMAP" ]; then
+    for i in $(open_ids); do
+      grep -q "$i" "$ROADMAP" || OFF="${OFF:+$OFF }$i"
+    done
+    NOID="$(awk '/^## Next|^## Later/{f=1;next} /^## /{f=0} f && /^- /' "$ROADMAP" \
+      | grep -v '^- _' | grep -cvE 'ISSUE-[0-9]+|DECISION-[0-9]+|BACKLOG-[0-9]+' || true)"
+  else
+    NOID="-"
+  fi
+  OFFC=0
+  [ -n "$OFF" ] && OFFC="$(printf '%s' "$OFF" | wc -w | tr -d ' ')"
+
+  MEASURED="$(cat <<MEAS
+period      : $PERIOD ($KIND)
+window      : $WINDOW
+landed      : $NIDCOUNT ticket(s) in $NCLOSE commit(s)${CIDS:+ — ${CIDS% }}
+audit lines : $AUDIT
+crew done   : $DONEC in ../$(basename "$STATE")/log.tsv
+size calls  : $SIZEBAD of $SIZEN with declared != actual
+lock wait   : ${WAIT}s in the window (approximate — log.tsv stamps local time)
+roadmap Now : $R_L listed · $R_D done · $R_P of $R_O open present${R_M:+
+not listed  : $R_M}
+off-roadmap : $OFFC open ticket(s) named in no column${OFF:+ — $OFF}
+no-id lines : $NOID bullet(s) under Next/Later carrying no ISSUE or DECISION id
+MEAS
+)"
+
+  if [ "$WRITE" -eq 0 ]; then
+    echo "$MEASURED"
+    echo ""
+    if [ -e "$TARGET" ]; then
+      echo "report      : docs/92_audit/reports/$PERIOD.md exists — append to it, never rewrite"
+    else
+      echo "report      : docs/92_audit/reports/$PERIOD.md not written — pass --write"
+    fi
+    return 0
+  fi
+
+  mkdir -p "$REPORTS"
+  TITLE="Báo cáo tuần"
+  [ "$KIND" = month ] && TITLE="Kế hoạch tháng"
+  {
+    echo "# $TITLE $PERIOD — $REPO"
+    report_header
+    echo ""
+    echo "## 1. Số đo"
+    echo ""
+    echo '```'
+    echo "$MEASURED"
+    echo '```'
+    echo ""
+    echo "Nửa trên do \`scripts/crew report\` đo từ git và \`docs/\`. Mọi mục dưới đây"
+    echo "là phán đoán và phải do navigator viết — lệnh cố ý không viết hộ."
+    report_body "$KIND"
+  } > "$TARGET"
+  note "wrote docs/92_audit/reports/$PERIOD.md — the measured half is filled, the judgment half is yours"
+  note "then: sync docs/00_roadmap/roadmap.md and append one line to docs/92_audit/LOG.md"
+  note "the audit line's ref column names the report FILE, never an open ticket id"
+  note "(docs_close reads every *.md directly under 92_audit/ and treats a mentioned"
+  note " id as already recorded — that is why reports live in reports/ and cite paths)"
 }
 
 # ---------------------------------------------------------------- role
@@ -823,6 +1289,7 @@ case "${1:-help}" in
   executor) shift; cmd_executor "$@" ;;
   lock)   shift; cmd_lock "$@" ;;
   status) shift; cmd_status "$@" ;;
+  report) shift; cmd_report "$@" ;;
   name)   shift; cmd_name "$@" ;;
   role)   shift; cmd_role "$@" ;;
   help|--help|-h)

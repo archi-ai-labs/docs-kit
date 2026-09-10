@@ -697,6 +697,339 @@ OUT="$( (cd "$WR" && scripts/crew role ghost) 2>&1 )" && RC=0 || RC=$?
 [ "$RC" -ne 0 ] && has "$OUT" "no role file" && ok "role: an unstamped role is red, and says so" \
   || bad "role: unstamped (rc=$RC, got: $OUT)"
 
+# ---------------------------------------------------------------- main tree
+# The board now answers `crew done`'s check 1 and check 2 before a merge is
+# attempted, so the known-bad shapes come first: a main tree parked on the wrong
+# branch, and a dirty one. Both used to be discoverable only by running the merge.
+MT="$TMP/mainbranch"
+mkdir -p "$MT/docs/23_backlog" "$MT/docs/92_audit" "$MT/scripts"
+(
+  cd "$MT"
+  git init -q && git checkout -q -b dev
+  git config user.email t@t && git config user.name t
+  cp "$KIT/templates/crew/crew" scripts/crew && chmod +x scripts/crew
+  printf '{"owns": [], "crew": {"dev_branch": "dev"}}\n' > .docs-kit.json
+  printf '# Audit log\n' > docs/92_audit/LOG.md
+  printf -- '---\nid: BACKLOG-001\ndescription: "x"\nsource_ref: ISSUE-001\nstatus: open\n---\n' \
+    > docs/23_backlog/t001.md
+  git add -A && git commit -qm init
+)
+mt() { (cd "$MT" && scripts/crew status) 2>&1; }
+
+# KNOWN-BAD 1: parked on a branch that is not dev. check 1 would refuse.
+( cd "$MT" && git checkout -q -b sidequest && echo a > f && git add -A && git commit -qm side )
+OUT="$(mt)"
+if has "$OUT" "branch    : sidequest ≠ dev_branch 'dev'" \
+   && has "$OUT" "check 1 wants 'dev' checked out"; then
+  ok "main tree: a tree on the wrong branch is named, and cites check 1"
+else
+  bad "main tree: wrong branch (got: $(printf '%s' "$OUT" | sed -n '3,6p'))"
+fi
+# ...and it says how far that branch has drifted from dev, which is the whole
+# reason the branch name alone is not enough.
+has "$OUT" "vs dev    : 1 ahead, 0 behind" \
+  && ok "main tree: distance from dev is counted, not just the branch name" \
+  || bad "main tree: ahead/behind vs dev (got: $OUT)"
+
+# KNOWN-BAD 2: on dev but dirty. check 2 would refuse. Plain porcelain, not
+# own_files — check 2 counts the payload too, so a filtered board would promise
+# a merge the merge refuses.
+( cd "$MT" && git checkout -q dev && echo dirt > untracked.txt )
+OUT="$(mt)"
+if has "$OUT" "branch    : dev = dev_branch · 1 uncommitted" \
+   && has "$OUT" "check 2 wants it clean" \
+   && ! has "$OUT" "check 1"; then
+  ok "main tree: a dirty tree cites check 2 alone"
+else
+  bad "main tree: dirty case (got: $(printf '%s' "$OUT" | sed -n '3,6p'))"
+fi
+
+# The count must be PLAIN porcelain, not own_files(). own_files filters the
+# provisioned payload by name — `briefs` is in that list unconditionally — but
+# check 2 counts every uncommitted file there is. A board that filtered would
+# report a clean tree and then watch the merge refuse, which is worse than not
+# reporting at all. `briefs/` is the realistic shape: a repo that runs
+# /docs-kit:brief without gitignoring the folder has it untracked in the main
+# tree, where own_dirty sees nothing and check 2 sees a blocker.
+( cd "$MT" && git checkout -q dev && rm -f untracked.txt && mkdir -p briefs && echo b > briefs/x.md )
+OUT="$(mt)"
+if has "$OUT" "branch    : dev = dev_branch · 1 uncommitted" \
+   && has "$OUT" "check 2 wants it clean"; then
+  ok "main tree: the dirty count is check 2's, not the executor's filtered one"
+else
+  bad "main tree: payload-filtered count leaked in (got: $(printf '%s' "$OUT" | sed -n '3,6p'))"
+fi
+( cd "$MT" && rm -rf briefs && echo dirt > untracked.txt )
+
+# Both wrong at once names both, in the order crew done hits them.
+( cd "$MT" && git checkout -q sidequest )
+OUT="$(mt)"
+has "$OUT" "check 1 wants 'dev' checked out, check 2 wants it clean" \
+  && ok "main tree: both refusals named together, in check order" \
+  || bad "main tree: combined arrow (got: $OUT)"
+
+# THE QUIET FORM: on dev, clean, nothing to act on — no arrow at all.
+( cd "$MT" && git checkout -q dev && rm -f untracked.txt )
+OUT="$(mt)"
+if has "$OUT" "branch    : dev = dev_branch · clean" \
+   && ! has "$OUT" "crew done refuses here"; then
+  ok "main tree: a tree ready to merge draws no arrow"
+else
+  bad "main tree: quiet form (got: $(printf '%s' "$OUT" | sed -n '3,6p'))"
+fi
+
+# No remote is the common case in a fresh repo, and it must print the fact
+# rather than a zero that reads as "in sync" (§8 fail open).
+has "$OUT" "vs remote : 'dev' tracks nothing here" \
+  && ok "main tree: no upstream states the fact instead of inventing a verdict" \
+  || bad "main tree: no-upstream line (got: $OUT)"
+
+# With an upstream, the comparison is against the remote — a different question
+# wearing the same words, so it must name which one it answered.
+(
+  cd "$TMP" && git init -q --bare mainremote.git >/dev/null 2>&1
+  cd "$MT" && git remote add origin "$TMP/mainremote.git" \
+    && git push -q -u origin dev >/dev/null 2>&1
+  echo b > g && git add -A && git commit -qm ahead
+)
+OUT="$(mt)"
+has "$OUT" "vs remote : 1 ahead, 0 behind origin/dev" \
+  && ok "main tree: on dev, the comparison is against the remote" \
+  || bad "main tree: upstream compare (got: $OUT)"
+
+# A dev_branch naming a branch that does not exist must not be reported as a
+# clean comparison against nothing.
+printf '{"owns": [], "crew": {"dev_branch": "ghost"}}\n' > "$MT/.docs-kit.json"
+OUT="$(mt)"
+has "$OUT" "vs ghost  : that branch does not exist here" \
+  && ok "main tree: a dev_branch that does not exist says so" \
+  || bad "main tree: ghost dev_branch (got: $OUT)"
+printf '{"owns": [], "crew": {"dev_branch": "dev"}}\n' > "$MT/.docs-kit.json"
+
+# ---------------------------------------------------------------- navigator
+# The sixth hat reads two documents nothing used to compare, so every check here
+# starts from a KNOWN-BAD board and asserts the words a human acts on — not the
+# exit code, which `crew status` never varies.
+NV="$TMP/navrepo"
+mkdir -p "$NV/docs/23_backlog" "$NV/docs/92_audit" "$NV/docs/00_roadmap" "$NV/scripts"
+(
+  cd "$NV"
+  git init -q && git checkout -q -b main
+  git config user.email t@t && git config user.name t
+  cp "$KIT/templates/crew/crew" scripts/crew && chmod +x scripts/crew
+  printf '{"owns": [], "crew": {"dev_branch": "main"}}\n' > .docs-kit.json
+  printf '# Audit log\n\n2026-09-01 | init | - | - | mốc\n' > docs/92_audit/LOG.md
+  for n in 002 004; do
+    printf -- '---\nid: BACKLOG-%s\ndescription: "x"\nsource_ref: ISSUE-001\nstatus: done\n---\n' "$n" \
+      > "docs/23_backlog/t$n.md"
+  done
+  for n in 016 017; do
+    printf -- '---\nid: BACKLOG-%s\ndescription: "y"\nsource_ref: ISSUE-002\nstatus: open\n---\n' "$n" \
+      > "docs/23_backlog/t$n.md"
+  done
+  # The origin repo's real shape on 2026-09-10: the column names finished work
+  # and neither open ticket appears anywhere.
+  printf '# Roadmap\n\n## Now\n\n- A — `BACKLOG-002`.\n- B — `BACKLOG-004`.\n\n## Next\n\n- Không id.\n- C — `DECISION-008`.\n' \
+    > docs/00_roadmap/roadmap.md
+  git add -A && git commit -qm init
+  echo a > f1 && git add -A && git commit -qm "a
+
+Closes: BACKLOG-002"
+  echo b > f2 && git add -A && git commit -qm "b
+
+Closes: BACKLOG-004"
+)
+nav() { (cd "$NV" && scripts/crew "$@") 2>&1; }
+
+OUT="$(nav status)"
+# TWO ids on purpose: the first version of roadmap_stats read them through
+# `IFS=<tab> read <<heredoc`, and the assignment was still in effect while the
+# heredoc's command substitution ran, so the loop split on tabs and reported
+# "1 listed · 1 done" for a two-ticket column. Counting one is the regression.
+if has "$OUT" "roadmap Now : 2 listed · 2 done · 0 of 2 open present"; then
+  ok "navigator: known-bad board counts the whole Now column"
+else
+  bad "navigator: stale Now (got: $(printf '%s' "$OUT" | grep 'roadmap Now'))"
+fi
+has "$OUT" "not listed  : BACKLOG-016 BACKLOG-017" \
+  && ok "navigator: open tickets no column mentions are named" \
+  || bad "navigator: not-listed line (got: $OUT)"
+has "$OUT" "→ the Now column is not the Backlog" \
+  && ok "navigator: the stale column gets the arrow that names its action" \
+  || bad "navigator: sync arrow missing"
+has "$OUT" "commit(s) closed a ticket in the last 7 days" \
+  && ok "navigator: a week with landed work and no report says so" \
+  || bad "navigator: report-due line (got: $OUT)"
+has "$OUT" "→ a week has landed work and no report" \
+  && ok "navigator: the missing report gets its own arrow" \
+  || bad "navigator: report arrow missing"
+
+# `crew report` measures the window from git, and names the ids it counted.
+OUT="$(nav report)"
+if has "$OUT" "landed      : 2 ticket(s) in 2 commit(s) — BACKLOG-002 BACKLOG-004" \
+   && has "$OUT" "off-roadmap : 2 open ticket(s) named in no column" \
+   && has "$OUT" "no-id lines : 1 bullet"; then
+  ok "navigator: report measures landed work, off-roadmap tickets and id-less plan lines"
+else
+  bad "navigator: report numbers (got: $OUT)"
+fi
+has "$OUT" "not written — pass --write" \
+  && ok "navigator: report prints without writing unless asked" \
+  || bad "navigator: read-only default (got: $OUT)"
+
+OUT="$(nav report 2026-Q1)" && RC=0 || RC=$?
+[ "$RC" -ne 0 ] && has "$OUT" "a period is a week" \
+  && ok "navigator: a period that is neither a week nor a month is red" \
+  || bad "navigator: bad period accepted (rc=$RC, got: $OUT)"
+
+WEEK="$(date -u +%G-W%V)"
+OUT="$(nav report --write)"
+if [ -f "$NV/docs/92_audit/reports/$WEEK.md" ] \
+   && grep -q '^## 1. Số đo' "$NV/docs/92_audit/reports/$WEEK.md" \
+   && grep -q '^## 5. Cần chủ dự án quyết' "$NV/docs/92_audit/reports/$WEEK.md"; then
+  ok "navigator: --write lays down the report with the judgement sections empty"
+else
+  bad "navigator: --write output (got: $OUT)"
+fi
+# A report is append-only, so the command must never be the thing that rewrites one.
+OUT="$(nav report --write)" && RC=0 || RC=$?
+[ "$RC" -ne 0 ] && has "$OUT" "[report:exists]" \
+  && ok "navigator: a second --write refuses, with the reason tag" \
+  || bad "navigator: second write (rc=$RC, got: $OUT)"
+
+( cd "$NV" && git add -A && git commit -qm "report" )
+OUT="$(nav status)"
+has "$OUT" "report      : reports/$WEEK.md" \
+  && ok "navigator: an existing report closes the report line" \
+  || bad "navigator: report line after write (got: $OUT)"
+
+# The quiet form: a column that IS the Backlog draws no arrow at all.
+(
+  cd "$NV"
+  printf '# Roadmap\n\n## Now\n\n- D — `BACKLOG-016`.\n- E — `BACKLOG-017`.\n\n## Next\n\n- C — `DECISION-008`.\n' \
+    > docs/00_roadmap/roadmap.md
+  git add -A && git commit -qm sync
+)
+OUT="$(nav status)"
+if has "$OUT" "roadmap Now : 2 listed · 0 done · 2 of 2 open present" \
+   && ! has "$OUT" "→ the Now column is not the Backlog" \
+   && ! has "$OUT" "not listed"; then
+  ok "navigator: a synced column is quiet — no arrow, no not-listed line"
+else
+  bad "navigator: quiet form (got: $OUT)"
+fi
+
+# A window with nothing landed owes nobody a report.
+NV2="$TMP/navquiet"
+mkdir -p "$NV2/docs/23_backlog" "$NV2/docs/92_audit" "$NV2/docs/00_roadmap" "$NV2/scripts"
+(
+  cd "$NV2"
+  git init -q && git checkout -q -b main
+  git config user.email t@t && git config user.name t
+  cp "$KIT/templates/crew/crew" scripts/crew && chmod +x scripts/crew
+  printf '{"owns": [], "crew": {"dev_branch": "main"}}\n' > .docs-kit.json
+  printf '# Audit log\n' > docs/92_audit/LOG.md
+  printf -- '---\nid: BACKLOG-001\ndescription: "z"\nsource_ref: ISSUE-001\nstatus: open\n---\n' \
+    > docs/23_backlog/t001.md
+  printf '# Roadmap\n\n## Now\n\n- Z — `BACKLOG-001`.\n' > docs/00_roadmap/roadmap.md
+  git add -A && git commit -qm init
+)
+OUT="$( (cd "$NV2" && scripts/crew status) 2>&1 )"
+has "$OUT" "report      : none due — nothing closed a ticket" \
+  && ok "navigator: a week with nothing landed owes no report" \
+  || bad "navigator: none-due line (got: $OUT)"
+
+# Declared absent means silent, not quieter: the whole block goes away and the
+# existing roles_absent note is the only trace. A board that nags for a hat
+# nobody wears is a board that gets switched off.
+printf '{"owns": [], "crew": {"dev_branch": "main", "roles_absent": ["navigator"]}}\n' > "$NV/.docs-kit.json"
+OUT="$(nav status)"
+if ! has "$OUT" "direction:" && has "$OUT" "role 'navigator' declared absent"; then
+  ok "navigator: roles_absent removes the block and keeps the absent note"
+else
+  bad "navigator: absent handling (got: $OUT)"
+fi
+printf '{"owns": [], "crew": {"dev_branch": "main"}}\n' > "$NV/.docs-kit.json"
+
+# THE REASON REPORTS LIVE IN A SUBFOLDER, proven both ways rather than asserted.
+# docs_close::audit_ids reads every *.md DIRECTLY under 92_audit/ and treats any
+# Backlog id it finds as a completion already recorded — so a report beside
+# LOG.md that merely names an open ticket makes that ticket close with no audit
+# line and no message. Reproduce the silent failure first, then the fix.
+trap_repo() { # trap_repo <dir> <report-path-relative-to-docs>
+  rm -rf "$1"; mkdir -p "$1/docs/23_backlog" "$1/docs/$(dirname "$2")"
+  (
+    cd "$1"
+    git init -q && git checkout -q -b main
+    git config user.email t@t && git config user.name t
+    printf -- '---\nid: BACKLOG-016\ndescription: "y"\nsource_ref: ISSUE-002\nstatus: open\n---\n' \
+      > docs/23_backlog/t016.md
+    printf '# Audit log\n\n2026-09-01 | init | - | - | mốc\n' > docs/92_audit/LOG.md
+    printf '# Báo cáo\n\nĐang mở: BACKLOG-016.\n' > "docs/$2"
+    git add -A && git commit -qm init
+    echo x > f && git add -A && git commit -qm "x
+
+Closes: BACKLOG-016"
+    python3 "$KIT/scripts/docs_close.py" . --apply >/dev/null 2>&1
+  )
+  # `grep -c` prints 0 AND exits 1 when it matches nothing, so a `|| echo 0`
+  # fallback would emit the count twice. Let the assignment carry the status.
+  TR_N="$(grep -c 'BACKLOG-016' "$1/docs/92_audit/LOG.md" 2>/dev/null)" || TR_N=0
+  echo "$TR_N"
+}
+FLAT="$(trap_repo "$TMP/trapflat" "92_audit/$WEEK.md")"
+SUB="$(trap_repo "$TMP/trapsub" "92_audit/reports/$WEEK.md")"
+if [ "$FLAT" -eq 0 ] && [ "$SUB" -eq 1 ]; then
+  ok "navigator: a report beside LOG.md eats the audit line, one in reports/ does not"
+else
+  bad "navigator: audit_ids trap not reproduced (flat=$FLAT sub=$SUB — expected 0 and 1)"
+fi
+
+# Append-only really reaches into the subfolder: the check is on the folder, not
+# on LOG.md, so a rewritten report is a FAIL like a rewritten log line.
+printf 'rewritten\n' > "$NV/docs/92_audit/reports/$WEEK.md"
+OUT="$(bash "$KIT/scripts/docs_validate.sh" "$NV/docs" 2>&1)"
+if has "$OUT" "FAIL [audit-append]" && has "$OUT" "reports/$WEEK.md"; then
+  ok "navigator: rewriting a committed report is red, and names the file"
+else
+  bad "navigator: append-only over reports/ (got: $OUT)"
+fi
+( cd "$NV" && git checkout -q -- "docs/92_audit/reports/$WEEK.md" )
+
+# The scaffold needs no code change for a new role, but "needs none" is a claim
+# with two halves and both are asserted.
+NVS="$TMP/navstamp"
+mkdir -p "$NVS"
+( cd "$NVS" && git init -q && git checkout -q -b main \
+  && git -c user.email=t@t -c user.name=t commit -q --allow-empty -m init )
+bash "$KIT/scripts/crew_scaffold.sh" "$NVS" >/dev/null 2>&1
+[ -f "$NVS/.claude/commands/navigator.md" ] \
+  && ok "navigator: the scaffold stamps the role file with no code change" \
+  || bad "navigator: navigator.md not stamped"
+NVS2="$TMP/navskip"
+mkdir -p "$NVS2"
+( cd "$NVS2" && git init -q && git checkout -q -b main \
+  && git -c user.email=t@t -c user.name=t commit -q --allow-empty -m init )
+bash "$KIT/scripts/crew_scaffold.sh" --skip navigator "$NVS2" >/dev/null 2>&1
+if [ ! -f "$NVS2/.claude/commands/navigator.md" ] \
+   && [ -f "$NVS2/.claude/commands/planner.md" ]; then
+  ok "navigator: --skip navigator leaves the hat unstamped"
+else
+  bad "navigator: --skip navigator"
+fi
+
+OUT="$( (cd "$NVS" && cp -R "$NVS/.claude" "$NV/" 2>/dev/null; cd "$NV" && scripts/crew role navigator) 2>&1 )" \
+  && RC=0 || RC=$?
+[ "$RC" -eq 0 ] && has "$OUT" "crew report" \
+  && ok "navigator: crew role prints the stamped hat file" \
+  || bad "navigator: crew role navigator (rc=$RC, got: $OUT)"
+
+OUT="$( (cd "$NV" && CREW_SESSIONS_DIR="$TMP/no-sessions" scripts/crew name navigator) 2>&1 )" \
+  && RC=0 || RC=$?
+[ "$RC" -eq 0 ] && has "$OUT" "$(basename "$NV") · crew/navigator" \
+  && ok "navigator: the hat's session title follows the existing grammar" \
+  || bad "navigator: crew name navigator (rc=$RC, got: $OUT)"
+
 # ---------------------------------------------------------------- summary
 echo ""
 echo "crew_test: $PASS passed, $FAIL failed"

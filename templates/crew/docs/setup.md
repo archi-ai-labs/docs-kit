@@ -5,9 +5,10 @@
 | Chỗ | Thứ |
 |---|---|
 | `.docs-kit.json` → `crew` | config: lệnh test/typecheck, nhánh, resources, ngưỡng |
-| `scripts/crew` | CLI: `new` · `done` · `lock` · `status` |
+| `scripts/crew` | CLI: `new` · `done` · `executor` · `lock` · `status` · `report` · `name` · `role` |
 | `.claude/crew/*.md` | bảy tệp luật vận hành (thư mục này) |
-| `.claude/commands/*.md` | sáu tệp vai + thủ tục release |
+| `.claude/commands/*.md` | bảy tệp: sáu vai + thủ tục `release` |
+| `docs/92_audit/reports/` | báo cáo tuần và kế hoạch tháng của navigator — sinh khi dùng, có commit |
 | `CLAUDE.md` | một đoạn tóm tắt giữa marker `docs-kit:crew` (nếu bạn đồng ý chèn) |
 | `../<repo>-crew/` | trạng thái runtime — tự sinh khi dùng, không commit |
 
@@ -48,6 +49,14 @@ này. Bật khi đủ hai điều kiện, đúng thứ tự đó: bộ test củ
 hook đỏ-đúng-lý-do trên ca hỏng đã biết, và log cho thấy lời nhắc đang bị lờ.
 Quyền chặn mua bằng số liệu, không mua bằng niềm tin. Resource-guard không có
 đường enforce — giới hạn của nó nằm trong `resources.md`.
+
+## Nhịp báo cáo không phải một ngưỡng
+
+Không có khoá config nào cho nhịp của navigator, và đó là chủ đích. Tuần là nhịp
+của cột `## Now` theo định nghĩa, còn "đến hạn hay chưa" thì suy ra từ việc thật:
+bảng chỉ đòi một báo cáo khi cửa sổ có ít nhất một phiếu hạ cánh, và tuần không
+có gì thì in `report : none due`. Mỗi khoá config là một chỗ điền sai lặng lẽ,
+nên chỉ thêm khi có số đo đòi.
 
 ## Chỉnh ngưỡng theo số đo của chính repo
 

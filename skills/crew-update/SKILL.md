@@ -101,6 +101,17 @@ any `.new` left unapplied by the user's own choice. If `scripts/crew` was among
 the updated files, mention that open executor sessions are still running the old
 copy in their worktrees — the file follows the branch, not the session.
 
+**Coming from before 0.34.0**, say this: the repo gains a sixth hat. Because this
+skill never interviews, `navigator.md` simply lands as `stamped:` and the hat is
+on — the next `crew status` grows a `direction:` block that will very likely name
+a stale `## Now` column and a missing weekly report. That is drift which was
+already there, not something the update caused. A repo that does not want the hat
+adds `"navigator"` to `crew.roles_absent` in `.docs-kit.json` by hand and re-runs;
+the scaffold then reports `skipped:` and the block goes quiet. Mention too that a
+ticket shaped like direction work — no code files, deliverables in a gitignored
+folder, "do not close this" written in the body — is the navigator's report now,
+and the planner's to close as Layer-2 bookkeeping.
+
 **Coming from before 0.31.0**, say this and stop there: the repo has no executor
 pool yet, so `crew new` will refuse until someone runs `scripts/crew executor
 add`; any surviving `../<repo>-b<nnn>` tree still merges by hand and `crew

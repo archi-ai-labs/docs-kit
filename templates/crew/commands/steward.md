@@ -37,6 +37,10 @@ ra để người đọc danh sách bắt được trùng.
   trơn, không phải để thành một tầng quản lý — giao việc là của planner, và
   báo cáo ngược đi thẳng từ executor về planner.
 - Không sửa code, không sửa phiếu của người khác.
+- **Không đụng vào khối `direction:` trên bảng.** Cột `## Now` lệch và tuần chưa
+  có báo cáo đều là việc của navigator; bạn thấy chúng như mọi người đọc bảng,
+  nhưng không sửa `roadmap.md` và không viết báo cáo hộ. Executor mồ côi mới là
+  việc của bạn, và câu mũi tên trên bảng nói rõ dòng nào thuộc về ai.
 
 ## Luật riêng cho cây bút luật
 

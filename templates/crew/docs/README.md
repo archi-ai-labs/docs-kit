@@ -14,6 +14,14 @@ Issue → (lane test, 3 câu — gates.md) → Backlog item
       → scripts/crew done <nnn>    # merge + 2 phép kiểm + đóng phiếu + thả executor
 ```
 
+Và một vòng ngoài, nhịp tuần:
+
+```
+scripts/crew report --write    # đo git + docs/, viết docs/92_audit/reports/<tuần>.md
+      → điền phần phán đoán, đồng bộ cột ## Now cho bằng phiếu open/in-progress
+      → một dòng LOG.md, cột ref dẫn ĐƯỜNG DẪN tệp báo cáo chứ không dẫn id phiếu mở
+```
+
 Không có phiếu thì không có nhánh: `crew new` từ chối id chưa tồn tại trong
 `docs/23_backlog/`, vì id cấp trong worktree sẽ trùng nhau một cách tất định.
 
@@ -21,7 +29,7 @@ Không có phiếu thì không có nhánh: `crew new` từ chối id chưa tồn
 
 | Tệp | Trả lời câu |
 |---|---|
-| `roles.md` | ai làm gì, ai cố ý không làm gì |
+| `roles.md` | ai làm gì, ai cố ý không làm gì; ai cầm bút trên tệp nào |
 | `tickets.md` | phiếu to bao nhiêu thì chẻ, ba mức thi hành |
 | `worktrees.md` | pool executor, nhánh, và vì sao gộp là một lệnh |
 | `resources.md` | tài nguyên dùng chung, khoá, nhịp nhận phiếu |
@@ -45,5 +53,6 @@ ngưỡng trong `resources.md` và `tickets.md` mới chỉ đo trên vài phi�
 ## Trạng thái nằm ở đâu
 
 `../<repo>-crew/` — ngoài mọi bản checkout, nên mọi phiên nhìn chung một bảng
-khoá. `scripts/crew status` đọc nó và trả lời ba câu: cây nào đang mở, khoá nào
-đang giữ, có nên nhận thêm phiếu không.
+khoá. `scripts/crew status` đọc nó và trả lời năm câu: cây chính đang đứng ở
+nhánh nào, cây nào đang mở, khoá nào đang giữ, lộ trình còn khớp thực tế không,
+và có nên nhận thêm phiếu không.
