@@ -5,6 +5,56 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
+## [0.33.0] — 2026-09-10
+
+### Fixed — `docs-init` writes the Product doc, and the validator says so until someone does
+
+`01_products/` was the one folder in the tree that no step of `docs-init` ever wrote to. Step 3
+grounds layer 1 in the real source and fills `02_architecture/`, `03_business-logic/` and
+`04_api/` from the code; the word "product" appeared twice in the whole 17KB skill, both times
+naming the product doc as a *destination* for a ```` ```flow ```` block, never as something to
+write. So every repo scaffolded by this plugin kept `example-product.md` exactly as it shipped.
+
+**And it kept it invisibly, which is the part that matters.** Measured on a fresh scaffold
+(`--owns data,endpoints`) before anything was changed: `docs_validate.sh` printed
+`OK — 15 markdown file(s) ... pass all checks`, `current.html` listed **Example product** under
+Products three times over, and `INDEX.md` — the read model the next agent trusts instead of
+globbing the folder — reported `## 01_products — 1`. Nothing in the kit was lying; the seed
+carries all six required fields (§4), filled with the sentences describing what to write there,
+so every check the validator had was satisfied by a file that describes nothing.
+
+**Why the fill step was missing is not an oversight worth papering over.** `components` and
+`data_flow` are read out of the source, which is why Step 3 can insist on reading before
+writing. `users` and `success_metric` are written down in no repo — they are an answer only a
+person has. There was nothing for a "read the source and fill it" step to read, so no step got
+written, and the skill went quiet instead of asking.
+
+**Step 3.5 asks.** It drafts `name`, `problem` and the two scope lists from what the repo does
+state about its own purpose — the root `README.md`'s opening paragraph, the manifest
+`description` — which is a different source from the README's claims about how the code is
+built that item 2 of Step 3 forbids. Then it puts the two unreadable fields in the same
+AskUserQuestion dialog as the yes/no, with two or three answers the code makes plausible and
+free text beside them, because a trickle of dialogs is how a user stops reading them. On yes it
+writes `<slug>.md` and **deletes** `example-product.md`; keeping both leaves the renderer
+listing a product nobody has. On silence it ends the turn, like every other layer 1 write in
+this skill.
+
+**`NOTE [seed]` is the half that survives the user saying no.** One informational line while
+`01_products/` holds nothing but the example — never failing, not even under `--strict`,
+because on day one the seed IS the correct state and a check that fails a fresh scaffold is a
+check people switch off. It reads two signals, not one: byte-identical to the shipped template
+(the same test `folder_has_docs` uses for `NOTE [profile]`), **or** `name:` still carrying the
+template's own `"Example product"` — which is the case a byte compare misses, since renaming
+the file and editing one line makes it new bytes under a new name that still describes nothing.
+An empty `01_products/` reports the same thing, because deleting the example is not writing a
+product. The line surfaces in `docs-check` and in every `docs-sync`, which reads the validator's
+NOTE lines rather than its exit code.
+
+Scope, deliberately: `00_roadmap/`, `30_conventions/` and `93_qa/` also ship seeds nobody fills,
+and they are left alone. Those are free-form documents whose seed is visibly a seed — a `>`
+blockquote telling you what to write. `01_products/` is the only *typed* folder whose seed
+satisfies its own frontmatter contract and is rendered as real content downstream.
+
 ## [0.32.1] — 2026-09-10
 
 ### Fixed — a figure wider than the column now shows the scrollbar it depends on

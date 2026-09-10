@@ -530,6 +530,7 @@ Informational lines, which never affect the exit code in either mode:
 | `NOTE [layout]` | A folder this repo's profile calls for is missing (§9.1). A folder *outside* the profile is never reported. |
 | `NOTE [profile]` | `.docs-kit.json` declares `owns`, and the repo shows a surface it does not account for — see §9.2. |
 | `NOTE [stale]` | A layer 1 document carries `verified_at: <rev>` and some of the paths it names have changed since that rev — or the rev is not a commit in this repo. |
+| `NOTE [seed]` | `01_products/` holds nothing but the shipped example. It is the one folder no `docs-init` step fills from source — who the users are and what counts as success are written down in no repo — and its seed carries all six required fields, so without this line a scaffold that describes no product reports "pass all checks" while `current.html` lists **Example product** under Products. |
 
 Output: one line per finding — `FAIL [tag] <file>: <message>` or
 `NOTE [tag] <file>: <message>` — then a summary. A run with notes and no failures

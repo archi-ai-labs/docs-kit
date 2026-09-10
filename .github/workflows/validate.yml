@@ -1019,6 +1019,47 @@ jobs:
             || { echo "::error::a NOTE changed the exit code; it must not."; exit 1; }
           echo "OK — profile drift noticed, seeds ignored, exit code untouched"
 
+      # 01_products is the one folder no docs-init step fills from source, and its
+      # seed satisfies every other check — all six required fields are present,
+      # filled with the sentence describing what to write there. So the only thing
+      # between a fresh scaffold and a repo that silently documents no product is
+      # this note. It must fire on the seed, survive a rename, go quiet the moment
+      # someone writes a real name, and never touch the exit code in either mode.
+      - name: NOTE [seed] fires until a product is actually described
+        run: |
+          work="$(mktemp -d)"
+          git -C "$work" init -q
+          bash scripts/docs_scaffold.sh "$work" >/dev/null
+          out="$(bash scripts/docs_validate.sh "$work/docs" || true)"
+          case "$out" in *"NOTE [seed]"*) ;; *)
+            echo "::error::a fresh scaffold describes no product and said nothing."; exit 1 ;; esac
+          bash scripts/docs_validate.sh "$work/docs" >/dev/null \
+            || { echo "::error::NOTE [seed] changed the exit code; it must not."; exit 1; }
+          bash scripts/docs_validate.sh --strict "$work/docs" >/dev/null \
+            || { echo "::error::NOTE [seed] failed under --strict; it is informational."; exit 1; }
+          # Renamed and lightly edited, frontmatter untouched: still the example.
+          # The byte compare alone would call this content and go quiet.
+          mv "$work/docs/01_products/example-product.md" "$work/docs/01_products/orderhub.md"
+          printf '\n<!-- a line somebody added -->\n' >> "$work/docs/01_products/orderhub.md"
+          out="$(bash scripts/docs_validate.sh "$work/docs" || true)"
+          case "$out" in *"NOTE [seed]"*) ;; *)
+            echo "::error::renaming the example silenced the note."; exit 1 ;; esac
+          # Writing the product's own name is the whole difference.
+          python3 - "$work" <<'PY3'
+          import pathlib, sys
+          f = pathlib.Path(sys.argv[1]) / "docs/01_products/orderhub.md"
+          f.write_text(f.read_text().replace('name: "Example product"', 'name: "OrderHub"'))
+          PY3
+          out="$(bash scripts/docs_validate.sh "$work/docs" || true)"
+          case "$out" in *"NOTE [seed]"*)
+            echo "::error::the note still fired on a described product."; exit 1 ;; esac
+          # Deleting the example without writing anything is not progress either.
+          rm "$work/docs/01_products/orderhub.md"
+          out="$(bash scripts/docs_validate.sh "$work/docs" || true)"
+          case "$out" in *"NOTE [seed]"*) ;; *)
+            echo "::error::an empty 01_products reported nothing."; exit 1 ;; esac
+          echo "OK — the note tracks whether a product is described, not whether a file is there"
+
       # Hooks are deterministic and warn-only: they must speak on a real
       # architecture edit and stay silent on anything else.
       - name: Hooks warn on architecture, silent elsewhere

@@ -246,6 +246,61 @@ conventional layout.
    say so, and leave it out rather than guess. An architecture doc that is
    confidently wrong is worse than an empty one.
 
+## Step 3.5 — Write the Product doc (ASK FIRST)
+
+`01_products/` is layer 1 exactly like the Architecture, and it is the one layer 1
+folder Step 3 cannot fill: `components` and `data_flow` are read out of the code,
+but who the users are and what counts as success are written down in no repo. Left
+alone it stays as it shipped, and it stays *invisibly* — `example-product.md`
+carries all six required fields, so the validator prints "pass all checks",
+`current.html` lists **Example product** under Products, and `INDEX.md` tells the
+next agent this repo documents one product. `NOTE [seed]` now says so on every run
+until this step is done; do not skip it silently.
+
+1. **Draft from what the repo states about itself.** The root `README.md`'s opening
+   paragraph and the manifest `description` (`package.json`, `pyproject.toml`,
+   `Cargo.toml`, `composer.json`) are the product describing its own purpose. That is
+   a different source from the README's claims about how the code is built, which
+   Step 3's opening paragraph forbids you to use: a component's behaviour has to be
+   read, while a product's purpose is a statement its owner is entitled to make. Read those, plus
+   the entry points you already read in Step 3.
+
+2. **One file per product, never one per service.** `01_products/` answers "what is
+   this for", `02_architecture/` answers "what runs" — a repo that split its
+   Architecture per service still has one product if it ships one thing. Name the
+   file after the product (`orderhub.md`), not `product.md`. If the repo plainly
+   ships more than one, say which ones you found before writing any.
+
+3. Ask with AskUserQuestion — **one dialog**, all of it in the same call, because
+   `users` and `success_metric` are the two fields no amount of reading can answer:
+   - "Điền `docs/01_products/` bây giờ? (`example-product.md` sẽ bị thay bằng file
+     thật)" — options "Yes — ghi bản nháp vừa đọc được, bạn sửa sau (Recommended)"
+     and "No — giữ file mẫu, tôi tự viết".
+   - "Ai dùng sản phẩm này?" — offer the two or three roles the code actually
+     implies (an API consumer, an internal operator, an end user on the web app),
+     each phrased as a full answer. The user picks one or types their own.
+   - "Thế nào là chạy đúng — đo bằng gì?" — same shape: two or three measurable
+     signals the code makes plausible, never a slogan.
+
+   If AskUserQuestion fails or returns empty, ask the same three in plain text and
+   **end the turn**. A product doc filled on silence is the example file with a new
+   name on it.
+
+4. On yes, write `docs/01_products/<slug>.md` with all six fields — `name`, `users`,
+   `problem`, `scope_in`, `scope_out`, `success_metric` — then **delete
+   `example-product.md`**. Keeping both leaves the renderer listing a product nobody
+   has. `scope_out` is the field that earns its keep: write what this product
+   deliberately does not do, which is the question a newcomer actually arrives with.
+
+5. Move the system-level ```` ```flow ```` blocks from item 6 of Step 3 into this
+   file when they describe a user-visible scenario rather than an internal one —
+   that is what the product doc's body is for (STANDARD §10), and participant names
+   must still match `components`.
+
+6. Anything you drafted rather than were told — say so in the Step 6 report, field
+   by field. A `problem:` inferred from a README badge is a guess wearing layer 1's
+   authority.
+
 ## Step 4 — Self-check
 
 Run:
@@ -257,6 +312,10 @@ bash "$PLUGIN_ROOT/scripts/docs_validate.sh" docs
 A fresh scaffold must pass clean (the shipped `-000` example chain is
 self-consistent by design). If it does not, report the raw FAIL lines to the
 user as a plugin bug — do not hand-patch the generated files silently.
+
+One `NOTE [seed]` line is expected and is not a failure: it means `01_products/`
+still holds only the example. If Step 3.5 wrote a product doc the line is gone; if
+the user declined it, the line is correct and belongs in the report, not swallowed.
 
 Then generate the HTML views (deterministic, read model — see STANDARD.md §10):
 
@@ -313,6 +372,10 @@ validation result, CLAUDE.md action taken (or skipped and why), and next steps �
   visual map (regenerate anytime with `/docs-kit:docs-render`).
 - The `-000` files are a worked example chain; delete all four together or keep
   them as a format reference. Real IDs start at `001`.
+- If Step 3.5 was declined, say plainly that `docs/01_products/` still describes no
+  product, that `current.html` will list the example as though it were one, and that
+  `NOTE [seed]` will repeat this on every `docs-check` and `docs-sync` until a real
+  product doc replaces it.
 - `/docs-kit:docs-sync` reconciles docs after a working session;
   `/docs-kit:docs-check` validates structure anytime.
 - `docs/99_feedback/` is the one folder that is not about this product: when

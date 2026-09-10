@@ -105,6 +105,12 @@ may now have findings. **That is the point, not a regression — say so.** Group
 - **`NOTE [anchor]`** — paths a doc names that no longer exist. These were never
   checked before this version; they are pre-existing drift being surfaced, not damage
   the upgrade did. Say that plainly or it reads as breakage.
+- **`NOTE [seed]`** — `01_products/` holds nothing but the shipped example. New in
+  0.33.0, and on an upgraded repo it is almost always true, because no version of
+  `docs-init` before that one ever wrote a product doc. It is not something the
+  upgrade broke; it is a folder that has been empty of meaning since the day the repo
+  was scaffolded, and `current.html` has been listing the example as a real product
+  the whole time. The fix is a person answering three questions, not a script.
 - **The other `NOTE` lines** — since 0.28.0 the validator fails on wrong *names* and
   only notes wrong *links* (STANDARD §7), so an upgraded repo may exit 0 while
   printing a dozen `NOTE [ref]` lines. Group them, do not bury them, and do not

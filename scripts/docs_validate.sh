@@ -51,6 +51,11 @@
 #                  does not account for — a component tagged [db]/[ui]/[queue], or a
 #                  folder holding real documents. Seeds identical to their shipped
 #                  template count as neither.
+#   NOTE [seed]    01_products/ holds nothing but the shipped example. It is the one
+#                  folder no docs-init step fills from source — who the users are and
+#                  what counts as success are not written down in any repo — and its
+#                  seed satisfies every check above, so without this line a scaffold
+#                  that documents no product reports "pass all checks".
 #
 # Layer 2 folders may hold an `_archive/` subfolder for terminal documents; it is
 # validated exactly like the folder above it — archiving lowers read cost, never
@@ -713,6 +718,55 @@ if [ -n "$ROOT" ] && [ "$HAVE_PROFILE" -eq 1 ] && [ -n "$VTEMPLATES" ] && dk_own
        || folder_has_docs 70_deploy; } && ! dk_owns_has "$ROOT" deploys; then
     note profile "$DOCS" "holds operational docs (40_services / 50_runbooks / 70_deploy) but .docs-kit.json 'owns' does not list 'deploys' — update owns"
   fi
+fi
+
+# ----------------------- no product described yet (informational, never failing) ---
+#
+# `01_products/` is the one folder in the tree that is present under every profile,
+# is never written by any step of docs-init, and whose seed passes every check
+# above. It passes because the six required fields are all *present* in it —
+# filled with the sentence describing what to write there. Measured on a fresh
+# scaffold before this check existed: validate printed "pass all checks",
+# current.html listed "Example product" under Products, and INDEX.md told the next
+# agent this repo documents one product.
+#
+# Why docs-init cannot just fill it like the rest of layer 1: `components` and
+# `data_flow` are read out of the source, but no repo writes down who its users
+# are or what counts as success. That is an answer only a person has, so the step
+# that gets it has to ask — and until someone answers, this line is the reminder.
+#
+# Informational, never failing, not even under --strict: on day one the seed IS
+# the correct state, and a check that fails a fresh scaffold is a check people
+# switch off.
+product_described() {
+  pdt="$VTEMPLATES/01_products"
+  pd_name=""
+  [ -n "$VTEMPLATES" ] && [ -f "$pdt/example-product.md" ] \
+    && pd_name="$(fm_get "$pdt/example-product.md" name)"
+  for pf in "$DOCS"/01_products/*.md "$DOCS"/01_products/_archive/*.md; do
+    [ -f "$pf" ] || continue
+    case "$(basename "$pf")" in README.md) continue ;; esac
+    # Two ways to still be the shipped example. Byte-identical is the same test
+    # folder_has_docs uses, and it is not folded into that function because the
+    # two ask different questions: that one asks whether a folder holds content,
+    # this one asks whether anyone has described a product.
+    if [ -n "$VTEMPLATES" ] && [ -f "$pdt/$(basename "$pf")" ] \
+       && cmp -s "$pf" "$pdt/$(basename "$pf")"; then
+      continue
+    fi
+    # Renamed and lightly edited, frontmatter untouched: the file is a different
+    # name and different bytes, and `name:` still says "Example product". A
+    # product doc whose own name is the placeholder describes nothing.
+    if [ -n "$pd_name" ] && [ "$(fm_get "$pf" name)" = "$pd_name" ]; then
+      continue
+    fi
+    return 0
+  done
+  return 1
+}
+
+if [ -d "$DOCS/01_products" ] && ! product_described; then
+  note seed "$DOCS/01_products" "no product is described here yet — only the shipped example, whose six fields are placeholders that satisfy every check above. current.html and INDEX.md report it as a real product. Fill name/users/problem/scope_in/scope_out/success_metric, or re-run /docs-kit:docs-init, whose Step 3.5 drafts it and asks for the two fields no source read can answer"
 fi
 
 # ----------------------------- layout notes (informational, never failing) ---
