@@ -952,10 +952,13 @@ fi
 printf '{"owns": [], "crew": {"dev_branch": "main"}}\n' > "$NV/.docs-kit.json"
 
 # THE REASON REPORTS LIVE IN A SUBFOLDER, proven both ways rather than asserted.
-# docs_close::audit_ids reads every *.md DIRECTLY under 92_audit/ and treats any
-# Backlog id it finds as a completion already recorded — so a report beside
-# LOG.md that merely names an open ticket makes that ticket close with no audit
-# line and no message. Reproduce the silent failure first, then the fix.
+# docs_close::audit_ids reads every *.md DIRECTLY under 92_audit/, so a report
+# beside LOG.md can make a ticket close with no audit line and no message.
+# 0.35.0 narrowed what counts: only a line whose ref column LEADS with the id
+# records a completion, so a prose mention no longer traps. The trap survives in
+# the shape a report actually takes when it quotes the log — an audit-shaped row
+# — which is why the subfolder still earns its keep. Reproduce the silent
+# failure first, then the fix.
 trap_repo() { # trap_repo <dir> <report-path-relative-to-docs>
   rm -rf "$1"; mkdir -p "$1/docs/23_backlog" "$1/docs/$(dirname "$2")"
   (
@@ -965,7 +968,7 @@ trap_repo() { # trap_repo <dir> <report-path-relative-to-docs>
     printf -- '---\nid: BACKLOG-016\ndescription: "y"\nsource_ref: ISSUE-002\nstatus: open\n---\n' \
       > docs/23_backlog/t016.md
     printf '# Audit log\n\n2026-09-01 | init | - | - | mốc\n' > docs/92_audit/LOG.md
-    printf '# Báo cáo\n\nĐang mở: BACKLOG-016.\n' > "docs/$2"
+    printf '# Báo cáo\n\nĐang mở: BACKLOG-016.\n\n2026-09-05 | trích lại từ log | BACKLOG-016 | - | dẫn chứng\n' > "docs/$2"
     git add -A && git commit -qm init
     echo x > f && git add -A && git commit -qm "x
 

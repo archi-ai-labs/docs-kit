@@ -62,6 +62,20 @@ Suite **100 → 109 checks**. Three mutations — never citing check 1, filterin
 through `own_files()`, comparing against the wrong reference — each turn exactly their own
 check red.
 
+
+### Fixed — the subfolder rule and the audit rule, reconciled on the way in
+
+0.34.0 put navigator reports under `92_audit/reports/` because a report beside `LOG.md`
+that merely *named* an open Backlog id made that item close with no audit line. 0.35.0 then
+narrowed what `audit_ids` counts to a line whose ref column **leads** with the id, which
+retires the prose half of that trap. Shipping both together made the guard test go red on
+exactly that point: it built its report from a prose mention and measured `flat=1 sub=1`
+where it asserted `0` and `1`.
+
+The subfolder still earns its keep, so the fixture now traps the way a real report does —
+by quoting the log as an audit-shaped row. Measured after the change: `flat=0 sub=1`,
+109 checks green. `STANDARD.md` §4 lost the claim that *naming* an id suppresses the line
+and says *an audit-shaped line leading with* one does.
 ## [0.35.0] — 2026-09-10
 
 ### Fixed — a ticket that was *mentioned* in the audit log closed without an audit line
