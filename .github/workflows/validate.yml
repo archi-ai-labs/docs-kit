@@ -58,6 +58,68 @@ jobs:
           bash scripts/docs_scaffold.sh "$work"
           bash scripts/docs_validate.sh "$work/docs"
 
+      # `.` is a directory, so the only setup guard waved it through: ROOT resolved
+      # to the repo's parent, no NN_* folder was found, and the run ended
+      # `OK — 0 markdown file(s) in . pass all checks` — a pass that checked
+      # nothing, wearing the face of a clean run. Reported from a repo where a full
+      # run takes over ten minutes, so `.` is exactly what someone reaches for.
+      # Known-bad first, then the two shapes that must still pass.
+      - name: A validator that checked nothing does not print OK
+        run: |
+          work="$(mktemp -d)"
+          git -C "$work" init -q
+          bash scripts/docs_scaffold.sh "$work" >/dev/null
+          cd "$work"
+          if bash "$GITHUB_WORKSPACE/scripts/docs_validate.sh" . > out.txt 2>&1; then
+            echo "::error::docs_validate.sh . exited 0 having checked no documents"
+            cat out.txt
+            exit 1
+          fi
+          grep -q "FAIL \[setup\]" "$work/out.txt" || {
+            echo "::error::it failed, but not for the setup reason"; cat "$work/out.txt"; exit 1; }
+          grep -q "no INDEX.md and no NN_\* folder" "$work/out.txt" || {
+            echo "::error::the refusal does not say what was wrong"; cat "$work/out.txt"; exit 1; }
+          # The real tree, and the default argument, must both still pass — a guard
+          # that refused those would be a worse bug than the one it closes.
+          bash "$GITHUB_WORKSPACE/scripts/docs_validate.sh" docs > ok1.txt 2>&1 \
+            || { echo "::error::the guard refused a real docs/ tree"; cat ok1.txt; exit 1; }
+          bash "$GITHUB_WORKSPACE/scripts/docs_validate.sh" > ok2.txt 2>&1 \
+            || { echo "::error::the guard refused the default argument"; cat ok2.txt; exit 1; }
+          grep -q "docs-validate: OK" ok1.txt && echo "OK — . refused, docs and the default still pass"
+
+      # Id allocation was read-then-write with no claim, so two sessions that both
+      # read before either wrote picked the same number — and because the filenames
+      # differ by slug, the "already exists" check never saw it. Reported from a
+      # real repo: two FEEDBACK-002 files, 08:33 and 10:11 the same day. Measured
+      # here by actually racing two allocations: before the lock, two files carried
+      # one id; after it, two.
+      - name: Concurrent feedback ids do not collide
+        run: |
+          work="$(mktemp -d)"
+          git -C "$work" init -q
+          bash scripts/docs_scaffold.sh "$work" >/dev/null
+          rm -rf "${TMPDIR:-/tmp}"/docs-kit-fb-*.lock || true
+          ( cd "$work" && bash "$GITHUB_WORKSPACE/scripts/docs_feedback.sh" new "alpha problem" >/dev/null 2>&1 ) &
+          ( cd "$work" && bash "$GITHUB_WORKSPACE/scripts/docs_feedback.sh" new "beta problem"  >/dev/null 2>&1 ) &
+          wait
+          files=$(ls "$work"/docs/99_feedback/FEEDBACK-*.md 2>/dev/null | wc -l | tr -d " ")
+          ids=$(grep -h "^id:" "$work"/docs/99_feedback/FEEDBACK-*.md 2>/dev/null | sort -u | wc -l | tr -d " ")
+          echo "wrote $files file(s) carrying $ids distinct id(s)"
+          if [ "$files" != "2" ]; then
+            echo "::error::expected two reports, got $files — the race did not run"
+            exit 1
+          fi
+          if [ "$ids" != "2" ]; then
+            echo "::error::two reports share an id — the allocation claim did not hold"
+            grep -H "^id:" "$work"/docs/99_feedback/FEEDBACK-*.md
+            exit 1
+          fi
+          # The claim must not outlive the command, or the next run waits 15s and fails.
+          if ls "${TMPDIR:-/tmp}"/docs-kit-fb-*.lock >/dev/null 2>&1; then
+            echo "::error::a lock survived the run"; exit 1
+          fi
+          echo "OK — two concurrent allocations, two ids, no lock left behind"
+
       # The folder set became a function of one declared field, and a function has
       # branches the byte-identical sample gate cannot see: the samples render one
       # fixture, which takes one path through it. Every branch is asserted here
@@ -476,6 +538,92 @@ jobs:
               || { echo "::error::INDEX.md omits $id — skills reading it would miss the doc."; exit 1; }
           done
           echo "OK — INDEX.md complete and byte-stable"
+
+      # Archiving is the kit's own tidying operation, and it used to buy the reader
+      # nothing: measured on a fresh scaffold, moving one Issue into `_archive/`
+      # left INDEX.md at exactly 65 lines — the row only gained a path prefix. Repos
+      # were writing their own trimmer to get the shrink. Known-bad shape first: a
+      # section whose documents are archived must get SHORTER, and must still say
+      # where they went.
+      - name: Archiving shortens INDEX.md and still says where
+        run: |
+          work="$(mktemp -d)"
+          git -C "$work" init -q
+          bash scripts/docs_scaffold.sh "$work" >/dev/null
+          for i in 1 2 3 4 5; do
+            printf -- '---\nid: ISSUE-00%s\ndescription: "v%s"\nstatus: archived\n---\n\n# ISSUE-00%s\n' \
+              "$i" "$i" "$i" > "$work/docs/20_issues/ISSUE-00$i-x.md"
+          done
+          python3 scripts/docs_render.py "$work" >/dev/null
+          before=$(wc -l < "$work/docs/INDEX.md" | tr -d " ")
+          mkdir -p "$work/docs/20_issues/_archive"
+          mv "$work"/docs/20_issues/ISSUE-00[1-5]-x.md "$work/docs/20_issues/_archive/"
+          python3 scripts/docs_render.py "$work" >/dev/null
+          after=$(wc -l < "$work/docs/INDEX.md" | tr -d " ")
+          echo "INDEX.md: $before -> $after lines after archiving 5 of 6 issues"
+          if [ "$after" -ge "$before" ]; then
+            echo "::error::archiving did not shorten INDEX.md ($before -> $after)"
+            exit 1
+          fi
+          grep -q "ISSUE-001" "$work/docs/INDEX.md" \
+            && { echo "::error::an archived document is still listed"; exit 1; }
+          # Silence would read as "there is nothing there". The count and the folder
+          # both have to survive, or this trades one wrong answer for another.
+          grep -q "(+5 archived)" "$work/docs/INDEX.md" \
+            || { echo "::error::the archived count vanished from the heading"; exit 1; }
+          grep -q "20_issues/_archive/" "$work/docs/INDEX.md" \
+            || { echo "::error::INDEX does not say where the archived documents went"; exit 1; }
+          echo "OK — archiving shrinks the read model and names the folder"
+
+      # The validator resolved every reference by frontmatter id and never checked
+      # that `](some/path.md)` leads anywhere. Reported from a repo with 1,011
+      # internal links: 44 broken, run green — and they broke during archiving,
+      # which is something THIS KIT does, so the kit created the breakage and could
+      # not see it. Measured here on a real repo after the check landed: 42 broken
+      # links found, 0 in two other repos, so it is not firing on everything.
+      # Each shape is asserted separately because the MESSAGE is the deliverable:
+      # "moved" sent to a reader whose file never moved is a wasted hunt.
+      - name: A relative link that leads nowhere is reported, by shape
+        run: |
+          work="$(mktemp -d)"
+          git -C "$work" init -q
+          bash scripts/docs_scaffold.sh "$work" >/dev/null
+          d="$work/docs"
+          # A clean scaffold must stay silent, or the check is worse than the gap.
+          ( cd "$work" && bash "$GITHUB_WORKSPACE/scripts/docs_validate.sh" docs > clean.txt 2>&1 )
+          grep -q "NOTE \[link\]" "$work/clean.txt" \
+            && { echo "::error::a fresh scaffold raised a link note"; cat "$work/clean.txt"; exit 1; }
+          mkdir -p "$d/20_issues/_archive"
+          mv "$d"/20_issues/ISSUE-000-example.md "$d/20_issues/_archive/"
+          {
+            printf '\n## links\n'
+            printf -- '- [moved](../20_issues/ISSUE-000-example.md)\n'
+            printf -- '- [never existed](../22_decisions/DECISION-000-tape-lifecycle.md)\n'
+            printf -- '- [wrong base](docs/22_decisions/DECISION-000-example.md)\n'
+            printf -- '- [nothing](../nowhere/ghost.md)\n'
+            printf -- '- [external](https://example.com/x.md)\n'
+            printf -- '- [anchor](#somewhere)\n'
+          } >> "$d/00_roadmap/roadmap.md"
+          ( cd "$work" && bash "$GITHUB_WORKSPACE/scripts/docs_validate.sh" docs > out.txt 2>&1 )
+          grep -q "is now at 20_issues/_archive/ISSUE-000-example.md" "$work/out.txt" \
+            || { echo "::error::a moved file was not diagnosed as moved"; cat "$work/out.txt"; exit 1; }
+          grep -q "did you mean 22_decisions/DECISION-000-example.md" "$work/out.txt" \
+            || { echo "::error::the id-prefix fallback did not fire"; cat "$work/out.txt"; exit 1; }
+          grep -q "written from the repo root" "$work/out.txt" \
+            || { echo "::error::a root-relative link was not diagnosed as one"; cat "$work/out.txt"; exit 1; }
+          grep -q "ghost.md\` — no such file" "$work/out.txt" \
+            || { echo "::error::a plainly broken link was not reported"; cat "$work/out.txt"; exit 1; }
+          # Neither of these is a broken document link, and reporting them would
+          # make the check noise.
+          grep -q "example.com" "$work/out.txt" \
+            && { echo "::error::an external URL was reported"; exit 1; }
+          grep -q "somewhere" "$work/out.txt" \
+            && { echo "::error::an anchor-only link was reported"; exit 1; }
+          # Links are soft: NOTE by default, FAIL under --strict (0.28.0).
+          ( cd "$work" && bash "$GITHUB_WORKSPACE/scripts/docs_validate.sh" --strict docs > strict.txt 2>&1 ) || true
+          grep -q "FAIL \[link\]" "$work/strict.txt" \
+            || { echo "::error::--strict did not promote link notes to failures"; cat "$work/strict.txt"; exit 1; }
+          echo "OK — four shapes diagnosed apart, two non-links ignored, soft by default"
 
       # The index is only safe to trust if something notices when it goes stale.
       # --check must catch a document added without re-rendering, and must write

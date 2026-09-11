@@ -66,8 +66,14 @@ cái mũ do người giao chứ không phải thứ model tự đội. Lấy n�
 ## Mẫu báo cáo cuối
 
 Số ở mục 1, 3, 4 lấy từ thứ máy đã đo, đừng gõ lại theo trí nhớ: sha và trailer
-từ commit, `declared=`/`actual=` từ dòng `SIZE` mà `crew done` ghi, thời gian giữ
-khoá từ dòng `released lock`.
+từ commit, thời gian giữ khoá từ dòng `released lock` mà `crew done` in ra.
+
+`declared=`/`actual=` **không** nằm trong output của `crew done`: lệnh ghi nó
+xuống nhật ký chứ không in ra màn hình. Lấy bằng:
+
+```
+grep "BACKLOG-<nnn>" ../<repo>-crew/log.tsv
+```
 
 `<base>` là gốc URL của repo, lấy bằng lệnh chứ đừng gõ tay:
 
@@ -111,7 +117,7 @@ Luồng không đổi thì bỏ hai khối vẽ, viết một dòng:
 |---|---|---|
 | Commit | [`<sha ngắn>`](<base>/commit/<sha>) | mang trailer `Closes: BACKLOG-<nnn>` |
 | Kiểm thử | [<tệp test>](<đường dẫn>) | <n passed, m failed> |
-| Phạm vi | dòng `SIZE` của `crew done` | khai `<S>` · thật `<N>` tệp |
+| Phạm vi | dòng `SIZE` trong `../<repo>-crew/log.tsv` | khai `<S>` · thật `<N>` tệp |
 | Khoá | `<tài nguyên>` | giữ `<n>`s |
 
 **4. Git**

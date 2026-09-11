@@ -550,6 +550,13 @@ unless the repo opts in (a `.docs-kit.json` whose `crew` key exists).
    the flag precisely so nothing else spells them out. Silent on a non-crew
    title, on a repo with no `scripts/crew`, and whenever `--want` refuses.
 
+   **Known hole, stated rather than discovered:** `--want` is exactly what the
+   `[name:place]` guard refuses for a `fast`/`full` ticket named from the main
+   tree, so the hook goes quiet in the very case a nag would help most — a
+   session that skipped `crew new` and is editing the shared tree. Fail open
+   beats relaying a refusal the hook cannot act on, but it means this hook only
+   ever helps sessions that were in the right tree to begin with.
+
 Promotion to blocking is **per repo, per hook, by flag** — `"crew": {"enforce":
 true}` turns explain-gate's warning into a deny; resource-guard stays warn-only
 in 0.26.0. Three rules bind any future hardening, each learned from a hook that

@@ -84,6 +84,30 @@ chain, not a finished one, and the least-read folder is the worst place to put i
 Before 0.29.0 only the declaration existed, which meant `20_issues/` shrank when work
 was abandoned and grew when it succeeded.
 
+**A Decision that never produced a Backlog item is not archived either, and that is
+the rule rather than an oversight.** `docs_close --archive` moves an approved Decision
+only once every Backlog item citing it is `done` and recorded; with no such item there
+is nothing to be terminal, so it stays in the hot set. Reported from a repo where 8 of
+9 hot Decisions were in exactly that state, and investigating each one first is what
+made moving them by hand safe — none was a broken chain:
+
+| Shape | Why no Backlog item |
+|---|---|
+| retroactive record | the Decision was written during a docs migration, after the architecture already existed. There was never work to ticket |
+| layer-1 only | the whole change was a documentation amendment applied in the approving session |
+| recording shipped work | a ticket **does** exist, but its `source_ref` names the Issue, not the Decision |
+
+**The third shape is the trap, and it is why a lookup needs three routes.** Asking only
+"which Backlog item cites this Decision" reads that shape as *code shipped with no
+ticket* — the reporter believed exactly that until the dates disproved it, one Decision
+having been written the day AFTER its page shipped. A safe check follows the Decision
+id, its `proposal_ref`, and the `issue_ref` of that Proposal.
+
+Whether the first two shapes deserve a state of their own — *finished, produced no
+ticket* is not the same thing as *its tickets vanished* — is open. Until something
+measures the difference, the conservative rule holds: a Decision with no successor is
+left where it can be read.
+
 **Archiving lowers read cost. It never lowers the standard a document is held to.**
 The validator walks `_archive/` exactly as it walks the folder above it — ids are
 collected, refs must still resolve, frontmatter is still checked. Skills read it only

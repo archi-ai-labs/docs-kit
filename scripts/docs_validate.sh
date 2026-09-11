@@ -38,6 +38,10 @@
 #   [frontmatter]  a required field other than `id` missing; a Proposal with no
 #                  "Alternatives considered" heading
 #   [amended-by]   an amended_by / rejected entry citing a Decision that is not there
+#   [link]         a relative `](path.md)` in a body that points at no file. The
+#                  message says WHICH kind: written from the repo root instead of
+#                  from the file, a file that moved, a name that never existed
+#                  (matched on its id prefix), or simply nothing
 #   [anchor]       a path a doc names — a `backticked` components path, a fence
 #                  `code:` header, a `generated_from` artifact — that no longer exists
 #
@@ -78,6 +82,19 @@ done
 
 if [ ! -d "$DOCS" ]; then
   echo "FAIL [setup] $DOCS: directory not found (run /docs-kit:docs-init first)"
+  exit 2
+fi
+
+# `.` is a directory too, so the check above waves it through — and then ROOT
+# resolves to the repo's PARENT, no NN_* folder is found, and the run ended
+# `docs-validate: OK — 0 markdown file(s) in . pass all checks`, which is
+# indistinguishable from a clean repo. Reported from a repo where a full run
+# takes over ten minutes: someone tries `.` to save time, sees OK, and believes
+# it. A validator that passes having checked nothing is worse than one that
+# fails wrongly, because it looks exactly like success.
+if [ ! -f "$DOCS/INDEX.md" ] \
+   && [ -z "$(find "$DOCS" -maxdepth 1 -type d -name '[0-9][0-9]_*' 2>/dev/null | head -1)" ]; then
+  echo "FAIL [setup] $DOCS: no INDEX.md and no NN_* folder — this is not a docs/ tree (did you mean 'docs'?)"
   exit 2
 fi
 
@@ -627,6 +644,83 @@ if [ -n "$ROOT" ]; then
     done
   done
 fi
+
+# ---------- check 7: a relative .md link points at a file that is there -------
+#
+# The validator resolved every reference by frontmatter `id` and never once
+# checked that `](some/path.md)` in a body leads anywhere. Reported from a repo
+# with 1,011 internal links: 44 were broken and the run was green.
+#
+# WHY IT IS THE KIT'S OWN FAULT. Those 44 broke during archiving — seven
+# `git mv`s into `_archive/`, each adding a directory level, so every link out of
+# a moved file and every link into it shifted by one. `docs_close.sh --archive`
+# is the thing that moves them, so the kit creates the breakage and then cannot
+# see it.
+#
+# WHY SOFT, NOT FAIL. Same rule as check 6 and the *_ref checks (0.28.0): a name
+# that is wrong is a defect, a link that is wrong is one broken edge, visible to
+# the first person who follows it. NOTE by default, FAIL under --strict, which is
+# what CI runs.
+#
+# WHY RESOLUTION HAS TWO STAGES. Matching the basename alone finds a file that
+# MOVED, which is the common case here. It misses a filename that never existed:
+# `DECISION-010-tape-lifecycle.md`, cited from three documents in that repo, when
+# the real file ends `-tape-retention.md`. The id prefix is the only thing the
+# two share, so the fallback matches on it and the suggestion lands.
+while IFS= read -r f; do
+  [ -f "$f" ] || continue
+  d="$(dirname "$f")"
+  # `](target)` only. An empty target, an anchor-only link, a URL, a mail link and
+  # an absolute path are all somebody else's problem.
+  grep -o ']([^)]*)' "$f" 2>/dev/null | sed -e 's/^](//' -e 's/)$//' | while IFS= read -r raw; do
+    [ -n "$raw" ] || continue
+    tgt="${raw%%#*}"                      # drop the anchor; anchors are not checked
+    [ -n "$tgt" ] || continue
+    case "$tgt" in
+      http://*|https://*|mailto:*|tel:*|//*|/*|'<'*) continue ;;
+      *.md|*.md/) : ;;
+      *) continue ;;
+    esac
+    [ -f "$d/$tgt" ] && continue
+    # Stage 0 — it resolves from the REPO ROOT, so the link is written
+    # `docs/22_decisions/X.md` from inside docs/. The file never moved; the base
+    # is wrong, and a viewer that resolves relative to the FILE (GitHub, every
+    # markdown renderer) 404s it. Measured on a real repo: 42 of its broken links
+    # are this one shape, so calling them "moved" would send the reader hunting
+    # for a file that is exactly where they left it. Depth below the root is
+    # 1 (docs/ itself) plus the depth of this file's folder below docs/.
+    if [ -f "$ROOT/$tgt" ]; then
+      sub="${d#$DOCS}"; sub="${sub#/}"
+      n=1
+      [ -n "$sub" ] && n=$(( 1 + $(printf '%s' "$sub" | tr '/' '\n' | grep -c .) ))
+      up=""; i=0
+      while [ "$i" -lt "$n" ]; do up="../$up"; i=$((i + 1)); done
+      soft link "${f#./}" "broken link \`$raw\` — written from the repo root; from this file it is \`$up$tgt\`"
+      continue
+    fi
+    base="$(basename "$tgt")"
+    # Stage 1 — same name, somewhere else: the file moved.
+    moved="$(find "$DOCS" -type f -name "$base" 2>/dev/null | head -1)"
+    if [ -n "$moved" ]; then
+      soft link "${f#./}" "broken link \`$raw\` — that file is now at ${moved#$DOCS/}"
+      continue
+    fi
+    # Stage 2 — same id prefix, different name: the link names a file that never
+    # existed. Basename matching alone cannot see this one.
+    idp="$(printf '%s' "$base" | sed -n 's/^\([A-Z][A-Z]*-[0-9][0-9]*\).*/\1/p')"
+    if [ -n "$idp" ]; then
+      near="$(find "$DOCS" -type f -name "$idp-*.md" 2>/dev/null | head -1)"
+      if [ -n "$near" ]; then
+        soft link "${f#./}" "broken link \`$raw\` — no such file; did you mean ${near#$DOCS/}"
+        continue
+      fi
+    fi
+    soft link "${f#./}" "broken link \`$raw\` — no such file under $DOCS"
+  done
+done <<EOF
+$(find "$DOCS" -type f -name '*.md' 2>/dev/null)
+EOF
+
 
 # ------------- profile notes: does `owns` still describe this repo? ----------
 #

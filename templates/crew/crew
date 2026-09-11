@@ -208,6 +208,15 @@ exec_state() {
 # `execution: fast-pair`. Every other executor is found from its branch, but a
 # fast-pair ticket has no work branch by design, so it must be found from the
 # other side: the ticket itself says where it runs.
+# main_branch → the branch the MAIN tree actually has checked out, or (detached).
+# One function because 0.37.0 shipped two readers of this same fact — the board's
+# `main tree:` block asked git, the executors row printed the CONFIGURED dev
+# branch — and a tree parked on another branch made one board name it two ways
+# four lines apart. A shared reader cannot disagree with itself.
+main_branch() {
+  git -C "$MAIN" symbolic-ref --short HEAD 2>/dev/null || echo '(detached)'
+}
+
 pair_tickets() {
   grep -rlE "^status:[[:space:]]*\"?in-progress\"?" "$MAIN/docs/23_backlog" 2>/dev/null \
     | while IFS= read -r f; do
@@ -594,7 +603,7 @@ cmd_lock() {
 # reading is the one who knows whether being on that branch is deliberate.
 main_tree_block() {
   MT_DEV="$(cfg dev_branch main)"
-  MT_CUR="$(git -C "$MAIN" symbolic-ref --short HEAD 2>/dev/null || echo '(detached)')"
+  MT_CUR="$(main_branch)"
   # Plain porcelain, deliberately NOT own_files(): check 2 counts every
   # uncommitted file in the main tree, provisioned payload included, so a board
   # that filtered would promise a merge the merge itself refuses.
@@ -832,11 +841,13 @@ cmd_status() {
   # main is a slot like any other: it is where every fast-pair ticket runs
   # (EXECUTION §2). exec_map cannot see it — that matches `<repo>-e<k>` — so the
   # row is built from the ticket side instead. The branch column stays the
-  # BRANCH; for main that is the dev branch, and the fact that it is not
+  # BRANCH — the one HEAD is really on, read through main_branch() so it can
+  # never disagree with the block above — and the fact that it is not
   # `work/b<nnn>` is itself what says fast-pair, so the level needs no column.
   # The dirty count is PLAIN porcelain, the same number the main tree block
   # reports: one tree must not carry two different dirty counts on one board.
   MPD="$(git -C "$MAIN" status --porcelain 2>/dev/null | grep -c .)" || MPD=0
+  MPB="$(main_branch)"
   MPT="$(pair_tickets)"
   if [ -z "$MPT" ]; then
     echo "  main  idle"
@@ -846,7 +857,7 @@ cmd_status() {
       PTF="$(ticket_file "$PT")"
       PTS="(no ticket)"
       [ -n "$PTF" ] && PTS="$(front "$PTF" status)"
-      echo "  main  $DEVB  BACKLOG-$PT  $(pair_state "$PT")  dirty=$MPD  ticket=$PTS"
+      echo "  main  $MPB  BACKLOG-$PT  $(pair_state "$PT")  dirty=$MPD  ticket=$PTS"
     done
     MPN="$(echo "$MPT" | grep -c .)" || MPN=0
     [ "$MPN" -gt 1 ] \

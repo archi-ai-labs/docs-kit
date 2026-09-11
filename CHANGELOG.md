@@ -5,6 +5,120 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
+## [0.38.0] — 2026-09-11
+
+Five findings from [issue #2](https://github.com/archi-ai-labs/docs-kit/issues/2),
+filed against 0.32.0 from a repo running 235 issues over three parallel executors,
+plus three defects found reviewing 0.37.0 an hour after shipping it.
+
+### Fixed — the board named one tree two ways, four lines apart
+
+0.37.0 put `main` in the executors list and printed the **configured** dev branch
+in its branch column, while the `main tree:` block above read `symbolic-ref`. A
+tree parked elsewhere therefore got both of these on one board:
+
+```
+main tree:
+  branch    : sidequest ≠ dev_branch 'dev' · clean
+executors:
+  main  dev  BACKLOG-042  processing  dirty=0  ticket=in-progress
+```
+
+Both now go through `main_branch()`. The fix is a shared reader rather than a
+corrected copy, because the same function already carried a comment forbidding
+one tree from showing two different dirty counts — and the branch column broke
+that rule in the next paragraph.
+
+Two more from the same review. The closing-report template told the executor to
+read `declared=`/`actual=` from "the SIZE line of `crew done`"; `log_line` writes
+to `$STATE/log.tsv` and has zero stdout writes, so that line was never on screen
+— it now names the file and the grep. And EXECUTION §8 records, rather than
+leaves to be discovered, that `--want` is exactly what the `[name:place]` guard
+refuses, so the title nag is silent in the one case a nag would help most.
+
+### Fixed — a validator that checked nothing printed OK (issue #2 §4)
+
+`.` is a directory, so the only setup guard waved it through; `ROOT` then
+resolved to the repo's **parent**, no `NN_*` folder was found, and the run ended:
+
+```
+docs-validate: OK — 0 markdown file(s) in . pass all checks
+```
+
+A pass that checked nothing, wearing the face of a clean run — and reported from
+a repo where a full run takes over ten minutes, so `.` is exactly what someone
+reaches for. A target with no `INDEX.md` and no `NN_*` folder is now refused. The
+real tree and the default argument are asserted to still pass, because a guard
+that refused those would be the worse bug.
+
+### Fixed — concurrent feedback ids collide (issue #2 §5)
+
+Allocation was read-then-write with no claim, and because filenames differ by
+slug the "already exists" check never saw it. **Raced two allocations on a fresh
+scaffold: before the claim, two files carried ONE id; after it, two.** The
+reporter measured the same shape in the wild — two `FEEDBACK-002` files, 08:33
+and 10:11 the same day — in the tool people use to report bugs.
+
+`mkdir` is the primitive, the same one `crew new` uses; `flock` is not on the
+portability floor. The lock lives outside the repo so one left by a hard kill
+cannot be committed, and CI asserts none survives the run.
+
+### Changed — archiving now shortens the read model (issue #2 §3)
+
+`INDEX.md` listed archived documents with a path prefix, so the kit's own tidying
+operation bought the reader nothing: measured on a fresh scaffold, moving one
+Issue into `_archive/` left it at exactly 65 lines. Repos were writing their own
+trimmer to get what this should have given them. Archived documents are now
+counted, not listed — **70 → 67 lines after archiving five of six issues**.
+
+- The heading keeps `(+5 archived)` and the section names `20_issues/_archive/`.
+  A list that silently gets shorter reads as *nothing there* rather than *there,
+  elsewhere*, which is why the reporter's own trimmer leaves that line too.
+- **The trade is written into the docstring, not left to be found:** an archived
+  id can no longer be located by reading INDEX, so "every id appears here" now
+  covers live documents only. Archiving exists to take a document out of the
+  working set; the section names one bounded folder to glob instead.
+- The reporter measured 459 → 473 on their tree. **The growth did not reproduce
+  here; the failure to shrink did**, and that is the substance either way.
+
+### Added — a relative link that leads nowhere is reported, by shape (issue #2 §2)
+
+References resolved by frontmatter `id`; nothing ever checked that
+`](some/path.md)` leads anywhere. Reported from a repo with 1,011 internal links:
+44 broken, run green. They broke during archiving — seven `git mv`s, each adding
+a directory level — and `docs_close.sh --archive` is what moves them, so the kit
+created the breakage and could not see it.
+
+Check 7 is **soft**: NOTE by default, FAIL under `--strict`, the rule 0.28.0 set
+down — a wrong name is a defect, a wrong link is one broken edge.
+
+Resolution has four stages **because the message is the deliverable**. Measured
+after the check landed: 42 broken links in a real repo, and every sampled one is
+written from the repo root (`docs/22_decisions/X.md` from inside `docs/`). The
+file never moved, so "that file is now at …" would have sent the reader hunting
+for something exactly where they left it.
+
+| Stage | Shape | What it says |
+|---|---|---|
+| 0 | resolves from the repo root | names the replacement path, verified to resolve |
+| 1 | same basename elsewhere | the file moved, and where to |
+| 2 | same id prefix, different name | *did you mean* — this is what catches `DECISION-010-tape-lifecycle.md` against a real file ending `-tape-retention.md`, which basename matching alone cannot see |
+| 3 | nothing at all | says so plainly |
+
+Two other repos scan clean at **0**, and a fresh scaffold raises nothing. Both
+are asserted: a check that fires on everything is worse than the gap it closes.
+
+### Documented — a Decision with no Backlog item is the rule, not an oversight (issue #2 §1)
+
+`docs_close --archive` leaves an approved Decision in the hot set when no Backlog
+item cites it, and nothing said so — the only way to learn it was to find eight
+documents stuck and read the source. STANDARD §4 now states it, with the three
+shapes the reporter found behind their 8-of-9, and names the trap: **a lookup
+needs three routes** (the Decision id, its `proposal_ref`, and that Proposal's
+`issue_ref`), because a single-route check reads *recording shipped work* as
+*code shipped with no ticket*. Whether the first two shapes deserve a state of
+their own is left open rather than guessed.
+
 ## [0.37.0] — 2026-09-10
 
 ### Fixed — the title check asked where you are, never where the ticket belongs

@@ -161,6 +161,30 @@ if [ -z "$SLUG" ]; then
   exit 2
 fi
 
+# Id allocation is read-then-write, so two sessions that both read before either
+# writes pick the same number — and the filenames differ by slug, so the
+# `already exists` check below never sees the collision. Measured in a real repo:
+# two FEEDBACK-002 files written the same day by two executor sessions, 08:33 and
+# 10:11. It landed in the tool people use to REPORT bugs, which is why it earns a
+# lock rather than a warning.
+#
+# `mkdir` is the atomic primitive, the same one `crew new` uses for its claim: it
+# works on every filesystem in the portability floor, unlike flock. The lock lives
+# OUTSIDE the repo so one left behind by a hard kill can never turn up in
+# `git status` or, worse, get committed.
+FB_LOCK="${TMPDIR:-/tmp}/docs-kit-fb-$(printf '%s' "$ROOT" | tr -c 'A-Za-z0-9' '-').lock"
+fb_i=0
+while ! mkdir "$FB_LOCK" 2>/dev/null; do
+  fb_i=$((fb_i + 1))
+  if [ "$fb_i" -ge 15 ]; then
+    echo "FEEDBACK ERROR: another 'docs_feedback new' has held the id claim for 15s"
+    echo "  if none is running, remove $FB_LOCK"
+    exit 2
+  fi
+  sleep 1
+done
+trap 'rmdir "$FB_LOCK" 2>/dev/null || true' EXIT INT TERM
+
 # Next id = highest filed + 1. Read from `id:`, not from the filename: §3 says a
 # file name is never a reference key, and this script does not get an exception.
 NEXT=1
@@ -232,6 +256,11 @@ sed -e "s|{{FEEDBACK_DATE}}|$(strip_pipe "$TODAY")|g" \
     -e "s|{{PLATFORM}}|$(strip_pipe "$PLATFORM")|g" \
     -e "s|^id: FEEDBACK-NNN|id: $ID|" \
     "$TPL" > "$OUT" || { echo "FEEDBACK ERROR: could not write $OUT"; exit 2; }
+
+# The claim covers read-through-write and nothing further: released the moment the
+# file exists on disk, because everything after this point is only reporting.
+trap - EXIT INT TERM
+rmdir "$FB_LOCK" 2>/dev/null || true
 
 echo "Created docs/$FOLDER/$(basename "$OUT")"
 echo "  id        : $ID"

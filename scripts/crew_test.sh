@@ -896,6 +896,27 @@ else
   bad "main place: second fast-pair ticket (got: $(printf '%s' "$OUT" | sed -n '/executors:/,/^$/p'))"
 fi
 
+
+# THE BRANCH COLUMN IS THE BRANCH, and 0.37.0 got that wrong: it printed the
+# CONFIGURED dev branch instead of the one HEAD is actually on, so a main tree
+# parked elsewhere made the board contradict itself four lines apart — the
+# `main tree:` block reads symbolic-ref and said `sidequest ≠ dev_branch 'dev'`
+# while this row still said `dev`. One tree, two branch names, one board.
+( cd "$MP" && git checkout -q -b sidequest )
+OUT="$(mp)"
+if has "$OUT" "  main  sidequest  BACKLOG-043" && ! has "$OUT" "  main  dev  BACKLOG-043"; then
+  ok "main place: the row names the branch HEAD is on, not the configured one"
+else
+  bad "main place: branch column off dev (got: $(printf '%s' "$OUT" | sed -n '/executors:/,/^$/p'))"
+fi
+# ...and it must agree with the block above it, which is the whole point.
+if has "$OUT" "branch    : sidequest" && has "$OUT" "  main  sidequest  "; then
+  ok "main place: both places on the board name the same branch"
+else
+  bad "main place: the two branch reports disagree (got: $OUT)"
+fi
+( cd "$MP" && git checkout -q dev )
+
 # ---------------------------------------------------------------- name knows the level
 # `crew name executor <nnn>` read only "which tree am I in", never "which tree
 # should this ticket be in". Measured before the fix: from the main tree, a
