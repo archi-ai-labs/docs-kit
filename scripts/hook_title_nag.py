@@ -4,11 +4,11 @@ WHY THIS EXISTS:
     The session title is the ONLY place the crew model is visible from outside a
     session — `crew status` derives every state from git, so the board is right
     whatever the title says, but the user's session list is not. An executor is
-    born `processing` and moves to `finishing` the moment it writes the trailer
-    (EXECUTION §3), and step 4b of the executor hat says to re-run
-    `scripts/crew name executor` right there. Reported in practice: that step is
-    the one most often skipped, so sessions end sitting at `processing` and the
-    list reads as work still in flight.
+    born `processing`, moves to `finishing` the moment it writes the trailer, and
+    reaches `finished` once the close-out lands (EXECUTION §3); steps 4b and 5b of
+    the executor hat say to re-run `scripts/crew name executor` at each point.
+    Reported in practice: those are the steps most often skipped, so sessions end
+    sitting at an earlier word and the list reads as work still in flight.
 
 WHY IT SHELLS OUT INSTEAD OF COMPUTING THE TITLE:
     The grammar is derived from git in exactly one place (`crew name`), and the
@@ -72,8 +72,10 @@ def main():
 
     argv = ["bash", crew, "name", role.group(1)]
     # An executor session names its ticket; every other hat takes no number. A
-    # wrong `processing`/`finishing` half still leaves the b<nnn> readable, which
-    # is the part this needs.
+    # wrong state word still leaves the b<nnn> readable, which is the part this
+    # needs — and since 0.39.0 it is load-bearing rather than a convenience: once
+    # `crew done` has parked the tree there is no branch left to read the ticket
+    # from, so this number is the only way `crew name` can still say `finished`.
     tick = TICKET_RE.search(got)
     if tick:
         argv.append(tick.group(1))

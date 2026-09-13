@@ -15,8 +15,10 @@ cây nào; rồi `scripts/crew name executor` ngay sau đó. Xanh thì làm ti�
 
 Title có ba phần lệnh tự đọc từ git, bạn không truyền gì cả:
 `<repo> · e1 · b157 · processing · crew/executor` — cây bạn ngồi, nhánh bạn mở,
-và trạng thái. Phiên sinh ra ở `processing`, và **đổi sang `finishing` ngay khi
-bạn viết commit mang trailer** (bước 4), nên chạy lại lệnh này một lần nữa ở đó. Trong app phiên tự đổi title của chính nó được, ngoài
+và trạng thái. Phiên sinh ra ở `processing`, **đổi sang `finishing` ngay khi bạn
+viết commit mang trailer** (bước 4), rồi **sang `finished` khi `crew done` đã
+gộp xong và đóng sổ phiếu** (bước 5). Cứ mỗi lần trạng thái đổi thì chạy lại
+lệnh này. Trong app phiên tự đổi title của chính nó được, ngoài
 terminal thì đưa dòng `/rename` mà lệnh in ra cho người dùng.
 
 Nếu bạn được mở từ một task chứ không do người dùng gõ `/executor`: bạn không
@@ -34,7 +36,9 @@ cái mũ do người giao chứ không phải thứ model tự đội. Lấy n�
    **Phiếu khai `execution: fast-pair` thì bỏ qua bước 1 này.** Lệnh sẽ từ chối
    và nói lý do: bạn sửa thẳng trên nhánh dev ở cây chính, commit ngay trong
    cùng lượt, không dựng cây và không mở nhánh. Bước 5 cũng bỏ — phiếu fast-pair
-   đóng bằng trailer, `crew done` không tham gia.
+   đóng bằng trailer, `crew done` không tham gia. Trailer của nó rơi thẳng lên
+   nhánh dev nên title chỉ sang `finished` khi phiếu đã được đóng sổ, tức là
+   `status: done` kèm dòng audit.
 2. Đọc phiếu và brief của nó (`briefs/` đã nằm sẵn trong executor). Làm **trọn phiếu**: code,
    test, docs, dòng audit — phần nào của phiếu cũng là của bạn, không chuyển
    tay cho vai khác.
@@ -59,6 +63,12 @@ cái mũ do người giao chứ không phải thứ model tự đội. Lấy n�
    ruột lệnh. **Không bao giờ gõ tay sáu lệnh đó** (`.claude/crew/worktrees.md`).
    Check 0 chặn ngay từ đầu nếu cây của bạn còn file chưa commit, vì thứ được
    gộp phải đúng bằng thứ bạn đang có.
+
+5b. `scripts/crew name executor $ARGUMENTS` lần cuối. Lần này bạn phải truyền
+   số phiếu, vì `crew done` đã park cây nên nhánh không còn ở đó để lệnh tự đọc
+   ra. Trạng thái bây giờ là `finished`, nghĩa là phiếu không còn việc gì và
+   bạn đóng phiên được. Nếu lệnh báo `[name:unclosed]` thì phần gộp đã xong
+   nhưng phiếu chưa đóng sổ, vì vậy hãy chạy `/docs-kit:docs-sync` rồi thử lại.
 
 6. **Báo cáo cuối** theo mẫu dưới đây, đúng năm mục và đúng thứ tự ấy. Đây là
    thứ duy nhất người giao việc đọc được mà không phải mở repo.

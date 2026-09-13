@@ -33,10 +33,17 @@ Quote the script's output, then read it back in plain language:
   actually be refused, and it names the checks by the same numbers `crew done`
   prints. Read the branch name yourself — the board cannot know whether sitting
   on another branch was deliberate.
-- **executors** — three states, all read off git: `idle` (detached, can take a
-  ticket), `processing` (holds the ticket's branch), `finishing` (a commit on it
-  already carries the `Closes:` trailer, so the work is declared done and only
-  the merge is missing — that one has an action, `crew done`). An `orphan` flag
+- **executors** — five states, all read off git: `idle` (detached and clean, can
+  take a ticket), `unclean` (detached but holding uncommitted files, so it has
+  dropped out of the pool until someone clears it), `processing` (holds the
+  ticket's branch), `finishing` (a commit already carries the `Closes:` trailer,
+  so the work is declared done and the close-out is not finished — the action is
+  `crew done`, or `/docs-kit:docs-sync` when only the ticket's own status is
+  still owed), and `finished` (that commit is reachable from the dev branch and
+  the ticket reads `status: done`, so nothing is left — park the tree and close
+  the session). A parked tree reads `idle` here while its session is titled
+  `finished`, which is not a contradiction: this row is about the tree, the
+  title is about the session. An `orphan` flag
   is steward work: an executor still holding a branch whose ticket is `done` or
   missing should be parked. A `note:` about an in-progress ticket no executor
   holds means someone closed a laptop mid-ticket. A `pre-pool worktree` note is

@@ -93,7 +93,7 @@ Tên repo đứng trước để danh sách phiên tự gom theo dự án. Ba ph
 đọc từ git chứ không gõ tay: tên cây cho biết executor nào, nhánh cho biết phiếu
 nào, trailer cho biết trạng thái. Ô đầu là **chỗ session đang ngồi**: `e<k>` khi
 nó ở một cây trong pool, `main` khi đó là phiếu fast-pair làm thẳng ở cây chính.
-Mỗi phiếu vẫn một phiên riêng, sinh ra ở `processing` và kết thúc ở `finishing`.
+Mỗi phiếu vẫn một phiên riêng, sinh ra ở `processing` và kết thúc ở `finished`.
 Executor rảnh thì không có phiên nào để đặt tên, và một phiên executor không có
 số phiếu cũng vậy, nên `crew name` báo lỗi thay vì bịa ra một cái title.
 

@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "docs-kit",
   "displayName": "Docs Kit",
-  "version": "0.38.0",
+  "version": "0.39.0",
   "description": "Two layers in one plugin. Docs: scaffold a three-layer structure (docs-init), reconcile it with what a session actually did (docs-sync), validate it deterministically (docs-check), render an HTML read model (docs-render), and turn settled decisions into a delegation prompt (brief). Crew: run tickets in parallel over a fixed pool of executor worktrees — one ticket, one branch, one named session — and close them out from the commit trailer (crew-init, crew-status). Five warn-only hooks watch Architecture edits, undocumented code changes, resource locks, unexplained questions and a session title that no longer matches git.",
   "author": {
     "name": "archi-ai-labs",

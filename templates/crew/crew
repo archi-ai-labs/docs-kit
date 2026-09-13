@@ -179,11 +179,34 @@ has_closer() {
   [ "${HC_C:-0}" -gt 0 ]
 }
 
-# exec_state <tree> <branch> → processing | finishing. Derived, never stored,
-# and computed in ONE place so the board and the session title can never
+# ticket_done <nnn> → true when the Backlog doc reads `status: done`. The merge
+# is only half of a close-out: STANDARD §6.1 wants the status flipped and an
+# audit line citing a sha, and `crew done` writes that half through docs_close
+# AFTER the merge — a step skipped on every machine where docs_close cannot be
+# reached (ISSUE-014). The two halves are therefore read separately, so the
+# state can say which one is still missing. A missing file or a missing key
+# reads false: a repo without the docs layer must never have work reported as
+# closed on the strength of a guess.
+ticket_done() {
+  TD_F="$(ticket_file "$1")"
+  [ -n "$TD_F" ] || return 1
+  [ "$(front "$TD_F" status)" = "done" ]
+}
+
+# closed_state <nnn> → finishing | finished, for a ticket whose closer is ALREADY
+# on the dev branch. ONE place, because the executor path and the fast-pair path
+# ask that same question and must never answer it two different ways.
+closed_state() { if ticket_done "$1"; then echo finished; else echo finishing; fi; }
+
+# exec_state <tree> <branch> → processing | finishing | finished. Derived, never
+# stored, and computed in ONE place so the board and the session title can never
 # disagree. Only states something ACTS on get a word: `finishing` means the work
-# declared itself done and only the merge is missing (action: crew done), which
-# is the 7h18 of unmerged work the origin repo measured (EXECUTION §5).
+# declared itself done and the close-out is not complete (action: crew done),
+# which is the 7h18 of unmerged work the origin repo measured (EXECUTION §5);
+# `finished` means nothing is left on the ticket at all (action: close the
+# session, park the tree). `finished` was added in 0.39.0 because without it a
+# session whose work had already landed read exactly like one still waiting for
+# its merge — which is the distinction `finishing` exists to make.
 exec_state() {
   # A trailer on an EARLIER commit does not mean the work stopped. Measured
   # 2026-09-09: with the trailer written and one file still uncommitted, the
@@ -191,12 +214,32 @@ exec_state() {
   # and `crew done` then ran to completion: the ticket flipped to `status: done`
   # with an audit line citing a sha while that file never landed. The
   # uncommitted count is therefore part of the state, not a column beside it.
+  # This test stays FIRST even after the merge: an uncommitted file in an
+  # executor tree is the one thing that must never go invisible.
   if [ "$(own_dirty "$1")" -gt 0 ]; then echo processing; return; fi
-  if has_closer "$1" "${2##*/b}" "$(cfg dev_branch main)..$2"; then echo finishing; else echo processing; fi
+  ES_N="${2##*/b}"
+  ES_DEV="$(cfg dev_branch main)"
+  # WHERE the closer sits is what decides, and the dev branch is asked FIRST.
+  # Measured 2026-09-12, before this order existed: the only test was the range
+  # `$DEV..$branch`, which a fast-forward merge empties — so the instant the
+  # work landed, the board and the title both fell back from `finishing` to
+  # `processing`, a word that reads "a session is on that ticket" for work
+  # already sitting on the dev branch.
+  # Stated ceiling, not papered over: the dev branch is read 50 commits deep, the
+  # same window `pair_state` has always used. Step 5b of the hat runs right after
+  # `crew done`, when the closer is the tip, so the window bites only a session
+  # retitled 50+ commits later — and there the board's `orphan` flag is what
+  # names the tree instead.
+  if has_closer "$MAIN" "$ES_N" -50 "$ES_DEV"; then closed_state "$ES_N"; return; fi
+  if has_closer "$1" "$ES_N" "$ES_DEV..$2"; then echo finishing; else echo processing; fi
 }
 
-# The same two states for a fast-pair session, which has no branch of its own:
-# its trailer lands straight on the dev branch, so that is where to look.
+# The same three states for a fast-pair session, which has no branch of its own:
+# its trailer lands straight on the dev branch, so that is where to look. Note
+# that `finished` is reachable here only from `crew name` — `pair_tickets` below
+# lists in-progress tickets, so a closed one has already dropped off the board,
+# which is correct: the row is about a tree still carrying work, the title is
+# about a session still open.
 # NOTE the asymmetry, and do not "fix" it into symmetry: the uncommitted-work
 # rule above holds because an executor tree belongs to exactly ONE ticket, so
 # anything uncommitted in it is that ticket's. The main tree is shared, and
@@ -227,7 +270,7 @@ pair_tickets() {
 }
 
 pair_state() {
-  if has_closer "$MAIN" "$1" -50 "$(cfg dev_branch main)"; then echo finishing; else echo processing; fi
+  if has_closer "$MAIN" "$1" -50 "$(cfg dev_branch main)"; then closed_state "$1"; else echo processing; fi
 }
 
 # A checkout is not a working environment: dep dirs, nested harness repos and
@@ -834,8 +877,12 @@ cmd_status() {
   # done AND the tree owns nothing uncommitted. Only the states something ACTS on
   # are named — `finishing` earns its word because the origin repo measured
   # finished work sitting unmerged for 7h18 with no board saying so (EXECUTION §6),
-  # `unclean` because such a tree silently leaves the pool, while a "just assigned,
-  # not started yet" state would only be a window nobody reacts to.
+  # `finished` because a landed ticket otherwise read as one still waiting for its
+  # merge, `unclean` because such a tree silently leaves the pool, while a "just
+  # assigned, not started yet" state would only be a window nobody reacts to.
+  # A parked tree reads `idle` on this board while its session is titled
+  # `finished`, and that is not a contradiction: the row is about the tree, which
+  # is free, and the title is about the session, which still has a human in it.
   DEVB="$(cfg dev_branch main)"
   echo "executors:"
   # main is a slot like any other: it is where every fast-pair ticket runs
@@ -1269,7 +1316,7 @@ cmd_name() {
   done
   # Three grammars, one place, project first so any session list sorts by repo.
   # A session is still ONE PER TICKET — only the tree is reused — so an executor
-  # session is born processing and ends finishing, and there is deliberately no
+  # session is born processing and ends finished, and there is deliberately no
   # idle form: an idle executor has no session to name. All three parts are read
   # from git rather than typed (tree → e<k>, branch → b<nnn>, trailer → state),
   # so the cwd beats any ticket argument. A bare b157 still works for anyone
@@ -1282,7 +1329,33 @@ cmd_name() {
     HB="$(git -C "$HERE" symbolic-ref --short HEAD 2>/dev/null || true)"
     case "$HB" in
       work/b*) WANT="$REPO · $SUF · ${HB#work/} · $(exec_state "$HERE" "$HB") · crew/$ROLE" ;;
-      *) die "$SUF holds no ticket, so there is no executor session to name — take one first: scripts/crew new <nnn>" ;;
+      *)
+        # A PARKED executor holds no branch, so the branch can no longer name the
+        # ticket — but the session is still open, and its work has landed. This is
+        # the one place the ticket argument beats the cwd, and it is deliberately
+        # narrow: only a ticket whose closer is on the dev branch AND whose doc
+        # reads `status: done` is named here, so a tree that is merely free still
+        # refuses. Measured 2026-09-12, before this branch existed: `crew done`
+        # parked the tree, this command exited 1, and the Stop hook — which is
+        # silent on any non-zero exit — left the session sitting at `finishing`
+        # for the rest of its life.
+        PKN=""
+        [ -n "$TICKET" ] && PKN="$(norm "$TICKET")"
+        if [ -n "$PKN" ] && has_closer "$MAIN" "$PKN" -50 "$(cfg dev_branch main)"; then
+          if ticket_done "$PKN"; then
+            WANT="$REPO · $SUF · b$PKN · $(closed_state "$PKN") · crew/$ROLE"
+          else
+            # Merged, parked, never closed out. There IS no title for this: the
+            # session's own `finishing` is still the honest word, because a
+            # close-out is missing and somebody has to write it. Say which half
+            # is missing instead of repeating the take-a-ticket line.
+            note "[name:unclosed] BACKLOG-$PKN is merged but its doc is not closed out"
+            die "close it out first — /docs-kit:docs-sync, or docs_close.sh --apply (STANDARD §6.1); this session stays $(closed_state "$PKN") until then"
+          fi
+        else
+          die "$SUF holds no ticket, so there is no executor session to name — take one first: scripts/crew new <nnn>"
+        fi
+        ;;
     esac
   elif [ "$ROLE" = "executor" ]; then
     # Main tree: this is a fast-pair session (EXECUTION §2). It gets a session

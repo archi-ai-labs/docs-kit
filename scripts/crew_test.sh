@@ -568,24 +568,27 @@ else
 fi
 
 # All three parts come from git — no argument is passed, so a pass proves the
-# title was derived. Born processing:
-( cd "$E1" && git switch -q -c work/b042 2>/dev/null )
+# title was derived. A FRESH number, not 042: the block above put 042's closer on
+# the dev branch on purpose, and since 0.39.0 a closer already on dev is read as
+# work that landed, so no session for that number can be born. One ticket lives
+# in one place, which is what a real repo does anyway.
+( cd "$E1" && git switch -q -c work/b045 2>/dev/null )
 en_title() { printf '{"type":"custom-title","customTitle":"%s"}\n' "$1" > "$PROJ/s1.jsonl"; }
-en_title "$RNAME · e1 · b042 · processing · crew/executor"
+en_title "$RNAME · e1 · b045 · processing · crew/executor"
 OUT="$( (cd "$E1" && CREW_SESSIONS_DIR="$SESS" CREW_PROJECTS_DIR="$TMP/projects" scripts/crew name executor) 2>&1 )" && RC=0 || RC=$?
 [ "$RC" -eq 0 ] && ok "name: a new executor session is born processing" \
   || bad "name: processing grammar (rc=$RC, got: $OUT)"
 
 # ...and the SAME title goes red once the trailer lands, naming the new state.
 ( cd "$E1" && echo z > z.txt && git add z.txt \
-    && git -c user.email=t@t -c user.name=t commit -qm "done" -m "Closes: BACKLOG-042" )
+    && git -c user.email=t@t -c user.name=t commit -qm "done" -m "Closes: BACKLOG-045" )
 OUT="$( (cd "$E1" && CREW_SESSIONS_DIR="$SESS" CREW_PROJECTS_DIR="$TMP/projects" scripts/crew name executor) 2>&1 )" && RC=0 || RC=$?
-if [ "$RC" -ne 0 ] && has "$OUT" "b042 · finishing"; then
+if [ "$RC" -ne 0 ] && has "$OUT" "b045 · finishing"; then
   ok "name: the trailer flips the title to finishing, and the old one is red"
 else
   bad "name: finishing grammar (rc=$RC, got: $OUT)"
 fi
-en_title "$RNAME · e1 · b042 · finishing · crew/executor"
+en_title "$RNAME · e1 · b045 · finishing · crew/executor"
 OUT="$( (cd "$E1" && CREW_SESSIONS_DIR="$SESS" CREW_PROJECTS_DIR="$TMP/projects" scripts/crew name executor) 2>&1 )" && RC=0 || RC=$?
 [ "$RC" -eq 0 ] && ok "name: the retitled session matches again" \
   || bad "name: finishing match (rc=$RC, got: $OUT)"
@@ -1270,6 +1273,19 @@ NOC="$TMP/nocrew"; mkdir -p "$NOC"
   && ok "title nag: a repo without scripts/crew is silent" \
   || bad "title nag: fired in a repo that does not run crew"
 
+# 0.39.0: the same hook has to catch the OTHER end of the lifecycle. Once the
+# ticket is closed out, a session still titled `finishing` is naming work that
+# has nothing left to do — and for a fast-pair ticket the trailer never moves,
+# so the close-out is the only thing that can tell the two apart.
+mkticket "$NG" 043 done fast-pair
+mktitle "titlenag · main · b043 · finishing · crew/executor" landed
+OUT="$(run_nag "$NG" "$NGT/landed.jsonl")"
+if has "$OUT" "b043 · finished · crew/executor"; then
+  ok "title nag: a closed-out ticket moves the title from finishing to finished"
+else
+  bad "title nag: finished not caught (got: $OUT)"
+fi
+
 # FAIL OPEN, and this is the case the guard added earlier makes reachable: a
 # `full` ticket named from the main tree makes `crew name --want` refuse. The
 # hook must go quiet, not relay a refusal it cannot act on.
@@ -1279,6 +1295,94 @@ mktitle "titlenag · main · b077 · processing · crew/executor" refused
   && ok "title nag: a title crew name refuses to compute is silent, not relayed" \
   || bad "title nag: relayed a refusal (got: $(run_nag "$NG" "$NGT/refused.jsonl"))"
 
+
+# ---------------------------------------------------------------- finished (0.39.0)
+# Before this state existed a session whose work had LANDED read exactly like one
+# still waiting for its merge — the distinction `finishing` was invented to make.
+# Measured 2026-09-12 on a fixture like this one: after the merge the board and
+# the title fell BACK from `finishing` to `processing`, because the only test was
+# the range `main..work/b<nnn>` and a fast-forward merge empties it; after the
+# park `crew name` exited 1, and the Stop hook — silent on any non-zero exit —
+# left the session at `finishing` for the rest of its life. Both ends are walked
+# here, on two tickets: 001 straight through the real `crew done`, 002 stopped in
+# the gap between the merge and the close-out.
+FN="$TMP/finished"
+FNR="$FN/repo"
+mkdir -p "$FNR/scripts" "$FNR/docs/92_audit"
+(
+  cd "$FNR"
+  git init -q && git checkout -q -b main
+  git config user.email t@t && git config user.name t
+  printf '# audit log\n' > docs/92_audit/LOG.md
+  printf '{"owns": [], "crew": {"dev_branch": "main", "copy": [], "link": []}}\n' > .docs-kit.json
+  cp "$KIT/templates/crew/crew" scripts/crew && chmod +x scripts/crew
+  git add -A && git commit -qm init >/dev/null
+)
+mkticket "$FNR" 001 open -
+mkticket "$FNR" 002 open -
+fst() { # fst <e<k>> → the state column of that executor's row, empty when idle
+  (cd "$FNR" && scripts/crew status) 2>&1 | awk -v e="$1" '$1 == e { print $4; exit }'
+}
+fwant() { # fwant <e<k>> <nnn> → the title crew name computes inside that tree
+  (cd "$FN/repo-$1" && "$FNR/scripts/crew" name executor "$2" --want) 2>&1
+}
+( cd "$FNR" && scripts/crew executor add >/dev/null 2>&1 && scripts/crew new 1 >/dev/null 2>&1 )
+( cd "$FN/repo-e1" && echo a > a.txt && git add a.txt \
+    && git -c user.email=t@t -c user.name=t commit -qm "work" -m "Closes: BACKLOG-001" )
+[ "$(fst e1)" = "finishing" ] && ok "finished: the trailer alone is still finishing" \
+  || bad "finished: expected finishing before the merge, got '$(fst e1)'"
+
+OUT="$( (cd "$FNR" && CREW_DOCS_CLOSE="$KIT/scripts/docs_close.sh" scripts/crew done 1) 2>&1 )" && RC=0 || RC=$?
+[ "$RC" -eq 0 ] || bad "finished: crew done 1 failed (out: $OUT)"
+grep -q "^status: done" "$FNR/docs/23_backlog/t001.md" \
+  && ok "finished: crew done writes the close-out half the state reads" \
+  || bad "finished: ticket 001 was not closed out (done said: $OUT)"
+# The tree is free while the SESSION is finished. Two different subjects, and the
+# board must keep answering about the tree.
+[ -z "$(fst e1)" ] && ok "finished: the parked tree still reads idle on the board" \
+  || bad "finished: expected an idle row, got '$(fst e1)'"
+OUT="$(fwant e1 1)" && RC=0 || RC=$?
+if [ "$RC" -eq 0 ] && has "$OUT" "e1 · b001 · finished · crew/executor"; then
+  ok "finished: a parked executor whose ticket is closed out is named, and the word is finished"
+else
+  bad "finished: parked title (rc=$RC, got: $OUT)"
+fi
+
+# KNOWN-BAD, and this is the regression itself: the closer is on the dev branch,
+# so the work HAS landed, but the close-out never ran. It must read `finishing`,
+# whose action is "finish closing it out", and must never fall back to
+# `processing`, which claims a session is still editing.
+( cd "$FNR" && scripts/crew new 2 >/dev/null 2>&1 )
+( cd "$FN/repo-e1" && echo b > b.txt && git add b.txt \
+    && git -c user.email=t@t -c user.name=t commit -qm "work" -m "Closes: BACKLOG-002" )
+( cd "$FNR" && git merge -q --ff-only work/b002 )
+[ "$(fst e1)" = "finishing" ] \
+  && ok "finished: a merge with no close-out holds at finishing instead of falling back" \
+  || bad "finished: merged-but-unclosed read '$(fst e1)' — the 0.39.0 regression is back"
+OUT="$(fwant e1 2)" && RC=0 || RC=$?
+if [ "$RC" -eq 0 ] && has "$OUT" "b002 · finishing"; then
+  ok "finished: the title agrees with the board inside that gap"
+else
+  bad "finished: gap title (rc=$RC, got: $OUT)"
+fi
+# Parked inside the gap there is NO title, because `finishing` is still the
+# honest word and somebody has to write the close-out. The refusal must name
+# that missing half rather than repeat the take-a-ticket line.
+git -C "$FN/repo-e1" switch -q --detach main
+OUT="$(fwant e1 2)" && RC=0 || RC=$?
+if [ "$RC" -ne 0 ] && has "$OUT" "[name:unclosed]"; then
+  ok "finished: a parked ticket nobody closed out is red, and names the half that is missing"
+else
+  bad "finished: unclosed refusal (rc=$RC, got: $OUT)"
+fi
+# A genuinely free tree still refuses the old way, which is what keeps the new
+# branch narrow: a ticket argument alone must not conjure a title.
+OUT="$(fwant e1 6)" && RC=0 || RC=$?
+if [ "$RC" -ne 0 ] && has "$OUT" "holds no ticket"; then
+  ok "finished: a free tree is still refused, so the ticket argument buys nothing on its own"
+else
+  bad "finished: free-tree refusal (rc=$RC, got: $OUT)"
+fi
 
 # ---------------------------------------------------------------- summary
 echo ""

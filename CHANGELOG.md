@@ -5,6 +5,65 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
+## [0.39.0] — 2026-09-12
+
+One word, because the board could say "the merge is missing" and could not say
+"nothing is missing" — and because on the way to the merge it said the opposite
+of the truth.
+
+### Fixed — the state fell BACK to `processing` the moment the work landed
+
+`exec_state` looked for the `Closes:` trailer in exactly one place, the range
+`<dev>..work/b<nnn>`. A fast-forward merge empties that range, so the instant
+`crew done` landed the work, the board and the session title both reverted:
+
+```
+before the merge   e1  work/b001  BACKLOG-001  finishing  dirty=0  ticket=in-progress
+after the merge    e1  work/b001  BACKLOG-001  processing dirty=0  ticket=done
+```
+
+`processing` reads "a session is on that ticket". This is the same family as the
+`finishing dirty=1` defect of 0.32.0 — one tree, two sources, contradicting each
+other — and it is now asked in the right order: where the closer **sits** decides
+the word, and the dev branch is asked first.
+
+### Added — `finished`, so a landed session stops reading like an unmerged one
+
+`finishing` exists because the origin repo measured finished work sitting
+unmerged for 7h18 with no board saying so. It was carrying a second job it could
+not do: once `crew done` had merged, closed out and parked, nothing moved the
+title off `finishing`, so a session list could not separate *still needs the
+merge* from *merged an hour ago* — the one distinction the word was invented to
+make. Worse, the title could not even be recomputed: a parked tree holds no
+branch, `crew name` exited 1, and the Stop hook is silent on any non-zero exit.
+
+| | Before | After |
+|---|---|---|
+| `crew status`, tree still held | `processing` | `finishing`, then `finished` once closed out |
+| `crew name`, tree parked | exits 1: "holds no ticket" | `<repo> · e1 · b001 · finished · crew/executor` |
+| title nag on a landed ticket | silent | prints the `/rename` line |
+
+`finished` takes **both halves of a close-out** (STANDARD §6.1): the closer
+reachable from the dev branch **and** the ticket reading `status: done`. The gap
+between them is real — `crew done` only `note`s when docs_close cannot be
+reached, which is every plain terminal with no `CLAUDE_PLUGIN_ROOT` (ISSUE-014)
+— and it keeps reading `finishing`, correctly, because something is still owed.
+Only the action changes there, and it is now said out loud instead of guessed at:
+a parked tree cannot re-run `crew done`, so `crew name` answers `[name:unclosed]`
+and names `/docs-kit:docs-sync`. A fifth word for that gap was considered and
+dropped — the action differs, the reading does not.
+
+Two invariants deliberately kept. The uncommitted-work test stays **first**, so a
+merge never makes somebody's unlanded file invisible. And the ticket argument
+buys nothing on its own: only a ticket whose closer is on dev and whose doc reads
+`done` is named in a parked tree, so a free executor still refuses, which is what
+keeps one session per ticket true.
+
+`scripts/crew_test.sh` is at **139 checks**, nine of them new. All five that
+assert new behaviour were run against 0.38.0's script first and are red there,
+each for its own reason — including the `processing` fallback, quoted in the
+failure as "the 0.39.0 regression is back".
+
 ## [0.38.0] — 2026-09-11
 
 Five findings from [issue #2](https://github.com/archi-ai-labs/docs-kit/issues/2),

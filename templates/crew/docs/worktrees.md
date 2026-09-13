@@ -99,7 +99,8 @@ những file chưa commit trong cây:
 | `idle` | HEAD tách rời **và** cây sạch | sẵn sàng nhận phiếu |
 | `unclean` | HEAD tách rời nhưng còn file chưa commit | không giữ phiếu nào, nhưng chưa rảnh |
 | `processing` | đang giữ `work/b<nnn>` | phiếu đang mở trong executor đó |
-| `finishing` | commit trên nhánh đã mang `Closes: BACKLOG-<nnn>` **và** cây sạch | việc khai là xong, chỉ còn thiếu lượt gộp |
+| `finishing` | commit đã mang `Closes: BACKLOG-<nnn>`, cây sạch, và phiếu chưa đóng sổ xong | việc khai là xong nhưng chưa về đích |
+| `finished` | commit ấy đã nằm trên nhánh dev **và** phiếu đọc `status: done` | phiếu không còn việc gì |
 
 Hai chữ **và** trong bảng là kết quả đo ngày 2026-09-09, từ cùng một nguyên
 nhân là đọc cây chỉ qua nhánh. Khi trailer đã viết mà còn một file chưa commit,
@@ -113,16 +114,35 @@ Vì vậy một cây `unclean` **rơi khỏi pool**: `crew new` dựng thêm exe
 không nhận nó, và bạn phải commit hoặc xoá những file được gọi tên thì cây mới
 quay lại `idle`.
 
-Phiên `fast-pair` đọc hai trạng thái `processing` và `finishing`, chỉ khác chỗ
-tìm: nó không có nhánh riêng nên trailer được tìm thẳng trên nhánh dev. Luật
-"cây sạch" **không** áp cho nó, vì cây chính là của chung và chính `crew done`
-để lại thay đổi chưa commit ở đó sau mỗi lượt.
+Phiên `fast-pair` đọc cùng ba trạng thái `processing`, `finishing` và
+`finished`, chỉ khác chỗ tìm: nó không có nhánh riêng nên trailer được tìm
+thẳng trên nhánh dev. Luật "cây sạch" **không** áp cho nó, vì cây chính là của
+chung và chính `crew done` để lại thay đổi chưa commit ở đó sau mỗi lượt.
 
 Chỉ trạng thái nào có người phản ứng lại mới được đặt tên. `finishing` xứng đáng
 vì repo gốc đo được việc xong nằm chờ **7h18** mà không bảng nào nói ra, và phản
-ứng đúng là chạy `crew done`. Một trạng thái thứ tư kiểu "đã nhận, chưa bắt đầu"
+ứng đúng là chạy `crew done`. Một trạng thái kiểu "đã nhận, chưa bắt đầu"
 đã được cân nhắc rồi bỏ, vì nó là một khoảng thời gian chứ không phải một điều
 kiện, và không ai hành xử khác đi khi gặp nó.
+
+`finished` được thêm ở 0.39.0 theo đúng luật ấy. Đo ngày 2026-09-12: ngay khi
+`crew done` gộp fast-forward, bảng và title cùng **lùi** từ `finishing` về
+`processing`, vì phép thử duy nhất lúc đó là khoảng `<dev>..work/b<nnn>` mà một
+lần fast-forward làm rỗng. Sau đó lệnh park cây, `crew name` thoát mã 1 vì cây
+đã không còn nhánh, và hook nhắc title — vốn im khi lệnh thoát khác 0 — để phiên
+đứng mãi ở `finishing`. Một danh sách phiên toàn `finishing` thì không cho biết
+dòng nào còn thiếu lượt gộp, tức là mất đúng cái phân biệt mà `finishing` sinh ra
+để làm. Phản ứng của `finished` là đóng phiên và park cây, không trùng với phản
+ứng của bất kỳ trạng thái nào khác.
+
+Nó đòi **đủ cả hai nửa**, vì đóng sổ một phiếu là đủ cả hai: commit mang
+trailer phải nằm trên nhánh dev, và phiếu phải đọc `status: done` kèm dòng
+audit. `crew done` viết hai nửa ấy theo thứ tự đó, và nếu không gọi được
+docs_close thì nó chỉ in một dòng nhắc. Khoảng giữa hai nửa vì vậy có thật,
+và nó vẫn đọc là `finishing` — đúng, vì phiếu còn nợ một việc. Chỉ có phản ứng
+là đổi: cây đã park rồi thì không chạy lại `crew done` được, nên nửa còn thiếu
+do `/docs-kit:docs-sync` viết, và `crew name` nói thẳng điều đó qua
+`[name:unclosed]`.
 
 Hai giới hạn ghi thẳng ra. Số `dirty=` không đếm phần crew tự đắp vào, vì có thứ
 không thể gitignore được (luật `thư-mục/` không khớp một symlink) nên đếm vào là

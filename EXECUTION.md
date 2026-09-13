@@ -82,7 +82,7 @@ intake: **no ticket, no branch.**
 
 **One ticket = one branch = one session, carried to `done`.** 0.31.0 changed
 exactly one thing about that: the *tree* is no longer per ticket. A session is
-still born for a ticket, titled `processing`, and ends `finishing`; what is
+still born for a ticket, titled `processing`, and ends `finished`; what is
 reused is the checkout underneath it. The measurement that bought this rule:
 one owner request ("fix the demo top-up") cut across 4 technical roles took
 **15h32** wall-clock of which **~87 minutes** had commits, and the owner was
@@ -330,7 +330,8 @@ nothing can go stale and nothing has to be written down:
 | `idle` | detached HEAD **and** nothing uncommitted | free; no ticket and therefore no session |
 | `unclean` | detached HEAD but files uncommitted | holds no ticket, yet not free — clear it |
 | `processing` | holds `work/b<nnn>`, or holds it with files uncommitted | a session is on that ticket |
-| `finishing` | a commit on the branch carries `Closes: BACKLOG-<nnn>` **and** the tree is clean | declared complete, not yet landed |
+| `finishing` | a commit carries `Closes: BACKLOG-<nnn>`, the tree is clean, and the close-out is not finished | declared complete, not landed yet |
+| `finished` | that commit is reachable from the dev branch **and** the ticket reads `status: done` | nothing is left on this ticket |
 
 **Uncommitted work is part of the state, not a column beside it (0.32.0).** Both
 rows above that say "and" were measured on 2026-09-09, in one repo, from one
@@ -359,14 +360,44 @@ main tree has its own guard instead, check 2 in §6.
 A fast-pair session reads the same two states, only from a different place: it
 has no branch of its own, so the trailer is looked for on the dev branch itself.
 
-The last two are also the session's own two states, and the title carries
-whichever holds — the session is born `processing` and ends `finishing`. Only
+The last three are also the session's own states, and the title carries
+whichever holds — the session is born `processing` and ends `finished`. Only
 states something **acts on** get a word. `finishing` earns its own because
 the origin repo measured finished work sitting unmerged for **7h18** with no
-board saying so, and the action is "run `crew done`". A fourth state for "taken
+board saying so, and the action is "run `crew done`". A state for "taken
 but not started" was considered and dropped: it is a window, not a condition,
 and nothing behaves differently in it. Provisioning is likewise not a state —
 it happens inside `crew new` and is skipped entirely unless a lockfile moved.
+
+**`finished` closes the same gap at the other end (0.39.0).** Measured
+2026-09-12 on a fixture repo: the moment `crew done` fast-forwarded the merge,
+the board and the title fell **back** from `finishing` to `processing` — the
+only test was the range `<dev>..work/b<nnn>`, which a fast-forward empties, so
+work already sitting on the dev branch was reported as a session still editing.
+Then `crew done` parked the tree, `crew name` exited 1 because a parked tree
+holds no branch, and the title-nag hook — silent on any non-zero exit — left
+the session at `finishing` for the rest of its life. A session list full of
+`finishing` cannot say which rows still need the merge, which is the one
+distinction `finishing` was invented to make. `finished` earns its word by the
+same rule as the others: its action is "close the session, park the tree", and
+nothing else asks for that.
+
+It takes **both** halves, because a close-out is both halves (STANDARD §6.1):
+the closer reachable from the dev branch, and the ticket reading `status: done`
+with its audit line. `crew done` writes them in that order and only `note`s when
+docs_close cannot be reached, which is every plain terminal with no
+`CLAUDE_PLUGIN_ROOT` (ISSUE-014). The gap between them therefore happens in
+practice, and it keeps reading `finishing` — correctly, since something is
+still owed. What changes there is only the action: `crew done` cannot be re-run
+once the tree is parked, so the remaining half is written by
+`/docs-kit:docs-sync`, and `crew name` says exactly that instead of repeating
+its take-a-ticket line. A separate word for that gap was considered and dropped:
+the action differs, but the reading — "this ticket still owes something" — does
+not, and five words for one ticket is past what a board can be read at a glance.
+
+The uncommitted-work test stays **first**, ahead of both. A merge does not make
+somebody's unlanded file less important, and that file is the one thing in an
+executor tree that must never go invisible.
 
 Two ceilings, stated rather than papered over. The `dirty=` count excludes
 crew's own provisioned payload, because some of it cannot be gitignored at all
@@ -543,9 +574,10 @@ unless the repo opts in (a `.docs-kit.json` whose `crew` key exists).
    model is visible from OUTSIDE a session. `crew status` derives every state
    from git, so the board stays right whatever the title says — the user's
    session list does not. An executor moves from `processing` to `finishing` the
-   moment it writes the trailer, and re-running `crew name` there (step 4b of the
-   hat) was reported as the most-skipped step, so sessions ended reading as work
-   still in flight. The hook asks `crew name <role> --want` rather than deriving
+   moment it writes the trailer and to `finished` when the close-out lands, and
+   re-running `crew name` at either point (steps 4b and 5b of the hat) was
+   reported as the most-skipped step, so sessions ended reading as work still in
+   flight. The hook asks `crew name <role> --want` rather than deriving
    the grammar again: three parts read from git, one place, and this release adds
    the flag precisely so nothing else spells them out. Silent on a non-crew
    title, on a repo with no `scripts/crew`, and whenever `--want` refuses.

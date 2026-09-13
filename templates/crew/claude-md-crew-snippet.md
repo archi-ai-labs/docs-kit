@@ -11,14 +11,14 @@ làm trọn tới `done`. Không có phiếu trong `docs/23_backlog/` thì khôn
 nhiều phiếu. Nhánh nó đang mở là phiếu nó giữ, HEAD tách rời là nó rảnh.
 
 **Title phiên** `<repo> · <chỗ> · b<nnn> · <trạng thái> · crew/executor`, do
-`crew name executor` tự đọc: chỗ là `e<k>`, hoặc `main` với fast-pair; sinh ra ở
-`processing`, sang `finishing` khi commit mang trailer **và** cây đã sạch.
+`crew name executor` tự đọc: chỗ là `e<k>`, hoặc `main` với fast-pair. Trạng
+thái đi `processing` → `finishing` (commit mang trailer **và** cây sạch) →
+`finished` (phiếu đã đóng sổ); chạy lại lệnh sau mỗi lần đổi.
 
 **Lệnh:** `scripts/crew new <nnn>` giao phiếu cho một executor rảnh (nhánh
-`work/b<nnn>`), hết cây rảnh thì tự dựng thêm chứ không chặn; `scripts/crew done
-<nnn>` gộp — sáu bước và ba phép kiểm nằm trong ruột lệnh, **không gõ tay sáu
-lệnh đó**; `scripts/crew lock` trước phần
-chạm máy thật; `scripts/crew status` trước khi nhận thêm phiếu.
+`work/b<nnn>`), hết cây rảnh thì tự dựng thêm; `scripts/crew done <nnn>` gộp, và
+**không gõ tay sáu lệnh trong ruột nó**; `scripts/crew lock` trước phần chạm
+máy thật; `scripts/crew status` trước khi nhận thêm phiếu.
 
 **Ba mức thi hành** (`execution:` trong phiếu): `fast-pair` = sửa thẳng nhánh dev
 ở cây chính, ≤ 1 tệp, commit ngay trong lượt; `fast` và `full` = một executor,
