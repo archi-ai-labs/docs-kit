@@ -21,14 +21,32 @@ WHY THIS ASKS A DIFFERENT QUESTION THAN IT USED TO (0.25.0):
     takes a `code:` header — collected into `docs/MAP.tsv` by docs-render. A file
     nobody documents produces silence, however sensitive its path looks.
 
+WHY IT ALSO READS subagents/ (0.40.1):
+    Since Claude Code 2.1.x a sub-agent's tool calls never reach the main
+    transcript. They land beside it, in `<session>/subagents/agent-<id>.jsonl`,
+    and a Workflow agent's one level deeper, under `subagents/workflows/wf_<id>/`.
+    Reading `transcript_path` alone made every edit a sub-agent made invisible —
+    measured on one machine (CLI 2.1.x): 2,884 edit calls in 11 sessions, all
+    of them Workflow agents, so a flat `subagents/*.jsonl` glob would have missed
+    every one. The walk therefore takes every `*.jsonl` under that directory, at
+    any depth; the largest tree measured, 88 MB in 199 files, reads in 0.7 s.
+
+    It reads them here, at Stop, and does not register on SubagentStop. That
+    event sees one agent at a time, so "the session also edited that document"
+    could not see a document the parent or a sibling agent updated, and a
+    191-agent workflow would report per agent. Its feedback channel is also
+    aimed at the sub-agent that is finishing, not at the session's owner.
+
 Logic:
-  1. Read hook JSON from stdin (needs `cwd` and `transcript_path`).
+  1. Read hook JSON from stdin (needs `cwd` and `transcript_path`; `session_id`
+     is a second way to find the sub-agent directory).
   2. Guard: the repo declares itself a docs-kit repo (`.docs-kit.json` or
      `docs/22_decisions/`). `docs/README.md` alone is NOT enough — that is what
      made this fire in a repo using a different folder scheme entirely.
   3. Load `docs/MAP.tsv` (path → doc, claim, verified_at).
-  4. Scan the transcript for Edit/Write paths, split into code edits and edits to
-     documents under docs/.
+  4. Scan the transcript and every sub-agent transcript of the session for
+     Edit/Write paths, split into code edits and edits to documents under docs/.
+     An unreadable sub-agent file hides only its own edits.
   5. Report, grouped by DOCUMENT rather than by file:
        - a document whose claimed paths this session edited, unless the session
          also edited that document (it was already being kept up to date);
@@ -86,6 +104,26 @@ def claims(rel, entry_path):
     if ("*" in entry_path or "?" in entry_path) and fnmatch.fnmatch(rel, entry_path):
         return True
     return False
+
+
+def subagent_transcripts(transcript_path, session_id):
+    """Every `*.jsonl` under this session's `subagents/` directory, at any depth.
+
+    The CLI names that directory after the session id and the transcript after
+    the session id too, so the two usually agree; both are tried because
+    nothing forces them to. A `session_id` that is not a bare name is ignored
+    rather than joined into a path. `os.walk` swallows a missing or unreadable
+    directory, so this yields nothing instead of raising.
+    """
+    names = {os.path.splitext(os.path.basename(transcript_path))[0]}
+    if isinstance(session_id, str) and os.path.basename(session_id) == session_id:
+        names.add(session_id)
+    base = os.path.dirname(transcript_path)
+    for name in names - {"", ".", ".."}:
+        for dirpath, _dirs, files in os.walk(os.path.join(base, name, "subagents")):
+            for fn in files:
+                if fn.endswith(".jsonl"):
+                    yield os.path.join(dirpath, fn)
 
 
 def changed_since(cwd, rev):
@@ -158,8 +196,8 @@ def main():
             for value in node:
                 walk(value)
 
-    try:
-        with open(transcript_path, encoding="utf-8", errors="replace") as fh:
+    def scan(path):
+        with open(path, encoding="utf-8", errors="replace") as fh:
             for line in fh:
                 line = line.strip()
                 if not line:
@@ -169,8 +207,16 @@ def main():
                 except Exception:
                     continue
                 walk(obj)
+
+    try:
+        scan(transcript_path)
     except Exception:
         return
+    for path in subagent_transcripts(transcript_path, data.get("session_id")):
+        try:
+            scan(path)
+        except Exception:
+            continue  # fail open: the rest of the session still gets reported
 
     if not code_edits:
         return  # a docs-only session has nothing to reconcile

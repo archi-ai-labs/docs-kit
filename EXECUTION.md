@@ -563,7 +563,10 @@ unless the repo opts in (a `.docs-kit.json` whose `crew` key exists).
    Its own warning text never contains the literal marker: the origin repo's
    first gate matched strings over the whole transcript, and its refusal
    message contained both strings it was hunting, so it blocked exactly once
-   and then held the door open forever.
+   and then held the door open forever. It reads the main transcript only, on
+   purpose: a sub-agent's text never reaches the user as a reply, so its marker
+   or drawing must not open the parent's question. The Stop scan does read
+   `<session>/subagents/` (0.40.1), because an edit counts wherever it was made.
 2. **resource-guard** (on `Bash`): when a command matches a declared resource's
    patterns and no session holds that lock → warn. Substring patterns; a
    wrapper script slips through unlogged. It measures the cooperative and

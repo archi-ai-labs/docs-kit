@@ -5,6 +5,79 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
+## [0.40.1] — 2026-09-19
+
+The Stop hook now sees the edits a sub-agent makes. Since Claude Code 2.1.x those
+edits never reach the main transcript, and the hook read nothing else, so a
+session that handed its code to sub-agents looked exactly like a session that
+changed nothing — `severity: silent`, the class EXECUTION §12 ranks above a gate
+that refuses.
+
+### Fixed — a sub-agent's edits were invisible to the Stop hook
+
+`hook_stop_scan.py` walked only the file at `transcript_path`. The CLI writes a
+sub-agent's tool calls beside that file instead: the Agent tool's into
+`<session>/subagents/agent-<id>.jsonl`, the Workflow tool's one level deeper into
+`subagents/workflows/wf_<id>/agent-<id>.jsonl`. The main transcript records the
+Agent or Workflow call and its result: of 34,409 tool calls made inside
+sub-agents, 0 appear in it. Measured on one machine, over every transcript under
+`~/.claude/projects/` (all written by CLI 2.1.x):
+
+| Where the sub-agent's calls land | Files | Edit calls | Sessions with edits |
+|---|---|---|---|
+| Agent tool, `subagents/agent-*.jsonl` | 13 | 0 | 0 |
+| Workflow tool, `subagents/workflows/wf_*/agent-*.jsonl` | 1,285 | 2,884 | 11 |
+
+All 2,884 were invisible to the hook, and all of them sat in the nested layout, so
+the obvious fix — a flat `subagents/*.jsonl` glob — would have fixed none of them.
+The hook now walks every `*.jsonl` under `subagents/` at any depth. The directory
+is found from the transcript's file name and from `session_id`, because the CLI
+names it after the session and the two agree only while the transcript is named
+after the session too. An unreadable sub-agent file hides its own edits and
+nothing else. The largest tree measured, 88 MB in 199 files, reads in 0.7 s
+against the hook's 30 s timeout.
+
+Replayed today on the eight sessions, in four real docs-kit repos, whose
+sub-agents made edit calls: six print the same report under both versions, and
+two name a document the old version never named.
+
+**It reads them at Stop, not on `SubagentStop`.** That event sees one agent at a
+time, so the rule that keeps the hook from describing the user's own work back to
+them — *a document the session also edited is never reported* — could not see a
+document the parent or a sibling agent updated, and a 191-agent workflow (also
+measured) would report once per agent. The event's own feedback channel is aimed
+at the sub-agent that is finishing (exit 2 hands stderr back to it), not at the
+person who owns the session.
+
+### Checked, and deliberately left alone — the explain-gate
+
+`hook_explain_gate.py` also reads transcript events, so it was checked for the
+same blind spot. It does not have one, and it must not copy this fix:
+
+- Its trigger is main-thread only: **0 of 1,298** sub-agent transcripts on the
+  same machine contain an `AskUserQuestion` call, while 191 main transcripts do.
+- Every hook's input carries the MAIN `transcript_path`, even when it fires inside
+  a sub-agent (read from the 2.1.277 binary; `agent_id` is what marks that case).
+  A question asked from inside a sub-agent would therefore at worst draw a warning
+  it did not need, which is loud rather than silent.
+- The evidence it accepts has to be something the user saw. Nothing a sub-agent
+  writes reaches the user as a reply, so a marker line or a drawing under
+  `subagents/` opening the parent's question would repeat the failure rule 1 of
+  EXECUTION §8 was written after: text the user never saw, opening the gate.
+
+A new crew check locks the asymmetry. With the gate mutated to read `subagents/`,
+exactly that check goes red.
+
+### Tests
+
+New CI step *Stop hook sees the edits a sub-agent made*, six cases: the Agent
+layout, the Workflow layout, a transcript not named after its session, another
+session's sub-agents (silent), one unreadable sub-agent file (fail open), and a
+document a sibling agent updated (silent). With the fix reverted, the full local
+suite differs from a clean 0.39.0 baseline by exactly that step. Five narrower
+mutations (flat glob, no `session_id`, no per-file fail-open, every session's
+directory, sub-agent document edits dropped) each turn exactly their own case
+red. `scripts/crew_test.sh` is at **140 checks**.
 ## [0.40.0] — 2026-09-19
 
 Cleaning up Layer 2 is now a thing you ask for by chain, and read before it

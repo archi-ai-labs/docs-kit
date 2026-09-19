@@ -670,8 +670,10 @@ Two docs-model hooks, both plain scripts, **no LLM calls**:
    ref exists." Paths under `templates/docs/` are exempt: the plugin ships its own
    template tree at exactly that shape, and firing on it would train docs-kit's
    own maintainers to switch the hook off.
-2. **Stop**: scan the session transcript for edited files, look each one up in
-   `docs/MAP.tsv` (§10), and report **by document, not by file**:
+2. **Stop**: scan the session transcript for edited files, and every sub-agent
+   transcript under `<session>/subagents/` too (a sub-agent's tool calls never
+   reach the main one), look each one up in `docs/MAP.tsv` (§10), and report
+   **by document, not by file**:
    - a document whose claimed paths this session edited and whose `verified_at`
      the code has moved past → *changed since last verified*;
    - the same, but the document has no `verified_at` at all → *never verified*,

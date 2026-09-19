@@ -29,6 +29,13 @@ Evidence accepted, scanning backwards to the last human turn:
     EXECUTION §7 — matched at line start, in assistant-authored text only.
     A tool_result event also has type "user" but carries no text block, so it
     never terminates the scan; only a human turn does.
+
+Only the main transcript counts. A sub-agent's events live in
+`<session>/subagents/`, which the Stop scan reads since 0.40.1; this worker
+must not follow it there. Nothing a sub-agent writes reaches the user as a
+reply, so its marker or its drawing unlocking the parent's question would
+repeat rule 1's failure: text the user never saw, opening the gate
+(crew_test.sh asserts it).
 """
 import datetime
 import json

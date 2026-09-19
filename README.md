@@ -261,11 +261,11 @@ of its own, silent in a repo with no `scripts/crew` — see EXECUTION §8.
 - **PostToolUse** (Edit/Write) — editing `docs/02_architecture/`,
   `docs/03_business-logic/` or `docs/04_api/` prints a reminder that layer 1 is
   amended only via the Decision workflow. `templates/docs/` is exempt, so the plugin's own tree is quiet.
-- **Stop** — looks every file the session edited up in `docs/MAP.tsv` and reports
-  **by document**: which documents describe code that moved past their
-  `verified_at`, and files added beside documented ones that nothing claims. A file
-  no document describes produces silence, however sensitive its path looks. A
-  document the session also edited is never reported.
+- **Stop** — looks up every file the session or any of its sub-agents edited in
+  `docs/MAP.tsv` and reports **by document**: which documents describe code that
+  moved past their `verified_at`, and files added beside documented ones that
+  nothing claims. A file no document describes produces silence, however
+  sensitive its path looks. A document the session also edited is never reported.
 
   Until 0.25.0 this matched path globs instead. On a real monorepo whose service
   directory is named `apps/api/`, `**/api/**` matched 57 of 57 edited files — every

@@ -85,6 +85,17 @@ OUT="$(run_gate "$HR" "$TS/lane.jsonl")"
 [ -z "$OUT" ] && ok "gate: declared lane satisfies the gate" \
   || bad "gate: lane case not silent (got: $OUT)"
 
+# The stop scan reads <session>/subagents/ since 0.40.1; this gate must not copy
+# it. A sub-agent's text never reached the user as a reply, so its marker line
+# or its drawing opening the parent's question repeats rule 1's failure: text
+# the user never saw, opening the gate.
+mkdir -p "$TS/sub/subagents/workflows/wf_1"
+printf '%s\n%s\n' "$U" "$A_PLAIN" > "$TS/sub.jsonl"
+printf '%s\n%s\n' "$A_LANE" "$A_DRAW" > "$TS/sub/subagents/workflows/wf_1/agent-a1.jsonl"
+OUT="$(run_gate "$HR" "$TS/sub.jsonl")"
+has "$OUT" "[gate:no-draw]" && ok "gate: a sub-agent's marker or drawing does not open it" \
+  || bad "gate: opened by a sub-agent's transcript (got: $OUT)"
+
 # Unreadable transcript → fail OPEN (allow) + one line in gate.log, so
 # silence-from-broken never looks like silence-from-clean.
 OUT="$(run_gate "$HR" "$TMP/no-such-transcript.jsonl")"
