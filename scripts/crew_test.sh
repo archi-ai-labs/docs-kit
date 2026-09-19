@@ -797,6 +797,11 @@ fi
 has "$OUT" "vs remote : 'dev' tracks nothing here" \
   && ok "main tree: no upstream states the fact instead of inventing a verdict" \
   || bad "main tree: no-upstream line (got: $OUT)"
+# With no `origin` at all there is no origin/HEAD for any tool to read, so the
+# default row has nothing to say.
+has "$OUT" "default   :" \
+  && bad "main tree: default row printed with no origin remote (got: $OUT)" \
+  || ok "main tree: no origin remote, no default row"
 
 # With an upstream, the comparison is against the remote — a different question
 # wearing the same words, so it must name which one it answered.
@@ -811,6 +816,39 @@ has "$OUT" "vs remote : 1 ahead, 0 behind origin/dev" \
   && ok "main tree: on dev, the comparison is against the remote" \
   || bad "main tree: upstream compare (got: $OUT)"
 
+# origin/HEAD is what Claude Code's diff pane and its "Main branch" line read.
+# KNOWN-BAD first, in the shape the origin repo reported (FEEDBACK-007): the
+# GitHub default is the prod branch, so a clone points origin/HEAD there, and
+# every session between two releases diffs against prod.
+( cd "$MT" && git push -q origin dev:master >/dev/null 2>&1 && git remote set-head origin master >/dev/null )
+OUT="$(mt)"
+has "$OUT" "default   : origin/HEAD is 'master', not dev_branch 'dev' · git remote set-head origin dev" \
+  && ok "main tree: origin/HEAD on the prod branch is named, with the one-line fix" \
+  || bad "main tree: origin/HEAD on master (got: $OUT)"
+
+# `git remote add` + push never sets the ref, and then each tool guesses on its
+# own — Claude Code picks origin/master whenever that exists.
+( cd "$MT" && git remote set-head origin -d >/dev/null )
+OUT="$(mt)"
+has "$OUT" "default   : origin/HEAD is not set, so tools guess · git remote set-head origin dev" \
+  && ok "main tree: an unset origin/HEAD is named, not read as fine" \
+  || bad "main tree: unset origin/HEAD (got: $OUT)"
+
+# set-head refuses a target with no remote-tracking ref, so a fix printed for an
+# unpushed dev branch would just error; the push has to come first.
+( cd "$MT" && git remote set-head origin master >/dev/null && git update-ref -d refs/remotes/origin/dev )
+OUT="$(mt)"
+has "$OUT" "· push 'dev' first, then git remote set-head origin dev" \
+  && ok "main tree: an unpushed dev branch gets the push named before set-head" \
+  || bad "main tree: unpushed dev fix (got: $OUT)"
+
+# THE QUIET FORM: origin/HEAD already follows dev, nothing to act on, no row.
+( cd "$MT" && git fetch -q origin && git remote set-head origin dev >/dev/null )
+OUT="$(mt)"
+has "$OUT" "default   :" \
+  && bad "main tree: default row printed while origin/HEAD follows dev (got: $OUT)" \
+  || ok "main tree: origin/HEAD on dev_branch draws no default row"
+
 # A dev_branch naming a branch that does not exist must not be reported as a
 # clean comparison against nothing.
 printf '{"owns": [], "crew": {"dev_branch": "ghost"}}\n' > "$MT/.docs-kit.json"
@@ -818,6 +856,11 @@ OUT="$(mt)"
 has "$OUT" "vs ghost  : that branch does not exist here" \
   && ok "main tree: a dev_branch that does not exist says so" \
   || bad "main tree: ghost dev_branch (got: $OUT)"
+# ...and says it once: the default row would otherwise tell the user to push a
+# branch that does not exist, on top of the note that already names it.
+has "$OUT" "default   :" \
+  && bad "main tree: a ghost dev_branch also drew a default row (got: $OUT)" \
+  || ok "main tree: a ghost dev_branch is one fault, not a second default row"
 printf '{"owns": [], "crew": {"dev_branch": "dev"}}\n' > "$MT/.docs-kit.json"
 
 # ---------------------------------------------------------------- main is a place

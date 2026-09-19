@@ -643,7 +643,8 @@ cmd_lock() {
 # So this asks check 1's and check 2's questions before a ticket is in flight.
 #
 # It prints the branch NAME rather than only a verdict, because the person
-# reading is the one who knows whether being on that branch is deliberate.
+# reading is the one who knows whether being on that branch is deliberate. The
+# `default` row follows the same rule for origin/HEAD.
 main_tree_block() {
   MT_DEV="$(cfg dev_branch main)"
   MT_CUR="$(main_branch)"
@@ -698,6 +699,40 @@ main_tree_block() {
         row "$MT_LBL" "in step with${MT_NAME:- $MT_REF}"
       else
         row "$MT_LBL" "$MT_AHEAD ahead, $MT_BEHIND behind$MT_NAME"
+      fi
+    fi
+  fi
+
+  # What the tools OUTSIDE crew take to be the default branch. Claude Code's diff
+  # pane and the "Main branch … use this for PRs" line it loads into every
+  # session both read refs/remotes/origin/HEAD (read out of CLI 2.1.275; when the
+  # ref is unset it guesses origin/main, then origin/master). A clone points that
+  # ref at the GitHub default, which in the commonest setup is prod_branch, so
+  # between two releases every session diffed against prod and saw all the
+  # unreleased work — 30 commits and 78 files in the repo that reported it — and
+  # the PR hint named the one branch that takes no direct commit.
+  # The ref lives in the git dir every worktree shares, so one command fixes the
+  # whole pool; it is also local, so a fresh clone or `set-head -a` undoes it.
+  # The row appears only when there is something to do, and the board never runs
+  # the command: repointing a ref every tool reads is the user's call, asked in
+  # crew-init and crew-update. A dev_branch that does not exist is left to the
+  # note at the bottom of the board, one message per fault.
+  if git -C "$MAIN" config --get remote.origin.url >/dev/null 2>&1 \
+     && git -C "$MAIN" show-ref --verify --quiet "refs/heads/$MT_DEV"; then
+    # Full ref name, not --short: a local branch literally named `origin/x`
+    # would make the short form ambiguous.
+    MT_OH="$(git -C "$MAIN" symbolic-ref -q refs/remotes/origin/HEAD 2>/dev/null || true)"
+    MT_OH="${MT_OH#refs/remotes/origin/}"
+    if [ "$MT_OH" != "$MT_DEV" ]; then
+      # set-head refuses a target the remote-tracking refs do not have, so an
+      # unpushed dev branch needs the push named first or the fix just errors.
+      MT_FIX="git remote set-head origin $MT_DEV"
+      git -C "$MAIN" show-ref --verify --quiet "refs/remotes/origin/$MT_DEV" \
+        || MT_FIX="push '$MT_DEV' first, then $MT_FIX"
+      if [ -n "$MT_OH" ]; then
+        row "default" "origin/HEAD is '$MT_OH', not dev_branch '$MT_DEV' · $MT_FIX"
+      else
+        row "default" "origin/HEAD is not set, so tools guess · $MT_FIX"
       fi
     fi
   fi

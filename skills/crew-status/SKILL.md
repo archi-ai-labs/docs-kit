@@ -32,7 +32,10 @@ Quote the script's output, then read it back in plain language:
   label says which one was answered. The arrow appears only when a merge would
   actually be refused, and it names the checks by the same numbers `crew done`
   prints. Read the branch name yourself — the board cannot know whether sitting
-  on another branch was deliberate.
+  on another branch was deliberate. A `default` row means `origin/HEAD`, which
+  Claude Code's diff pane and its "Main branch" line read, names a branch other
+  than `dev_branch` or is not set at all. The row carries its own fix; relay it
+  and leave running it to the user, since this skill changes nothing.
 - **executors** — five states, all read off git: `idle` (detached and clean, can
   take a ticket), `unclean` (detached but holding uncommitted files, so it has
   dropped out of the pool until someone clears it), `processing` (holds the

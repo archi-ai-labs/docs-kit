@@ -42,6 +42,38 @@ chối lịch sự, không gì đổi hình dạng. Đó cũng là cách tắt n
   đã `copy`, vì `crew done` chỉ nhận ra những gì nó tự đắp vào — một tệp lạ
   chưa commit sẽ giữ executor lại trên nhánh và được nêu đích danh.
 
+## `origin/HEAD` chỉ tồn tại trên máy này
+
+`dev_branch` là nơi mọi phiếu đổ về, nhưng các công cụ ngoài crew lấy nhánh gốc
+từ ref `refs/remotes/origin/HEAD`. Khi clone, git đặt ref này theo nhánh mặc
+định (default branch) trên GitHub, và nhánh đó thường là `prod_branch`. Hậu quả
+là màn diff của Claude Code hiện toàn bộ việc chưa release, còn dòng "Main
+branch" nạp vào đầu mỗi phiên lại gợi ý mở PR vào nhánh không nhận commit trực
+tiếp.
+
+Lệnh sửa chỉ có một dòng và chạy ở cây chính:
+
+```
+git remote set-head origin <dev_branch>
+```
+
+| Điều cần biết | Hệ quả |
+|---|---|
+| Ref nằm trong thư mục git mà mọi worktree dùng chung | chạy một lần là đủ cho cả pool |
+| Ref chỉ tồn tại trên máy này | clone mới hoặc `git remote set-head origin -a` đưa nó về nhánh mặc định trên GitHub |
+| Git từ bản 2.48 có khoá `remote.origin.followRemoteHEAD` | khoá này đặt là `always` thì mỗi lần `git fetch` sẽ đặt lại ref |
+| Nhánh mặc định trên GitHub không đổi | `gh pr create` không kèm `--base` vẫn nhắm vào nhánh đó |
+| `set-head` từ chối nhánh chưa có trên remote | nhánh dev phải được push trước |
+
+`crew status` in hàng `default` trong khối `main tree:` khi ref này lệch khỏi
+`dev_branch` hoặc chưa được đặt, và hàng đó ghi sẵn lệnh sửa. Board không tự chạy
+lệnh, vì đổi một ref mà mọi công cụ cùng đọc là quyết định của người dùng, nên
+`crew-init` và `crew-update` hỏi trước khi chạy.
+
+Muốn sửa tận gốc cho mọi bản clone thì đổi nhánh mặc định trên GitHub sang
+`dev_branch`. Đây là cài đặt dùng chung của repo và CI cũng đọc nó, nên kit không
+đụng tới mà để chủ repo tự quyết.
+
 ## Khi nào bật `enforce`
 
 `enforce: true` biến lời nhắc của explain-gate thành deny thật, chỉ cho repo

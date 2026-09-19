@@ -5,6 +5,54 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
+## [0.40.3] — 2026-09-19
+
+`crew-init` settled where work lands, then left the one ref every tool outside
+crew reads pointing somewhere else. Between two releases, every session in a crew
+repo diffed against the prod branch.
+
+### Fixed — `origin/HEAD` stayed on the prod branch (FEEDBACK-007)
+
+Reported from a repo with `dev_branch: dev`, `prod_branch: master`, and `master`
+as the GitHub default. A clone points `refs/remotes/origin/HEAD` at the GitHub
+default, and nothing in crew looked at it again. Measured there: Claude Code's
+diff pane in "all" mode showed 30 commits and 78 files, every unreleased change
+since `master` last moved on 2026-09-01, and the session context read
+`Main branch (you will usually use this for PRs): master`.
+
+The report left one risk unmeasured: whether that "Main branch" line comes from
+`origin/HEAD`. Read out of CLI 2.1.275, it does. The default-branch reader takes
+`refs/remotes/origin/HEAD` from the git dir every worktree shares, and when the
+ref is unset it tries `origin/main`, then `origin/master`; the diff pane's
+`defaultBranchIfKnown` reads the same ref. So an agent following that hint opens
+its PR against the branch that takes no direct commit, and an unset ref is no
+safer while `origin/master` exists.
+
+| Where | Now |
+|---|---|
+| `crew status`, `main tree:` block | a `default` row when `origin/HEAD` names another branch or is unset, carrying the fix: `git remote set-head origin <dev>`, or "push first" when `origin/<dev>` does not exist, because `set-head` refuses that. Silent with no `origin`, and left to the bottom note when `dev_branch` itself does not exist |
+| `crew-init`, new step 3.5 | offers the command once `dev_branch` is written, with its three limits inside the question: one run covers every worktree, it is local to the machine, and it does not move `gh pr create`, which reads the GitHub default |
+| `crew-init`, step 1.5 | `origin/HEAD` no longer ranks as a dev suggestion; it ranks for prod, after the named branches |
+| `crew-update`, step 4 | runs `crew status` and asks the same question when the row is there, which is how repos already on crew get the fix |
+| `crew-status` | reads the row back and leaves the fix to the user |
+| `setup.md`, EXECUTION §9 · §10 · §11 | what reads the ref, what resets it, and changing the GitHub default as the owner's alternative |
+
+The board names the command and never runs it, and no key silences the row:
+repointing a ref every tool reads is the user's call, and someone who keeps it on
+prod on purpose pays one line on the board.
+
+Not measured here: git 2.48 added `remote.origin.followRemoteHEAD`, and with
+`always` every fetch resets the ref. This machine runs git 2.39.5, so `setup.md`
+states it as documented behaviour.
+
+### Tests
+
+Six checks on the row, the known-bad shape first (the reported one: `origin/HEAD`
+on `master`), then unset, unpushed dev, the quiet form, no `origin`, and a ghost
+`dev_branch`. Five mutations to the new code (no `origin` gate, no local-branch
+gate, no mismatch test, no push-first, unset reported as fine) each turn exactly
+their own check red. `scripts/crew_test.sh` is at **146 checks**.
+
 ## [0.40.2] — 2026-09-19
 
 The rule that an example id is written `NNN` had outlived its reason. It now

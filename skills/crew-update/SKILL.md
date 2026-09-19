@@ -14,6 +14,8 @@ out of the plugin cache. This skill is that missing half.
 
 **It stamps what the kit owns and nothing else.** It never writes
 `.docs-kit.json`, never re-asks the interview, never turns a role on or off.
+Besides the `.new` merges, the one question it may ask is step 4's about
+`origin/HEAD`, and only when the board shows that ref on another branch.
 
 ## Step 0 — Resolve the kit, and say which version is about to land
 
@@ -94,7 +96,15 @@ vanish under a kit update.
 
 ```bash
 scripts/crew help
+scripts/crew status
 ```
+
+If the board's `main tree:` block has a `default` row, `origin/HEAD` names a
+branch other than `dev_branch`, and every repo stamped before 0.40.3 was set up
+without anything checking it. Ask the question from crew-init's step 3.5, with
+the same facts in it, and run `git remote set-head origin <dev>` only on "yes".
+When the row says to push first, say so and do not push. This is a git ref and
+not `.docs-kit.json`, so the no-config-write contract above still holds.
 
 Then report three things: the version now stamped, the counts from step 2, and
 any `.new` left unapplied by the user's own choice. If `scripts/crew` was among

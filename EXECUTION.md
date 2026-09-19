@@ -650,6 +650,21 @@ it may replace from the sha256 manifest at `.claude/crew/.stamp`, so a file the
 scaffold wrote and nobody touched is updated in place while an edited one still
 lands as `.new`.
 
+**`dev_branch` is also what the tools outside crew should call the default.**
+Claude Code's diff pane and the "Main branch … use this for PRs" line it loads
+into every session read `refs/remotes/origin/HEAD`, and a clone points that ref at
+the GitHub default, which in the commonest setup is `prod_branch`. Measured in the
+repo that reported it: between two releases, every session diffed against prod and
+saw 30 commits and 78 files that were not its own, and the PR hint named the one
+branch that takes no direct commit. The fix is `git remote set-head origin <dev>`
+in the main tree. It covers every worktree, because the ref lives in the git dir
+they share, and it is local, so a fresh clone or `set-head -a` undoes it. So
+crew-init offers it once `dev_branch` is written, crew-update offers it when the
+board shows drift, and `crew status` prints a `default` row in the `main tree:`
+block whenever the ref names another branch or is unset. The row is silent with
+no `origin` remote, and it is left to the bottom note when `dev_branch` itself
+does not exist, so one fault is reported once.
+
 ## 10. Deliberately absent from 0.26.0
 
 | Absent | Why |
@@ -661,6 +676,8 @@ lands as `.new`.
 | `brief` crew section | `brief` has its own measured gates; teaching its delegation prompt to name level, tree and branch deserves its own release |
 | A report the machine writes | `crew report --write` fills the measured section and leaves every judgement section empty. Crew does not author prose about the project, for the reason §6.1 gives: the numbers are checkable and the story is not, so they must come from different hands |
 | A board that fixes the branch | the main-tree line reports and never runs `git checkout`: whether sitting on another branch is deliberate is the one thing the board cannot know, and a status command that moves HEAD under a running session is not a status command |
+| A board that sets `origin/HEAD`, or a key to silence its row | the `default` row names the fix and never runs it: repointing a ref every tool reads is the user's call, and someone who keeps it on prod on purpose pays one line on the board, which is cheaper than a config key that can be set wrong silently (§9) |
+| Changing the GitHub default branch | it would also fix fresh clones and `gh pr create`, but it is a repo-wide setting that CI and every other clone read, so it belongs to the repo's owner; `setup.md` names it as the alternative |
 | A monthly nag on the board | the four weekly lines already name the gap; only a state something acts on gets a word (0.32.0's rule) |
 | Reports drawn on the HTML views | `docs_render.py` reads `92_audit/LOG.md` only, and the renderer is not touched this release; the audit line makes the report reachable from `changes.html` until someone draws it |
 | A hook nagging an overdue report | hooks read events (§8) and a calendar is not one; the always-loaded snippet is at 2379 of its 2400-byte cap, so the reminder lives on the board that sessions are already told to run |
@@ -695,6 +712,7 @@ command detection tuned on Node manifests.
 | One lock serialising two parallel trees | 30.7 h waited | an executor is not a second rig (§5) |
 | 3 concurrent claims on a pool of 2 | 1 landed, 4 runs of 5 | claiming an executor is atomic (§4) |
 | 2 concurrent acquires of one resource | both "succeeded", 5 of 5 | the write is the test, via O_EXCL (§4) |
+| Diff pane between two releases, `origin/HEAD` on prod | 30 commits · 78 files, none the session's own | `origin/HEAD` follows `dev_branch`, offered and never forced (§9) |
 
 ## 12. When crew itself is wrong
 
