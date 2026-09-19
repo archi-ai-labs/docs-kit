@@ -6,7 +6,7 @@ own history and inferring:
 
   Step 2 — "which Backlog items did this session finish?" Inferred from context,
     then written as an audit line that cites the session rather than the work. The
-    commit already knows: `Closes: BACKLOG-012` in the message is the author saying
+    commit already knows: `Closes: BACKLOG-NNN` in the message is the author saying
     it, at the moment they said it, in something that outlives the chat.
 
   Step 6 — "what can leave the hot set?" A pure predicate over frontmatter: a

@@ -5,6 +5,67 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
+## [0.40.2] — 2026-09-19
+
+The rule that an example id is written `NNN` had outlived its reason. It now
+states the reason it still has, and the kit stops breaking it in the places where
+breaking it costs the most.
+
+### Changed — the `NNN` rule, argued from what still reads ids
+
+`references/issue-capture.md` justified `ISSUE-NNN` / `DECISION-NNN` /
+`BACKLOG-NNN` by the Stop hook's engagement check, which read ids out of the
+transcript. That check went in 0.25.0, and no hook has read an id out of
+transcript text since. The rule survives on another reason, measured before
+anything was edited:
+
+- **Examples get pasted.** Of the 11 layer-1 documents added beside a scaffolded
+  one in five real repos, 10 carry the template's instruction note verbatim,
+  `DECISION-NNN` included.
+- **The numbers examples reach for are taken.** `DECISION-000` exists in 5 of those
+  repos, `ISSUE-001` and `BACKLOG-001` in 4, and no tool that acts on an id can
+  tell a pasted example from a real reference.
+
+Each place an id is consumed, reproduced on a scratch repo:
+
+| Pasted into | With digits | With `NNN` |
+|---|---|---|
+| a `Closes:` trailer | a commit for BACKLOG-013 carrying the digest's own example, `Closes: BACKLOG-012`, closed 012 and printed `CLOSE BACKLOG-012 — status -> done, audit line` | nothing to do; 013 visibly stays in progress |
+| `source_ref:`, an `amended_by` entry | `DECISION-000` resolves, and the validator prints nothing | `NOTE [ref]`, `NOTE [amended-by]` |
+| the ref column of an audit line | a pasted `BACKLOG-012 (DECISION-003)` made the real close-out of 012 write no audit line | records nothing |
+
+None of the 33 real `Closes:` trailers in those repos came from an example: the
+four that reuse an example's number (`001` twice, `012` twice) each match their
+own Backlog document. So
+the section now calls the rule what it is, insurance against a silent failure,
+and scopes it to examples shaped like something a tool reads. Prose that cites a
+real item keeps its digits.
+
+### Fixed — the kit broke the rule where agents copy from
+
+Every example below was in trailer, frontmatter or audit shape and carried
+digits; each now reads `NNN`:
+
+| Where | Was |
+|---|---|
+| `templates/docs/README.md` — the digest scaffolded into every repo | `Closes: BACKLOG-012` |
+| STANDARD §4, all four frontmatter blocks | `id:` and `*_ref:` values ending in `-001` |
+| STANDARD §4, the audit-line example | `BACKLOG-012 (DECISION-003)` |
+| STANDARD §6.1, the commit example | `Closes: BACKLOG-012` |
+| EXECUTION §6 and `templates/crew/docs/worktrees.md` | `Closes: BACKLOG-157` |
+| `templates/docs/02_architecture/architecture.md` | a `rejected:` entry citing `DECISION-004` |
+| `scripts/docs_close.py`, module docstring | `Closes: BACKLOG-012` |
+
+Left alone on purpose: the crew docs' running example (`work/b157`, the naming
+tables), because the CLI derives those names and nobody pastes them; citations
+of real evidence (`BACKLOG-017`, `ISSUE-014`); the `-000` example chain, which is
+real documents that must validate; and test fixtures.
+
+`skills/brief` needed nothing. Its text already used only placeholders, and under
+the new reason it is where the rule matters most, because a brief is a prompt
+another agent executes, one step closer to a commit trailer. No script changed
+behaviour; the samples moved only by their version stamp.
+
 ## [0.40.1] — 2026-09-19
 
 The Stop hook now sees the edits a sub-agent makes. Since Claude Code 2.1.x those

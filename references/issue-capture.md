@@ -92,13 +92,31 @@ its winner.** `decided_by` is a human field; an agent filling it is fabricating
 an approval nobody gave. When the chain needs a Decision that does not exist:
 create the Issue, stop, and tell the user.
 
-## Ids in text that an agent reads
+## Ids in examples
 
-The Stop hook marks a session "engaged" with the docs workflow when the
-transcript mentions a concrete id (`ID_RE` in `scripts/hook_stop_scan.py`).
-Skill files and this file are loaded into that transcript, so a literal id with
-digits sitting in instructional text silences the hook in **every** session,
-permanently.
+**An example shaped like something a tool reads takes `ISSUE-NNN`,
+`DECISION-NNN`, `BACKLOG-NNN`, never digits** — a `Closes:` trailer, a `*_ref:`
+value, an `amended_by` or `rejected` entry, an audit line. That holds here, in
+skills, in templates and in reports. Digits stay where they are facts: real
+documents under `docs/`, and prose that cites a real item as evidence.
 
-In prose and examples — here, in skills, in reports — write `ISSUE-NNN`,
-`DECISION-NNN`, `BACKLOG-NNN`. Digits belong only in files under `docs/`.
+Examples get pasted. Of the 11 layer-1 documents added beside a scaffolded one in
+five real repos, 10 carry the template's instruction note verbatim. No tool that
+acts on an id can tell a pasted example from a real reference, and the numbers
+examples reach for are taken: `DECISION-000` exists in 5 of those repos,
+`ISSUE-001` and `BACKLOG-001` in 4. Each case below was reproduced on a scratch
+repo:
+
+| Pasted into | With digits | With `NNN` |
+|---|---|---|
+| a `Closes:` trailer | `docs_close` closes that ticket and writes its audit line, printed exactly like a correct close-out | matches nothing; the ticket really finished visibly stays in progress |
+| a `*_ref:` value, an `amended_by` or `rejected` entry | resolves wherever that id exists, so the validator says nothing | reported under `[ref]` or `[amended-by]` |
+| the ref column of an audit line | counts as a recorded completion, so the real close-out later writes no audit line of its own | records nothing |
+
+None of the 33 real `Closes:` trailers in those repos came from an example. The
+rule is insurance against a silent failure, not the fix for one that happened,
+and it costs three letters.
+
+Until 0.25.0 the rule had another reason: the Stop hook read ids out of the
+transcript to decide whether a session had engaged with the docs. That check is
+gone, and no hook has read an id out of transcript text since.

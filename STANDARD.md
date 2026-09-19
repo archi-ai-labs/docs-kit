@@ -379,7 +379,7 @@ every path describe the same API. The `generated_from` path is itself an anchor,
 ### `20_issues/*.md` — Issue (id prefix `ISSUE-`)
 ```yaml
 ---
-id: ISSUE-001
+id: ISSUE-NNN
 description: ""     # what this is about
 why: ""             # why it is worth doing
 lane: fast          # fast | full  (see §5)
@@ -390,8 +390,8 @@ status: exploring   # exploring | open | promoted | archived
 ### `21_proposals/*.md` — Proposal (id prefix `PROPOSAL-`)
 ```yaml
 ---
-id: PROPOSAL-001
-issue_ref: ISSUE-001
+id: PROPOSAL-NNN
+issue_ref: ISSUE-NNN
 problem: ""         # restated problem
 proposed: ""        # the proposed option (one line; detail in body)
 impact: ""          # impact on Architecture / Roadmap ("none" if none)
@@ -403,8 +403,8 @@ options with trade-offs (the validator greps for this heading).
 ### `22_decisions/*.md` — Decision (id prefix `DECISION-`)
 ```yaml
 ---
-id: DECISION-001
-proposal_ref: PROPOSAL-001
+id: DECISION-NNN
+proposal_ref: PROPOSAL-NNN
 outcome: approved   # approved | rejected
 reason: ""          # why approved / rejected
 decided_by: ""      # who decided
@@ -419,9 +419,9 @@ If `outcome: approved` and `architecture_amendment` is a real summary (not
 ### `23_backlog/*.md` — Backlog (id prefix `BACKLOG-`)
 ```yaml
 ---
-id: BACKLOG-001
+id: BACKLOG-NNN
 description: ""     # the work item
-source_ref: DECISION-001   # Decision if full lane, Issue if fast lane. Never empty.
+source_ref: DECISION-NNN   # Decision if full lane, Issue if fast lane. Never empty.
 status: open        # open | in-progress | done
 ---
 ```
@@ -435,7 +435,7 @@ YYYY-MM-DD | what happened | ref (IDs or "-") | deviation from Decision/Backlog 
 ```
 
 **The ref column leads with the id the line is about.** A line recording that
-`BACKLOG-012` finished writes `BACKLOG-012 (DECISION-003)`; a line about a
+`BACKLOG-NNN` finished writes `BACKLOG-NNN (DECISION-NNN)`; a line about a
 Decision that opened two tickets leads with the Decision. This was always the
 convention and is now load-bearing: `docs_close` reads the first id of the ref
 column to decide whether a completion has already been recorded, so an id that
@@ -510,7 +510,7 @@ A commit message may carry a git trailer naming what it finishes:
 ```
 cache the roster lookup
 
-Closes: BACKLOG-012
+Closes: BACKLOG-NNN
 ```
 
 `scripts/docs_close.sh --apply` then sets `status: done` and appends the audit line,

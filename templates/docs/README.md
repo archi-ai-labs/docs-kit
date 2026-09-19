@@ -119,7 +119,7 @@ Một neo có thể là danh sách nhiều đường dẫn cách nhau bằng d�
 một sự thật về codebase, không phải mười bốn sự thật. `*` và `?` là ký tự đại diện,
 còn `[` thì không: `app/users/[id]/page.tsx` là thư mục Next.js có thật.
 
-Khi commit hoàn thành một Backlog item, viết trailer `Closes: BACKLOG-012` vào thông
+Khi commit hoàn thành một Backlog item, viết trailer `Closes: BACKLOG-NNN` vào thông
 điệp commit. `docs_close.sh --apply .` sẽ lật `status: done` và ghi dòng audit trích
 đúng sha. Dòng audit khi đó dẫn về một commit kiểm được nhiều năm sau, thay vì dẫn về
 một phiên chat đã biến mất.

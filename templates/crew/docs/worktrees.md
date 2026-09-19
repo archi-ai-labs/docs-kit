@@ -74,7 +74,7 @@ Sáu bước nằm trong ruột lệnh: merge nhánh dev vào executor đang gi�
 (xung đột giải tại đó), typecheck + test đúng nội dung sắp lên, **kiểm 1** cây
 chính đang đúng nhánh dev, **kiểm 2** cây chính sạch (bẩn thì nêu đích danh
 tệp), `merge --ff-only`, push, rồi phần đóng phiếu: đọc trailer
-`Closes: BACKLOG-157` để chạy docs_close, trả khoá, thả executor.
+`Closes: BACKLOG-NNN` để chạy docs_close, trả khoá, thả executor.
 
 Vì sao không gõ tay: thủ tục để dạng văn xuôi sẽ được gõ lại theo trí nhớ, và
 hai phép kiểm giữa là thứ rơi trước tiên lúc mệt — trong khi kiểm 1 là "merge

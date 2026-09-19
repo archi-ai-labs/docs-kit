@@ -183,7 +183,7 @@ Danh sách có thẩm quyền là `rejected` trong frontmatter — mỗi dòng m
 
 ```yaml
 rejected:
-  - DECISION-004 bỏ Kafka, giữ outbox trên postgres — chi phí vận hành không đáng
+  - DECISION-NNN bỏ Kafka, giữ outbox trên postgres — chi phí vận hành không đáng
 ```
 
 Trường này tồn tại để câu hỏi *"cái gì đã cân nhắc rồi loại?"* trả lời được **chỉ bằng

@@ -472,7 +472,7 @@ it is on anything else, because "in sync" is a different question in each case.
 5. `git -C <main> merge --ff-only work/b157`, then push dev branch and work
    branch (skipped with a note when no remote exists). If the dev branch moved:
    back to step 1, at most twice.
-6. Close-out: if a commit on the branch carries `Closes: BACKLOG-157`, run
+6. Close-out: if a commit on the branch carries `Closes: BACKLOG-NNN`, run
    `docs_close` (STANDARD §6.1) so `status: done` and the audit line cite the
    sha; otherwise print the reminder and leave the flip to `docs-sync`. Release
    any locks still held by the ticket, then **park** the executor — detach it
