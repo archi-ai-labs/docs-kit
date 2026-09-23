@@ -1,6 +1,6 @@
 ---
 name: crew-update
-description: Re-stamp the crew layer of a repo that already has it — scripts/crew, the role commands, the operating docs — after docs-kit itself moved. No interview, no config writes, safe to re-run. Use when the plugin was updated and this repo still carries the copies it was stamped with.
+description: Re-stamp the crew layer of a repo that already has it — scripts/crew, the role commands, the operating docs — after docs-kit itself moved. No interview, no unasked config writes, safe to re-run. Use when the plugin was updated and this repo still carries the copies it was stamped with.
 disable-model-invocation: true
 ---
 
@@ -12,10 +12,12 @@ reconciles `docs/`. So a repo could sit on the version it was stamped with while
 the kit ran three releases ahead, and the only way out was hand-copying files
 out of the plugin cache. This skill is that missing half.
 
-**It stamps what the kit owns and nothing else.** It never writes
-`.docs-kit.json`, never re-asks the interview, never turns a role on or off.
-Besides the `.new` merges, the one question it may ask is step 4's about
-`origin/HEAD`, and only when the board shows that ref on another branch.
+**It stamps what the kit owns and nothing else.** It never re-asks the
+interview and never turns a role on or off. Besides the `.new` merges it may
+ask two questions: step 4's about `origin/HEAD`, only when the board shows that
+ref on another branch, and step 5's about frozen knobs, only when the config
+carries one. The second is the only way this skill writes `.docs-kit.json`,
+and only on "yes".
 
 ## Step 0 — Resolve the kit, and say which version is about to land
 
@@ -103,11 +105,36 @@ If the board's `main tree:` block has a `default` row, `origin/HEAD` names a
 branch other than `dev_branch`, and every repo stamped before 0.40.3 was set up
 without anything checking it. Ask the question from crew-init's step 3.5, with
 the same facts in it, and run `git remote set-head origin <dev>` only on "yes".
-When the row says to push first, say so and do not push. This is a git ref and
-not `.docs-kit.json`, so the no-config-write contract above still holds.
+When the row says to push first, say so and do not push. This is a git ref,
+not `.docs-kit.json`.
 
-Then report three things: the version now stamped, the counts from step 2, and
-any `.new` left unapplied by the user's own choice. If `scripts/crew` was among
+## Step 5 — Frozen knobs: offer to drop them, never unasked
+
+```bash
+python3 "$PLUGIN_ROOT/scripts/crew_knobs.py" .
+```
+
+`KNOBS none` or `KNOBS off` → say nothing and move on. Each `[knob:frozen]`
+line is a tuning knob this config carries at exactly the kit's current default,
+which is what crew-init wrote before 0.40.5. Ask one question (AskUserQuestion,
+text fallback) that names each key with its value and states three facts:
+
+- dropping changes nothing today, because each value equals the default the
+  readers fall back to (crew_test checks that table against the readers);
+- once dropped, a later release that retunes a default reaches this repo; kept,
+  the repo stays on today's value for good;
+- a value kept on purpose means answering "no" on every run, or setting a
+  different value, which the script never reports.
+
+On "yes", run the same script with `--drop` and relay its lines. Then say that
+`.docs-kit.json` changed and needs a commit; do not commit it yourself.
+
+```bash
+python3 "$PLUGIN_ROOT/scripts/crew_knobs.py" --drop .
+```
+
+Then report four things: the version now stamped, the counts from step 2, any
+`.new` left unapplied by the user's own choice, and the knobs dropped or kept. If `scripts/crew` was among
 the updated files, mention that open executor sessions are still running the old
 copy in their worktrees — the file follows the branch, not the session.
 

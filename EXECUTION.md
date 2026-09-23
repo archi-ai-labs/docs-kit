@@ -637,9 +637,6 @@ moves to the next surface.
     "setup_cmd": "",
     "roles_absent": [],
     "resources": { "e2e-harness": { "patterns": ["playwright", "docker compose"] } },
-    "reader_cap": 4,
-    "wait_budget_min": 30,
-    "draw_tools": ["mcp__visualize__show_widget", "Artifact"],
     "enforce": false
   }
 }
@@ -647,10 +644,38 @@ moves to the next surface.
 
 **Absent `crew` key = the layer is off**: no hook fires, `crew` scripts refuse
 politely, nothing scaffolded by an earlier version changes shape — the same
-migration guarantee `owns` gives (STANDARD §9.1 rule 1). Every field has the
-default shown; a minimal opt-in is `"crew": {}`. `draw_tools` names drawing
-tools only; a picture file sent to render opens the explain-gate whatever the
-list says (§8).
+migration guarantee `owns` gives (STANDARD §9.1 rule 1). A minimal opt-in is
+`"crew": {}`.
+
+The block above holds sample answers, not defaults. What a reader uses when a
+key is absent:
+
+| Key | Asked by crew-init | Absent means |
+|---|---|---|
+| `test_cmd`, `typecheck_cmd`, `setup_cmd` | yes | `""`, the gate or step is skipped |
+| `dev_branch` / `prod_branch` | yes | `main` / `production` |
+| `copy` | yes | `["node_modules"]`; an empty list copies nothing |
+| `link`, `roles_absent` | yes | `[]` |
+| `resources` | yes | no locks |
+| `enforce` | written as `false` | `false`, warn only |
+| `reader_cap` | no, knob | `4` |
+| `wait_budget_min` | no, knob | `30` |
+| `draw_tools` | no, knob | `["mcp__visualize__show_widget", "Artifact"]` |
+| `resetup_when` | no, knob | the seven usual lockfiles (§2) |
+
+**Knobs stay absent until a measurement asks for one** (`setup.md` says which).
+A present key outranks the default forever, so a knob written at its default is
+a frozen copy that no later release can retune. Before 0.40.5, crew-init read
+the block above as defaults and wrote them: 3 of the 4 crew repos measured
+carried all three knobs in it at exactly the default, and none had tuned one.
+`crew-update` step 5 finds such copies with `scripts/crew_knobs.py` and offers
+to drop them. Dropping is a no-op on the day, because `crew_test.sh` holds the
+script's table equal to every reader's fallback. `enforce` is written anyway:
+STANDARD §8 fixes its default, so a written `false` cannot stand in the way of a
+release, and `setup.md` tells people to flip it in place.
+
+`draw_tools` names drawing tools only; a picture file sent to render opens the
+explain-gate whatever the list says (§8).
 
 `/docs-kit:crew-init` writes this key (asking, never guessing — the docs-init
 asymmetry of §9.3), stamps `scripts/crew`, `.claude/crew/*.md` and

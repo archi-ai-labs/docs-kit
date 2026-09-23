@@ -135,9 +135,20 @@ evidence needed before anyone turns it on.
 Merge the `crew` key into `.docs-kit.json` **without touching other keys**
 (read-modify-write via python3 json, not sed). If the file does not exist,
 create it containing only `{"crew": {...}}` — an absent `owns` stays absent,
-so the docs profile behaves exactly as before (STANDARD §9.1 rule 1). Fields
-and defaults: EXECUTION §9 — including `copy`/`link`/`setup_cmd` from step 2
-and `roles_absent` from step 1.6.
+so the docs profile behaves exactly as before (STANDARD §9.1 rule 1).
+
+Write the fields the interview asked about — `test_cmd`, `typecheck_cmd`,
+`dev_branch`, `prod_branch`, `copy`, `link`, `setup_cmd`, `resources`,
+`roles_absent` — even when an answer equals the fallback, plus `enforce: false`.
+An answer is a fact about this repo: `dev_branch: "main"` must not move when a
+later kit changes its fallback.
+
+**Never write a tuning knob** — `reader_cap`, `wait_budget_min`, `draw_tools`,
+`resetup_when`. A present key outranks the kit's default forever, so a knob
+written at its default is a frozen copy: 3 of 4 crew repos measured carried all
+three written knobs at exactly the default, none tuned, and 0.40.4 could not
+change `draw_tools`' default for them. `setup.md` says when a measurement earns
+a knob its line; EXECUTION §9 lists every fallback.
 
 ## Step 3.5 — `origin/HEAD`: offer to point it at the dev branch, never unasked
 

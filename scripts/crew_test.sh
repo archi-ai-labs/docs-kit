@@ -1478,6 +1478,96 @@ else
   bad "finished: free-tree refusal (rc=$RC, got: $OUT)"
 fi
 
+# ---------------------------------------------------------------- frozen knobs (0.40.5)
+# A present key outranks the kit's default forever, and crew-init used to copy
+# the knobs in verbatim. The known-bad case is the shape 3 of 4 real crew repos
+# carried: every knob at exactly the default, beside asked answers that also
+# equal their fallbacks and must NOT be reported.
+KN="$KIT/scripts/crew_knobs.py"
+KD="$TMP/knobs"
+mkdir -p "$KD/verbatim" "$KD/tuned" "$KD/off"
+python3 - "$KD" <<'PY'
+import json, os, sys
+d = sys.argv[1]
+def put(sub, obj):
+    with open(os.path.join(d, sub, ".docs-kit.json"), "w") as f:
+        f.write(json.dumps(obj, indent=2, ensure_ascii=False) + "\n")
+put("verbatim", {"owns": ["screens"], "crew": {
+    "test_cmd": "npm test", "typecheck_cmd": "", "dev_branch": "main",
+    "prod_branch": "production", "copy": [], "link": [], "setup_cmd": "",
+    "roles_absent": [], "resources": {}, "reader_cap": 4, "wait_budget_min": 30,
+    "draw_tools": ["mcp__visualize__show_widget", "Artifact"], "enforce": False}})
+put("tuned", {"crew": {"reader_cap": 6, "draw_tools": ["mcp__visualize__show_widget"]}})
+put("off", {"owns": []})
+PY
+
+OUT="$(python3 "$KN" "$KD/verbatim")"
+if has "$OUT" "[knob:frozen] reader_cap" && has "$OUT" "[knob:frozen] wait_budget_min" \
+   && has "$OUT" "[knob:frozen] draw_tools"; then
+  ok "knobs: a verbatim default is reported, by key"
+else
+  bad "knobs: verbatim defaults not reported (got: $OUT)"
+fi
+
+N="$(printf '%s\n' "$OUT" | grep -c '^\[knob:frozen\]')"
+[ "$N" -eq 3 ] && ok "knobs: an asked answer equal to its fallback is not a knob, nor is enforce" \
+  || bad "knobs: reported more than the three knobs (got: $OUT)"
+
+OUT="$(python3 "$KN" "$KD/tuned")"
+[ "$OUT" = "KNOBS none" ] && ok "knobs: a tuned value is left alone" \
+  || bad "knobs: tuned value reported (got: $OUT)"
+
+OUT="$(python3 "$KN" "$KD/off")"
+[ "$OUT" = "KNOBS off" ] && ok "knobs: silent about a repo with crew off" \
+  || bad "knobs: crew-off repo (got: $OUT)"
+
+cp "$KD/verbatim/.docs-kit.json" "$KD/before.json"
+python3 "$KN" --drop "$KD/verbatim" >/dev/null
+OUT="$(python3 - "$KD/before.json" "$KD/verbatim/.docs-kit.json" <<'PY'
+import json, sys
+a, b = (json.load(open(p)) for p in sys.argv[1:])
+gone = sorted(set(a["crew"]) - set(b["crew"]))
+kept = all(b["crew"][k] == v for k, v in a["crew"].items() if k not in gone)
+print("gone=%s kept=%s owns=%s" % (",".join(gone), kept, b.get("owns") == a.get("owns")))
+PY
+)"
+AGAIN="$(python3 "$KN" "$KD/verbatim")"
+if [ "$OUT" = "gone=draw_tools,reader_cap,wait_budget_min kept=True owns=True" ] \
+   && [ "$AGAIN" = "KNOBS none" ]; then
+  ok "knobs: --drop removes exactly what was reported and nothing else"
+else
+  bad "knobs: --drop (got: $OUT / again: $AGAIN)"
+fi
+
+# Dropping is only a no-op if the table IS what the readers fall back to. Read
+# the fallbacks out of the stamped CLI and the hook, so a retuned default that
+# forgets the table goes red here instead of dropping a live value.
+OUT="$(python3 - "$KIT" <<'PY'
+import ast, re, sys
+kit = sys.argv[1]
+sys.dont_write_bytecode = True  # no cache tree beside the kit scripts
+sys.path.insert(0, kit + "/scripts")
+import crew_knobs
+bad = []
+cli = open(kit + "/templates/crew/crew").read()
+for key, want in crew_knobs.KNOBS.items():
+    if key == "draw_tools":
+        tree = ast.parse(open(kit + "/scripts/hook_explain_gate.py").read())
+        got = [ast.literal_eval(n.value) for n in tree.body if isinstance(n, ast.Assign)
+               and any(getattr(t, "id", "") == "DEFAULT_DRAW" for t in n.targets)]
+        if got != [want]:
+            bad.append("%s hook=%s" % (key, got))
+        continue
+    seen = {m.group(1) if m.group(1) is not None else m.group(2)
+            for m in re.finditer(r'cfg %s (?:"([^"]*)"|([^\s)"]+))' % key, cli)}
+    if seen != {want}:
+        bad.append("%s cli=%s" % (key, sorted(seen)))
+print("drift: " + "; ".join(bad) if bad else "same")
+PY
+)"
+[ "$OUT" = "same" ] && ok "knobs: the table matches every reader's fallback" \
+  || bad "knobs: table drifted from the readers ($OUT)"
+
 # ---------------------------------------------------------------- summary
 echo ""
 echo "crew_test: $PASS passed, $FAIL failed"

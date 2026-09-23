@@ -28,11 +28,17 @@ chối lịch sự, không gì đổi hình dạng. Đó cũng là cách tắt n
   "setup_cmd": "",
   "roles_absent": [],
   "resources": { "e2e-harness": { "patterns": ["playwright", "docker compose"] } },
-  "reader_cap": 4,
-  "wait_budget_min": 30,
   "enforce": false
 }
 ```
+
+Khối trên là câu trả lời mẫu cho các câu crew-init hỏi, không phải giá trị mặc
+định. Các núm chỉnh (knob) `reader_cap`, `wait_budget_min`, `draw_tools` và
+`resetup_when` cố ý vắng mặt, vì khoá nào có mặt thì luôn thắng giá trị mặc định
+của kit. Một núm ghi đúng bằng mặc định sẽ chặn mọi lần kit chỉnh lại nó về sau.
+Chỉ thêm núm khi mục "Chỉnh ngưỡng theo số đo" bên dưới cho ra một con số khác.
+Bảng giá trị khi vắng mặt nằm ở EXECUTION §9, và `/docs-kit:crew-update` đề nghị
+xoá những núm đang ghi đúng bằng mặc định.
 
 ## Hai luật cho phần cấp phát executor
 

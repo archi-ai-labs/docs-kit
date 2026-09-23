@@ -46,7 +46,7 @@ jobs:
       - name: Shell + Python syntax
         run: |
           for f in scripts/*.sh templates/crew/crew; do bash -n "$f"; done
-          python3 -m py_compile scripts/docs_render.py scripts/docs_detect.py scripts/hook_*.py
+          python3 -m py_compile scripts/docs_render.py scripts/docs_detect.py scripts/crew_knobs.py scripts/hook_*.py
 
       # The scaffold must validate clean out of the box: the shipped -000 example
       # chain is self-consistent by design, and a fresh tree is the first thing

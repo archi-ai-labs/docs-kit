@@ -5,6 +5,61 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
+## [0.40.5] — 2026-09-24
+
+Every reader of `.docs-kit.json` falls back to the kit's default only when a key
+is absent, and crew-init had been writing the defaults in. A knob copied at its
+default outranks every later change to that default, so a kit release could not
+retune the repos that needed it most.
+
+### Fixed — crew-init froze the tuning knobs at the version it ran
+
+Found while shipping 0.40.4, which could not change `draw_tools`' default for the
+repos that carried it. Measured on the four crew repos of one machine, with
+equality read the way each reader reads a value (`copy: []` is not the default,
+since an absent `copy` means `["node_modules"]`):
+
+| Keys | Written | Equal to the fallback | Tuned |
+|---|---|---|---|
+| knobs crew-init never asks about: `reader_cap`, `wait_budget_min`, `draw_tools` | 9, in 3 repos | 9 | 0 |
+| `enforce` | 4 | 4 | 0 |
+| the nine asked fields | 36 | 14 | answers |
+
+The cause is one line in crew-init, "Fields and defaults: EXECUTION §9", pointing
+at a block that called itself "every field has the default shown" while 5 of its
+13 values were samples. The same line produced no knobs in the repo stamped on
+2026-09-01 and all three in the three stamped from 2026-09-13 on.
+
+An asked answer that equals its fallback is kept. `dev_branch: "main"` in a repo
+whose dev branch is main is a fact about the repo, and agentic-ai's
+`main`/`production` pair names two branches that exist. Dropping them would let
+a future default move them.
+
+| Where | Now |
+|---|---|
+| `crew-init` step 3 | writes the nine asked fields and `enforce: false`, never a knob |
+| `scripts/crew_knobs.py`, new | reports each knob present at exactly the current default as `[knob:frozen]`; `--drop` removes exactly those and rewrites the file in the 2-space JSON form all four configs already use, so the diff is the dropped lines |
+| `crew-update`, new step 5 | runs the report and, when it names a knob, asks once; drops on "yes" and leaves the commit to the user |
+| EXECUTION §9, `setup.md` | the sample block loses its knobs, and a table gives every key's fallback and whether crew-init asks it |
+
+`enforce` stays written. STANDARD §8 fixes its default at `false`, so a written
+`false` cannot block a release, and `setup.md` tells people to flip it in place.
+`crew-update` no longer promises "no config writes": its description now says
+"no unasked config writes" (8 bytes; the skill descriptions total 3493 / 3500
+with 0.40.0 counted).
+
+### Tests
+
+Six checks, the known-bad shape first: the three-repo config reports its three
+knobs and none of its asked answers or `enforce`; a tuned value and a crew-off
+repo stay quiet; `--drop` removes exactly the reported keys; and the script's
+table matches the fallbacks read out of `scripts/crew` and the hook's
+`DEFAULT_DRAW`, so dropping stays a no-op on the day. Seven mutations (never
+frozen, an asked field treated as a knob, `draw_tools` always frozen, `--drop`
+taking `enforce`, a drifted table, JSON equality instead of the reader's, crew-off
+read as none) each turn their own checks red. `scripts/crew_test.sh` is at
+**157 checks**.
+
 ## [0.40.4] — 2026-09-24
 
 `explain` listed three surfaces to draw on and never said which one the reader
