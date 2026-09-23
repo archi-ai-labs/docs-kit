@@ -1568,6 +1568,223 @@ PY
 [ "$OUT" = "same" ] && ok "knobs: the table matches every reader's fallback" \
   || bad "knobs: table drifted from the readers ($OUT)"
 
+# ---------------------------------------------------------------- chains (0.41.0)
+# GitHub issue #4, from a repo with ~330 backlog items and 6 executors: a run of
+# dependent tickets (each one edits a file the one before it creates) cost one
+# hand-off per ticket, and the order of the chain lived only in a chat message.
+# The planner now records it as `after_ref:` on the later ticket, one session
+# carries the whole chain, and — the property the owner asked to be most careful
+# about — the executor carrying a chain stays BUSY through every `crew done`: a
+# parked tree is a free tree, and a free tree is what another session's
+# `crew new` takes. Known-bad first.
+CH="$TMP/chain"
+CHR="$CH/repo"
+mkdir -p "$CHR/scripts" "$CHR/docs/92_audit"
+(
+  cd "$CHR"
+  git init -q && git checkout -q -b main
+  git config user.email t@t && git config user.name t
+  printf '# audit log\n' > docs/92_audit/LOG.md
+  printf '{"owns": [], "crew": {"dev_branch": "main", "copy": [], "link": []}}\n' > .docs-kit.json
+  cp "$KIT/templates/crew/crew" scripts/crew && chmod +x scripts/crew
+  git add -A && git commit -qm init >/dev/null
+)
+chticket() { # chticket <nnn> <after nnn|-> [execution] — a Backlog item, committed
+  mkdir -p "$CHR/docs/23_backlog"
+  printf -- '---\nid: BACKLOG-%s\ndescription: "x"\nsource_ref: ISSUE-001\nstatus: open\n' "$1" \
+    > "$CHR/docs/23_backlog/t$1.md"
+  [ "$2" = "-" ] || printf 'after_ref: BACKLOG-%s\n' "$2" >> "$CHR/docs/23_backlog/t$1.md"
+  [ -z "${3:-}" ] || printf 'execution: %s\n' "$3" >> "$CHR/docs/23_backlog/t$1.md"
+  printf -- '---\n' >> "$CHR/docs/23_backlog/t$1.md"
+  ( cd "$CHR" && git add -A && git commit -qm "ticket $1" >/dev/null )
+}
+chcrew() { (cd "$CHR" && CREW_DOCS_CLOSE="$KIT/scripts/docs_close.sh" scripts/crew "$@") 2>&1; }
+chwork() { # chwork <e<k>> <nnn> — the ticket's work, committed with its closer
+  ( cd "$CH/repo-$1" && echo "$2" >> routes.txt && git add -A \
+      && git -c user.email=t@t -c user.name=t commit -qm "work $2" -m "Closes: BACKLOG-$2" )
+}
+chclose() { ( cd "$CHR" && git add -A && git commit -qm "docs: close-out" >/dev/null ); }
+chrow() { chcrew status | awk -v e="$1" '$1 == e { print $2; exit }'; }
+chwant() { (cd "$CH/repo-$1" && "$CHR/scripts/crew" name executor "$2" --want) 2>&1; }
+chticket 101 -
+chticket 102 101
+chticket 103 102
+chticket 200 -
+( cd "$CHR" && scripts/crew executor add >/dev/null 2>&1 )
+
+# KNOWN-BAD: 102 edits what 101 builds, and 101 has not landed.
+OUT="$(chcrew new 102)" && RC=0 || RC=$?
+if [ "$RC" -ne 0 ] && has "$OUT" "[new:after]" && has "$OUT" "BACKLOG-101"; then
+  ok "chain: a ticket whose predecessor has not landed is refused, and the refusal names it"
+else
+  bad "chain: after_ref gate (rc=$RC out: $OUT)"
+fi
+[ -z "$(git -C "$CHR" branch --list 'work/b102')" ] \
+  && ok "chain: the refusal leaves no branch behind" \
+  || bad "chain: a refused ticket still got a branch"
+
+OUT="$(chcrew new 101)" || bad "chain: crew new 101 failed: $OUT"
+has "$OUT" "101→103" && ok "chain: crew new says which chain the session now carries" \
+  || bad "chain: crew new did not name the chain (out: $OUT)"
+# Still refused while 101 is in flight, and now the refusal says WHO carries it,
+# so a second session does not go looking for a tree of its own.
+OUT="$(chcrew new 102)" && RC=0 || RC=$?
+if [ "$RC" -ne 0 ] && has "$OUT" "open in e1"; then
+  ok "chain: while the predecessor is in flight the refusal names the session carrying it"
+else
+  bad "chain: in-flight refusal (rc=$RC out: $OUT)"
+fi
+
+OUT="$(chwant e1 101)"
+has "$OUT" "e1 · b101 · 101→103 · processing · crew/executor" \
+  && ok "chain: the title names one ticket and the chain it belongs to" \
+  || bad "chain: chained title (got: $OUT)"
+OUT="$(chcrew status)"
+if has "$OUT" "chains:" && has "$OUT" "101→103  e1 on 101 · queued 102 103"; then
+  ok "chain: the board shows what is queued behind the session"
+else
+  bad "chain: chains block (got: $OUT)"
+fi
+
+# THE PROPERTY THE OWNER ASKED FOR. crew done 101 must leave e1 holding 102's
+# branch — busy — and must get there without ever detaching: a detached, clean
+# tree is exactly what exec_free hands to the next `crew new`, so even an instant
+# spent parked is a window in which another session takes the chain's tree. The
+# end state cannot prove "never parked" (park-then-switch ends in the same place),
+# so the check reads e1's own reflog for the move itself.
+chwork e1 101
+OUT="$(chcrew done 101)" && RC=0 || RC=$?
+[ "$RC" -eq 0 ] || bad "chain: crew done 101 failed (out: $OUT)"
+[ "$(git -C "$CH/repo-e1" symbolic-ref --short HEAD 2>/dev/null)" = "work/b102" ] \
+  && ok "chain: crew done hands the tree straight to the next ticket in the chain" \
+  || bad "chain: e1 is not on work/b102 after crew done 101 (out: $OUT)"
+[ "$(chrow e1)" = "work/b102" ] \
+  && ok "chain: the board reads the chain's executor as busy, never idle" \
+  || bad "chain: board row for e1 is '$(chrow e1)'"
+MOVE="$(git -C "$CH/repo-e1" reflog -1 --format=%gs HEAD)"
+has "$MOVE" "moving from work/b101 to work/b102" \
+  && ok "chain: the tree went from one branch to the next with no detached HEAD in between" \
+  || bad "chain: the handoff passed through another state (reflog: $MOVE)"
+[ -f "$CH/repo-e1/routes.txt" ] && grep -q "^101$" "$CH/repo-e1/routes.txt" \
+  && ok "chain: the next ticket starts from a dev branch that already holds the last one" \
+  || bad "chain: work/b102 was not cut from the merged dev branch"
+grep -q "NEW	e1	BACKLOG-102	.*after=BACKLOG-101" "$CH/repo-crew/log.tsv" \
+  && ok "chain: the handoff is logged as a NEW that says which ticket it followed" \
+  || bad "chain: no NEW line for the handoff"
+
+# Another session asking for a tree right now must NOT get e1.
+chclose
+OUT="$(chcrew new 200)" || bad "chain: crew new 200 failed: $OUT"
+if [ "$(git -C "$CH/repo-e1" symbolic-ref --short HEAD 2>/dev/null)" = "work/b102" ] \
+   && [ "$(git -C "$CH/repo-e2" symbolic-ref --short HEAD 2>/dev/null)" = "work/b200" ]; then
+  ok "chain: an unrelated crew new grows the pool instead of taking the chain's tree"
+else
+  bad "chain: unrelated ticket landed in the wrong tree (out: $OUT)"
+fi
+
+# The session's old title still reads 101; the nag must move it to 102, not to
+# `finished` — the chain is not over.
+mktitle "repo · e1 · b101 · 101→103 · finishing · crew/executor" chainstale
+OUT="$(run_nag "$CH/repo-e1" "$NGT/chainstale.jsonl")"
+has "$OUT" "true : repo · e1 · b102 · 101→103 · processing · crew/executor" \
+  && ok "chain: the title nag moves a chain session on to its next ticket" \
+  || bad "chain: nag after handoff (got: $OUT)"
+
+# --park ends the chain session here: the tree is free, the board points at the
+# ticket that is now ready, and whoever resumes gets the tree they stand in.
+chwork e1 102
+OUT="$(chcrew done 102 --park)" && RC=0 || RC=$?
+[ "$RC" -eq 0 ] && [ -z "$(git -C "$CH/repo-e1" symbolic-ref --short HEAD 2>/dev/null)" ] \
+  && ok "chain: --park lands the ticket and frees the tree instead of handing it on" \
+  || bad "chain: --park (rc=$RC out: $OUT)"
+chclose
+OUT="$(chcrew status)"
+has "$OUT" "← no session carries this chain — next: scripts/crew new 103" \
+  && ok "chain: a chain nobody carries is flagged with the ticket that is ready" \
+  || bad "chain: uncarried chain not flagged (got: $OUT)"
+( cd "$CHR" && scripts/crew executor add >/dev/null 2>&1 )   # e3, free, listed after e1
+OUT="$( (cd "$CH/repo-e3" && "$CHR/scripts/crew" new 103) 2>&1 )" || bad "chain: crew new 103 failed: $OUT"
+if [ "$(git -C "$CH/repo-e3" symbolic-ref --short HEAD 2>/dev/null)" = "work/b103" ] \
+   && [ -z "$(git -C "$CH/repo-e1" symbolic-ref --short HEAD 2>/dev/null)" ]; then
+  ok "chain: crew new takes the free executor the session stands in, not the first free one"
+else
+  bad "chain: cwd preference (e1=$(git -C "$CH/repo-e1" symbolic-ref --short HEAD 2>/dev/null) out: $OUT)"
+fi
+
+# The last ticket has nothing after it, so it parks exactly as before, and the
+# session ends `finished` with the chain still in its title.
+chwork e3 103
+OUT="$(chcrew done 103)" && RC=0 || RC=$?
+[ "$RC" -eq 0 ] && [ -z "$(git -C "$CH/repo-e3" symbolic-ref --short HEAD 2>/dev/null)" ] \
+  && ok "chain: the last ticket of a chain parks the tree" \
+  || bad "chain: last ticket did not park (rc=$RC out: $OUT)"
+chclose
+OUT="$(chwant e3 103)"
+has "$OUT" "e3 · b103 · 101→103 · finished · crew/executor" \
+  && ok "chain: the session carrying a chain ends finished on its last ticket" \
+  || bad "chain: finished title (got: $OUT)"
+has "$(chcrew status)" "chains:" \
+  && bad "chain: a chain with every ticket done is still on the board" \
+  || ok "chain: a chain whose tickets are all done drops off the board"
+OUT="$(chwant e2 200)"
+has "$OUT" "e2 · b200 · processing · crew/executor" \
+  && ok "chain: a ticket nobody chained keeps exactly the title it had" \
+  || bad "chain: unchained title changed (got: $OUT)"
+
+# A fork: two tickets after one. crew done continues into the lowest and names
+# the other; a fast-pair link is never held for, because it runs in main.
+chticket 300 -
+chticket 302 300
+chticket 301 300
+chticket 400 -
+chticket 401 400 fast-pair
+OUT="$(chcrew status)"
+has "$OUT" "fork: 300 is followed by 301 302" \
+  && ok "chain: the board names a fork and which lane crew done continues into" \
+  || bad "chain: fork line (got: $OUT)"
+( cd "$CH/repo-e1" && "$CHR/scripts/crew" new 300 >/dev/null 2>&1 )
+chwork e1 300
+OUT="$(chcrew done 300)"
+if [ "$(git -C "$CH/repo-e1" symbolic-ref --short HEAD 2>/dev/null)" = "work/b301" ] \
+   && has "$OUT" "also after BACKLOG-300: 302"; then
+  ok "chain: at a fork crew done continues into the lowest ticket and names the other lane"
+else
+  bad "chain: fork handoff (out: $OUT)"
+fi
+chclose
+( cd "$CH/repo-e3" && "$CHR/scripts/crew" new 400 >/dev/null 2>&1 )
+chwork e3 400
+OUT="$(chcrew done 400)"
+if [ -z "$(git -C "$CH/repo-e3" symbolic-ref --short HEAD 2>/dev/null)" ] && has "$OUT" "fast-pair"; then
+  ok "chain: a fast-pair next ticket runs in main, so the tree is parked, with the reason"
+else
+  bad "chain: fast-pair link (out: $OUT)"
+fi
+chclose
+
+# after_ref names a Backlog item, never an Issue; and a loop cannot hang the board.
+printf -- '---\nid: BACKLOG-500\ndescription: "x"\nsource_ref: ISSUE-001\nstatus: open\nafter_ref: ISSUE-001\n---\n' \
+  > "$CHR/docs/23_backlog/t500.md"
+chclose
+OUT="$(chcrew new 500)" && RC=0 || RC=$?
+if [ "$RC" -ne 0 ] && has "$OUT" "links Backlog items only"; then
+  ok "chain: an after_ref that names an Issue is refused with the reason"
+else
+  bad "chain: non-Backlog after_ref (rc=$RC out: $OUT)"
+fi
+chticket 601 602
+chticket 602 601
+OUT="$(chcrew status)"
+has "$OUT" "loops back on itself through" \
+  && ok "chain: an after_ref loop is named on the board instead of hanging it" \
+  || bad "chain: loop not reported (got: $OUT)"
+OUT="$( (cd "$CHR" && scripts/crew name executor 601 --want) 2>&1 )"
+if has "$OUT" "b601 · processing" && ! has "$OUT" "→"; then
+  ok "chain: a ticket inside a loop gets no chain in its title, since no ticket there is first"
+else
+  bad "chain: looped title (got: $OUT)"
+fi
+
 # ---------------------------------------------------------------- summary
 echo ""
 echo "crew_test: $PASS passed, $FAIL failed"

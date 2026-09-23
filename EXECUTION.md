@@ -30,7 +30,7 @@ five, verbatim:
 | Branch | `work/b<nnn>` | `work/b157` |
 | Lock owner | full id | `crew lock acquire e2e-harness 157` → owner `BACKLOG-157` |
 | Executor tree | `../<repo>-e<k>` | `../myapp-e1` |
-| Session name | `<repo> · <e<k>\|main> · b<nnn> · <state> · crew/executor` | `myapp · e1 · b157 · processing · crew/executor` |
+| Session name | `<repo> · <e<k>\|main> · b<nnn> · [<first>→<last> ·] <state> · crew/executor` | `myapp · e1 · b157 · processing · crew/executor` |
 
 `<nnn>` is the zero-padded number exactly as it appears in `id:` — `crew`
 normalizes `crew new 42` to `b042`.
@@ -46,7 +46,7 @@ along" without opening the board, and it cannot drift from what git says. The
 place is `e<k>` for a pooled executor and **`main` for a fast-pair session**,
 which skips the worktree and the branch but is still a session of its own. There
 is deliberately **no idle title** and no ticketless one: an executor session
-belongs to exactly one ticket, and without one there is nothing to name. An executor holding no ticket sits at a detached
+holds exactly one ticket at a time, and without one there is nothing to name. An executor holding no ticket sits at a detached
 HEAD on the dev branch, because "on dev" is the one thing a second worktree may
 not be.
 
@@ -80,16 +80,68 @@ Allocating on the main tree before any worktree exists is what makes the
 collision impossible instead of unlikely. It also makes the Backlog the single
 intake: **no ticket, no branch.**
 
-**One ticket = one branch = one session, carried to `done`.** 0.31.0 changed
-exactly one thing about that: the *tree* is no longer per ticket. A session is
-still born for a ticket, titled `processing`, and ends `finished`; what is
-reused is the checkout underneath it. The measurement that bought this rule:
+**One ticket = one branch; one session per chain, carried to `done`.** A ticket
+nobody chained is a chain of one, so for most work this still reads "one ticket,
+one session". 0.31.0 made the *tree* outlive the ticket, and 0.41.0 lets the
+*session* outlive it too, but only along a chain the planner wrote down. A
+session is born for a ticket, titled `processing`, and ends `finished`; its
+title always names exactly one ticket, the one its tree holds now. The
+measurement that bought the per-ticket half of this rule:
 one owner request ("fix the demo top-up") cut across 4 technical roles took
 **15h32** wall-clock of which **~87 minutes** had commits, and the owner was
 told "done" 4 separate times. The longest stretch was **7h18 of finished work sitting unmerged on a
 branch** — which happened 3 times in 2 days. Cutting tickets by request instead
 of by technical layer is the fix; the first two tickets run under this model
 closed in **15 and 41 minutes**.
+
+**A chain is tickets that cannot run side by side, and the planner records it
+on the later ticket** as `after_ref: BACKLOG-<nnn>`. Measured on the repo that
+reported the gap (GitHub issue #4: about 330 Backlog items, a pool of 6
+executors): a run of 8 tickets, each moving a route file into a folder tree
+the one before it created, so ticket N+1 edits the mount file ticket N built.
+One session per ticket meant **8 hand-offs**, each a session the owner starts
+by hand plus a re-read of the context. The owner split the run into two lanes
+of 5 and 3 and asked one executor to carry each, and then no surface said so:
+the title and `crew status` each named one ticket, and the order of the chain
+lived only in a chat message between two sessions. A hand-typed title such as
+`b332-336` went red on every later ticket, because `crew name` computes one
+number.
+
+The field sits on the ticket that has the dependency, the same direction as
+every other `*_ref`, so the validator's ref check (STANDARD §3) already
+resolves it and nothing new checks it. It is not a flag on `crew new`: that
+would keep the order in `../<repo>-crew/`, which is never committed and is
+written by the executor, not by the planner who decided it. With it in place:
+
+| Command | What the chain changes |
+|---|---|
+| `crew new <nnn>` | refuses with `[new:after]` until the predecessor has landed on the dev branch (closer on dev, or doc `done`); names the session carrying it when it is in flight |
+| `crew done <nnn>` | when a ticket runs after this one, the tree goes **straight** from `work/b<this>` to `work/b<next>`, cut from the dev branch that now holds this merge; `--park` ends the chain session here instead |
+| `crew name executor` | adds `<first>→<last> ·` after the ticket: `myapp · e1 · b334 · 332→336 · processing · crew/executor` |
+| `crew status` | a `chains:` block: what landed, who carries it, what is queued, and an arrow when no session carries a chain that has a ticket ready |
+
+**The chain's executor never reads `idle` between two of its tickets.** A parked
+tree is a free tree (§5: detached and clean is the whole test), and a free tree
+is what the next `crew new` takes. Parking after one ticket and letting the
+session run `crew new` for the next would open exactly that window, and a
+second session would take the tree the chain session is sitting in. So the
+switch happens inside `crew done`, under the same `assign.lock` mutex `crew new`
+claims under, and never passes through a detached HEAD; `crew_test.sh` reads
+the executor's own reflog to prove it, because park-then-switch ends in the
+same state and only the move itself differs. The pin is still the checked-out
+branch, and there is no reservation file.
+
+One predecessor per ticket makes a chain a line and a fork a tree. At a fork
+`crew done` continues into the lowest-numbered successor not yet done and
+names the others, each of which needs a session of its own. A `fast-pair`
+successor runs in the main tree by definition, so the tree is parked and the
+session carries on from there. Two ceilings, stated: the close-out
+`docs_close` writes lands uncommitted in the main tree (§5), so the next
+`crew done` in the chain meets check 2 until someone commits it, exactly as
+two parallel executors already do; and a leftover file that keeps the tree on
+the old branch also stops the handoff, so after clearing it the session runs
+`crew new <next>` from inside that tree, which `crew new` prefers over any
+other free one.
 
 ## 2. Execution levels — where the work happens
 
@@ -475,10 +527,13 @@ it is on anything else, because "in sync" is a different question in each case.
 6. Close-out: if a commit on the branch carries `Closes: BACKLOG-NNN`, run
    `docs_close` (STANDARD §6.1) so `status: done` and the audit line cite the
    sha; otherwise print the reminder and leave the flip to `docs-sync`. Release
-   any locks still held by the ticket, then **park** the executor — detach it
-   back onto the dev branch, which is what makes it free again. Its provisioned
-   payload stays; any other uncommitted file keeps the executor on the branch
-   and is named, exactly as the old teardown refused to delete it.
+   any locks still held by the ticket. Then, when a ticket names this one in its
+   `after_ref:`, **hand the tree on**: switch it straight to that ticket's branch,
+   cut from the dev branch that now holds this merge, so the chain's executor
+   never reads free (§1). Otherwise, or with `--park`, **park** the executor —
+   detach it back onto the dev branch, which is what makes it free again. Its
+   provisioned payload stays; any other uncommitted file keeps the executor on
+   the branch and is named, exactly as the old teardown refused to delete it.
 
 Executors merge their own finished work — no human review gate holds a green
 branch. The gate that was removed was measured first: finished work waited
@@ -723,6 +778,8 @@ does not exist, so one fault is reported once.
 | A hook nagging an overdue report | hooks read events (§8) and a calendar is not one; the always-loaded snippet is at 2379 of its 2400-byte cap, so the reminder lives on the board that sessions are already told to run |
 | A `roadmap_owner` / `report_every_days` key | one writer is a rule, not a setting, and the cadence is derived from landed work (§6.1) |
 | A hook that blocks a stale title | title-nag warns and never denies: a title is a label on work already done, so blocking a session from ending over one would cost more than the wrong label does (§12) |
+| Assigning a fork's other lanes | at a fork `crew done` continues into one successor and names the rest; who carries a second lane is the planner's call, like any other ticket, and a command that picked a session for it would be assigning work from a board |
+| A chain field the validator checks for shape | `after_ref:` is a `*_ref`, so check 1 already resolves it; a loop or an Issue in it is caught where it bites — `crew new` refuses the Issue, `crew status` names the loop — and the validator stays on document shape (STANDARD §7) |
 | `crew handoff <nnn>` generating the prompt | the template in the planner hat is filled by hand this release. A generator would make title and scope right by construction instead of by memory, which is strictly better and is exactly why it deserves its own release with its own measurement |
 | A `PR` step in `crew done` | there is none to record: the merge is `--ff-only` onto the dev branch and the executor's report says so in as many words, because an empty PR field reads as "forgot to fill in" rather than "by design" |
 | Node implementation | the origin repo's `lock.mjs` and hooks assumed Node on every machine; the port floor here is bash 3.2 + python 3.9 (STANDARD's own), so everything shipped is bash/py |

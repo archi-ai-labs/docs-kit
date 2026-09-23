@@ -6,7 +6,7 @@ Ràng buộc chỉ bắt đầu có nghĩa khi các mũ nằm trên các phiên 
 | Role | Làm | Ràng buộc đáng tiền nhất |
 |---|---|---|
 | `planner` | đo bug tại chỗ, viết phiếu, xếp lane + mức, khai `scope_files`, giao việc, quyết định cỡ pool | **không sửa code** |
-| `executor` | một phiếu – một nhánh – tới `done`; một phiên sống trong một executor | tự gộp bằng `crew done`, không chờ ai duyệt |
+| `executor` | một phiếu – một nhánh – tới `done`; một phiên mang một chuỗi phiếu trong một executor | tự gộp bằng `crew done`, không chờ ai duyệt |
 | `tester` | nghiệm thu + test khám phá đóng vai khách | **không vá thứ mình phát hiện** — phát hiện viết thành Issue |
 | `devops` | giữ nhánh production, quan sát bản đang chạy | không nhận phiếu code |
 | `steward` | dọn executor mồ côi, giữ bảng trạng thái, ghi luật | **không giao việc, không nhận báo cáo** |
@@ -86,6 +86,7 @@ vai cho một vai không tồn tại là một sự thật sai nằm trong repo.
 | Loại phiên | Tên | Ví dụ |
 |---|---|---|
 | phiên executor trong pool | `<repo> · e<k> · b<nnn> · <trạng thái> · crew/executor` | `lop-hoc-zalo · e1 · b157 · processing · crew/executor` |
+| phiên executor mang chuỗi | `<repo> · e<k> · b<nnn> · <đầu>→<cuối> · <trạng thái> · crew/executor` | `lop-hoc-zalo · e1 · b334 · 332→336 · processing · crew/executor` |
 | phiên executor fast-pair | `<repo> · main · b<nnn> · <trạng thái> · crew/executor` | `lop-hoc-zalo · main · b010 · processing · crew/executor` |
 | phiên mũ (năm vai còn lại) | `<repo> · crew/<vai>` | `lop-hoc-zalo · crew/navigator` |
 
@@ -93,7 +94,9 @@ Tên repo đứng trước để danh sách phiên tự gom theo dự án. Ba ph
 đọc từ git chứ không gõ tay: tên cây cho biết executor nào, nhánh cho biết phiếu
 nào, trailer cho biết trạng thái. Ô đầu là **chỗ session đang ngồi**: `e<k>` khi
 nó ở một cây trong pool, `main` khi đó là phiếu fast-pair làm thẳng ở cây chính.
-Mỗi phiếu vẫn một phiên riêng, sinh ra ở `processing` và kết thúc ở `finished`.
+Mỗi chuỗi phiếu có một phiên riêng, và phiếu không nằm trong chuỗi nào là chuỗi
+một phần tử (`tickets.md`). Phiên sinh ra ở `processing`, kết thúc ở `finished`,
+và title luôn chỉ đúng một phiếu, là phiếu cây đang giữ.
 Executor rảnh thì không có phiên nào để đặt tên, và một phiên executor không có
 số phiếu cũng vậy, nên `crew name` báo lỗi thay vì bịa ra một cái title.
 

@@ -9,7 +9,8 @@ phiếu nên nó mang địa chỉ executor:
 BACKLOG-157                                 phiếu (docs/23_backlog/)
 work/b157                                   nhánh
 BACKLOG-157                                 chủ khoá (crew lock acquire … 157)
-<repo> · e1 · b157 · processing · …         tên phiên (fast-pair thì e1 → main)
+<repo> · e1 · b157 · processing · …         tên phiên (fast-pair thì e1 → main; phiếu
+                                            trong chuỗi thêm đoạn 157→160 sau b157)
 ../<repo>-e1                                cây của executor (dùng lại)
 ```
 
@@ -65,6 +66,46 @@ execution: fast     # fast-pair | fast | full
 `crew done` ghi lại S khai so với số tệp thật (`git diff --stat`) vào
 `../<repo>-crew/log.tsv` — đó là cách ngưỡng dưới đây hết dựa trên một điểm
 dữ liệu.
+
+## Chuỗi phiếu — `after_ref:`
+
+Chuỗi (chain) là những phiếu không chạy song song được, vì phiếu sau sửa chính
+thứ mà phiếu trước dựng ra. Planner ghi thứ tự vào **phiếu sau**:
+
+```yaml
+id: BACKLOG-333
+after_ref: BACKLOG-332   # 333 chỉ bắt đầu khi 332 đã gộp vào nhánh dev
+```
+
+Một phiên executor mang trọn một chuỗi. Phiếu không ai xâu vào chuỗi là chuỗi
+một phần tử, nên nó vẫn đi một phiên như trước. Title luôn chỉ đúng một phiếu,
+là phiếu cây đang giữ, và thêm đoạn `<đầu>→<cuối>` để biết phiếu thuộc chuỗi
+nào:
+
+```
+<repo> · e1 · b333 · 332→336 · processing · crew/executor
+```
+
+| Lệnh | Chuỗi đổi gì |
+|---|---|
+| `crew new 333` | từ chối với `[new:after]` khi 332 chưa gộp vào nhánh dev, và nêu tên executor đang mang 332 nếu có |
+| `crew done 332` | chuyển cây thẳng từ `work/b332` sang `work/b333` mà không park ở giữa; thêm `--park` thì chuỗi dừng tại đây |
+| `crew status` | khối `chains:` cho biết phiếu nào đã gộp, executor nào đang mang chuỗi, phiếu nào đang chờ |
+
+**Cây của chuỗi không lúc nào rảnh giữa hai phiếu.** Cây đã park là cây rảnh, và
+`crew new` của một phiên khác sẽ lấy đúng cây rảnh ấy. Vì vậy `crew done` chuyển
+nhánh ngay bên trong lệnh, dưới cùng khoá `assign.lock` mà `crew new` dùng.
+
+Mỗi phiếu chỉ có một phiếu đứng trước, nên chuỗi là một đường thẳng còn chỗ rẽ
+nhánh (fork) là một cây. Tại chỗ rẽ, `crew done` đi tiếp vào phiếu có số nhỏ
+nhất chưa xong và nêu tên các phiếu còn lại, vì mỗi phiếu ấy cần một phiên
+riêng. Phiếu kế tiếp khai `execution: fast-pair` thì chạy ở cây chính, nên cây
+executor được park.
+
+**Giới hạn đã biết:** `docs_close` ghi phần đóng sổ (`status: done` và dòng
+audit) vào cây chính mà không commit. Vì vậy `crew done` của phiếu kế tiếp trong
+chuỗi sẽ vấp kiểm 2 cho tới khi có người commit hai tệp đó, giống hệt hai
+executor chạy song song.
 
 ## Chẻ nếu
 

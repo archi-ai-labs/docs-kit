@@ -207,7 +207,8 @@ Report in a few lines: what was written where, then the working loop — the
 planner pre-warms the pool if it wants to (`scripts/crew executor add`, twice by
 default) and writes the first ticket, `scripts/crew new <nnn>` hands it to a free
 executor and creates one if none is free,
-`scripts/crew done <nnn>` lands it and frees that executor, `scripts/crew
+`scripts/crew done <nnn>` lands it and frees that executor — or, for a ticket
+another one names in `after_ref:`, hands it straight to that one — `scripts/crew
 status` before taking more. Then the weekly loop, which is the navigator's:
 `scripts/crew report --write` measures the window and lays down
 `docs/92_audit/reports/<week>.md` with its judgement sections empty, and the same

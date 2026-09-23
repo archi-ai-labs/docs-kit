@@ -5,6 +5,64 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
+## [0.41.0] — 2026-09-24
+
+A run of dependent tickets can now be written down as a chain, and one executor
+session carries the whole chain without its tree ever becoming free in between.
+
+### Added — chains of dependent tickets (GitHub issue #4)
+
+Reported from a repo with about 330 Backlog items and a pool of 6 executors. A
+run of 8 tickets each moved a route file into a folder tree the one before it
+created, so ticket N+1 edited the mount file ticket N built and none could run
+side by side. One session per ticket meant 8 hand-offs, each a session the owner
+starts by hand plus a re-read of the context. The owner split the run into two
+lanes of 5 and 3 and asked one executor to carry each, and then nothing said so:
+the title and `crew status` each named one ticket, the order of the chain lived
+only in a chat message between two sessions, and a hand-typed `b332-336` title
+went red on every later ticket because `crew name` computes one number.
+
+The planner records the order on the later ticket as `after_ref: BACKLOG-<nnn>`.
+It is a `*_ref`, so the validator's ref check already resolves it. The rule in
+EXECUTION §1 becomes **one ticket = one branch; one session per chain**, and a
+ticket nobody chained is a chain of one.
+
+| Where | Now |
+|---|---|
+| `crew new <nnn>` | refuses with `[new:after]` until the predecessor has landed on the dev branch (its closer on dev, or its doc `done`), and names the executor carrying it when it is in flight; an `after_ref` naming anything but a Backlog item is refused with the reason. It also takes the free executor the session is standing in before any other |
+| `crew done <nnn> [--park]` | when a ticket names this one in `after_ref`, the tree goes straight from `work/b<this>` to `work/b<next>`, cut from the dev branch that now holds this merge, under the `assign.lock` mutex `crew new` claims with. `--park` ends the chain session instead. At a fork it continues into the lowest-numbered successor and names the rest; a `fast-pair` successor runs in main, so the tree is parked |
+| `crew name executor` | `<first>→<last> ·` after the ticket: `myapp · e1 · b334 · 332→336 · processing · crew/executor`. A ticket in no chain keeps exactly the title it had, so the title-nag hook needs no change |
+| `crew status` | a `chains:` block — landed, carried by whom, queued — with an arrow when no session carries a chain that has a ticket ready, a line per fork, and a note for an `after_ref` loop. Absent when no chain has an open ticket |
+| EXECUTION §1 · §6 · §10, `tickets.md`, `roles.md`, `worktrees.md`, the crew README, `planner.md` (field + a chain prompt), `executor.md` (the loop through a chain), `crew-init` step 6 | the rule and how each hat uses it |
+| crew snippet | "Một phiếu – một nhánh; một phiên mang một chuỗi `after_ref`" — 2397 of its 2400 bytes |
+
+**The chain's executor stays busy through every `crew done`.** A parked tree is
+a free tree, since `exec_free` asks only "detached and clean", and a free tree is
+what the next `crew new` takes. Parking after each ticket and letting the session
+run `crew new` for the next would open exactly the window in which another
+session takes the tree the chain session is sitting in. So the switch happens
+inside `crew done`, and the pin stays the checked-out branch, with no reservation
+file.
+
+Two ceilings, stated. `docs_close` leaves the close-out it writes uncommitted in
+the main tree, so the next `crew done` in a chain meets check 2 until someone
+commits those two files, exactly as two parallel executors already do. And a
+leftover file that keeps the tree on the old branch also stops the handoff; after
+clearing it the session runs `crew new <next>` from inside that tree.
+
+### Tests
+
+26 checks on a fixture that walks a three-ticket chain through the real
+`crew done`, the known-bad shape first (`crew new` for a ticket whose
+predecessor has not landed). The busy property is checked three ways: the tree
+holds the next branch, the board row reads it busy, and the executor's own
+reflog shows the move `work/b101 → work/b102` with nothing in between, because
+park-then-switch ends in the same state and only the move differs. Seven
+mutations each turn their own checks red: no handoff, park-then-switch (exactly
+one check, the reflog one), no gate, no cwd preference, no title segment, no
+board block, and no loop guard on the title (exactly one check). The chain's two
+awk programs print byte-identical output under BSD awk and mawk.
+`scripts/crew_test.sh` is at **172 checks**.
 ## [0.40.5] — 2026-09-24
 
 Every reader of `.docs-kit.json` falls back to the kit's default only when a key

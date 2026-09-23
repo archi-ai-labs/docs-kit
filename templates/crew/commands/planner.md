@@ -13,7 +13,10 @@ Phiên này đội mũ **planner** của tầng crew (`.claude/crew/roles.md`).
    (`.claude/crew/gates.md`) → Backlog item, với `source_ref` đúng luật
    STANDARD §5. Khai vào frontmatter phiếu:
    - `scope_files:` — số tệp code dự kiến chạm (S), để `crew done` đối chiếu;
-   - `execution:` — `fast-pair` | `fast` | `full` (`.claude/crew/tickets.md`).
+   - `execution:` — `fast-pair` | `fast` | `full` (`.claude/crew/tickets.md`);
+   - `after_ref:` — chỉ khi phiếu sửa thứ mà một phiếu khác sẽ dựng ra, ghi số
+     phiếu đứng trước vào **phiếu sau**. Thứ tự chuỗi nằm trong phiếu chứ không
+     nằm trong tin nhắn giữa hai phiên (`.claude/crew/tickets.md`).
 3. **Chẻ phiếu** nếu `S > 6`, `C ≥ 3`, hoặc phiếu chạm nhiều hơn một tầng kỹ
    thuật — phiếu ôm trọn một YÊU CẦU thì tốt hơn hai phiếu mỗi bên một nửa
    theo tầng.
@@ -28,8 +31,11 @@ Phiên này đội mũ **planner** của tầng crew (`.claude/crew/roles.md`).
 
 ## Mở một phiên executor mới
 
-Mỗi phiếu vẫn là một phiên riêng, sinh ra rồi kết thúc cùng phiếu. Thứ 0.31.0
-đổi là cái cây bên dưới: nó không còn dựng và xoá theo phiếu nữa.
+Mỗi chuỗi phiếu là một phiên riêng, và phiếu không nằm trong chuỗi nào là
+chuỗi một phần tử, nên nó vẫn sinh ra rồi kết thúc cùng phiếu. Một chuỗi dài 8
+phiếu vì vậy tốn một lần người dùng bấm mở phiên thay vì 8 lần. Cái cây bên dưới
+dùng lại qua nhiều phiếu từ 0.31.0, và `crew done` giữ nguyên cây ấy cho phiếu
+kế tiếp của chuỗi.
 
 Bạn không mở phiên trực tiếp được; thứ bạn dựng là một task để người dùng bấm.
 Hai thứ bạn viết lúc ấy quyết định phiên mới chạy đúng hay sai.
@@ -113,6 +119,28 @@ từ câu hỏi "tôi đang ngồi ở cây nào", nên trước 0.37.0 nó xác
 Phiên bỏ qua `crew new` được bảo là title hợp lệ rồi sửa thẳng vào cây chính dùng
 chung, và check 2 chặn mọi `crew done` đang chờ. Từ 0.37.0 lệnh từ chối ca đó,
 nhưng một dòng trong prompt rẻ hơn là trông vào lưới đỡ.
+
+**Prompt cho một chuỗi** — một task cho cả chuỗi, tiêu đề theo phiếu đầu:
+`<repo> · e? · b<đầu> · <đầu>→<cuối> · processing · crew/executor`.
+
+```
+Bạn nhận chuỗi BACKLOG-<đầu> → BACKLOG-<cuối>, theo đúng thứ tự:
+    <đầu>  <một câu>
+    <kế>   <một câu — sửa thứ <đầu> dựng ra>
+    …
+
+Hai lệnh đầu, chỉ cho phiếu đầu:
+    scripts/crew new <đầu>
+    scripts/crew role executor
+
+Sau mỗi `crew done`, cây tự chuyển sang phiếu kế; đừng chạy `crew new` cho nó.
+Phiếu : docs/23_backlog/<tệp đầu>.md … (mỗi phiếu một dòng)
+<các ô còn lại như trên, cho cả chuỗi>
+```
+
+Thứ tự trong prompt chỉ để người đọc dễ theo; thứ tự thật là các dòng
+`after_ref:` trong phiếu, và `crew new` từ chối một phiếu khi phiếu đứng trước nó
+chưa gộp.
 
 **Prompt cho `fast-pair`:**
 

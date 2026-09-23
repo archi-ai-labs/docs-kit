@@ -4,8 +4,9 @@
 Repo này chạy tầng thi hành crew — luật đầy đủ trong `.claude/crew/`, đọc
 `README.md` trước.
 
-**Phiếu:** Backlog item là đơn vị công việc. Một phiếu – một nhánh – một phiên,
-làm trọn tới `done`. Không có phiếu trong `docs/23_backlog/` thì không có nhánh.
+**Phiếu:** Backlog item là đơn vị công việc. Một phiếu – một nhánh; một phiên
+mang một chuỗi `after_ref`. Không có phiếu trong `docs/23_backlog/` thì không
+có nhánh.
 
 **Executor là cây thường trực** `../<repo>-e<k>`, dựng một lần rồi dùng lại qua
 nhiều phiếu. Nhánh nó đang mở là phiếu nó giữ, HEAD tách rời là nó rảnh.

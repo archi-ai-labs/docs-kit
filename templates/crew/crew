@@ -10,8 +10,8 @@
 # .docs-kit.json (degrades to defaults without it). No Node, no jq.
 #
 # Subcommands:
-#   crew new <nnn>                       ticket → a free executor (grows the pool if none) 
-#   crew done <nnn>                      merge procedure, close-out, park the executor
+#   crew new <nnn>                       ticket → a free executor (grows the pool if none)
+#   crew done <nnn> [--park]             merge, close-out, then the chain's next ticket or park
 #   crew executor add|rm <k>|prune       the persistent worktree pool
 #   crew lock acquire <res> <nnn> [--wait]
 #   crew lock release <res> <nnn>
@@ -197,6 +197,135 @@ ticket_done() {
 # on the dev branch. ONE place, because the executor path and the fast-pair path
 # ask that same question and must never answer it two different ways.
 closed_state() { if ticket_done "$1"; then echo finished; else echo finishing; fi; }
+
+# ---------------------------------------------------------------- chains
+# A chain is tickets that cannot run side by side because each one edits what the
+# one before it built. The planner records the order on the LATER ticket, as
+# `after_ref: BACKLOG-<nnn>` — the edge sits on the thing that has the dependency,
+# the same direction as every other *_ref, so the validator's ref check already
+# resolves it and nothing here re-checks that.
+#
+# WHY A FIELD AND NOT A FLAG ON `crew new`: measured on the repo that filed the
+# gap (330 backlog items, 6 executors, two lanes of 5 and 3), the order of a chain
+# was a fact that lived only in a chat message between two sessions. A flag would
+# have moved it into ../<repo>-crew/, which is never committed and is written by
+# the executor, not the planner.
+#
+# One predecessor per ticket, so a chain is a line and a fork is a tree. Where a
+# ticket has several successors, "next" is the lowest-numbered one not done yet;
+# the title, the board and `crew done` all use that one rule. Every walk keeps a
+# visited set, so an after_ref loop ends the walk instead of the command.
+chain_rows() { # → "<nnn>\t<after nnn or ->\t<status>\t<execution or ->" per Backlog doc
+  [ -d "$MAIN/docs/23_backlog" ] || return 0
+  find "$MAIN/docs/23_backlog" -type f -name '*.md' -exec awk '
+    function val(s) { sub(/^[^:]*:[ \t]*/, "", s); sub(/[ \t]*#.*$/, "", s); gsub(/"/, "", s); gsub(/^[ \t]+|[ \t]+$/, "", s); return s }
+    function num(s) { return sprintf("%03d", substr(s, 9) + 0) }
+    function flush() {
+      if (id ~ /^BACKLOG-[0-9]+$/)
+        print num(id) "\t" (af ~ /^BACKLOG-[0-9]+$/ ? num(af) : "-") "\t" (st == "" ? "-" : st) "\t" (ex == "" ? "-" : ex)
+    }
+    FNR == 1 { if (NR > 1) flush(); id = af = st = ex = ""; fm = 0; if (/^---/) { fm = 1; next } }
+    fm && /^---/        { fm = 0; next }
+    fm && /^id:/        { id = val($0) }
+    fm && /^after_ref:/ { af = val($0) }
+    fm && /^status:/    { st = val($0) }
+    fm && /^execution:/ { ex = val($0) }
+    END { if (NR > 0) flush() }' {} + 2>/dev/null
+}
+
+# chain_awk span <nnn>  → "<first>→<last>", or nothing for a ticket in no chain
+# chain_awk next <nnn>  → "<nnn>\t<execution>\t<other open successors>", or nothing
+# chain_awk board "<nnn>=<place> …" → the `chains:` rows of crew status
+CHAIN_AWK='
+function low(list,   a, i, n, b) {
+  n = split(list, a, " "); b = ""
+  for (i = 1; i <= n; i++) if (b == "" || a[i] + 0 < b + 0) b = a[i]
+  return b
+}
+function up(k) { return (k in aft) && aft[k] != "-" && (aft[k] in st) }
+function first(t,   f, seen) {
+  f = t; seen[f] = 1
+  while (up(f) && !(aft[f] in seen)) { f = aft[f]; seen[f] = 1 }
+  return f
+}
+function last(t,   l, n, seen) {
+  l = t; seen[l] = 1
+  while (succ[l] != "") { n = low(succ[l]); if (n in seen) break; l = n; seen[l] = 1 }
+  return l
+}
+function sorted(list, out,   n, i, j, v) {
+  n = split(list, out, " ")
+  for (i = 2; i <= n; i++) { v = out[i]; j = i - 1; while (j > 0 && out[j] + 0 > v + 0) { out[j + 1] = out[j]; j-- } out[j + 1] = v }
+  return n
+}
+{ aft[$1] = $2; st[$1] = $3; ex[$1] = $4 }
+END {
+  for (k in aft) if (up(k)) succ[aft[k]] = succ[aft[k]] " " k
+  if (mode == "span") {
+    if (!(arg in st)) exit
+    f = first(arg); l = last(arg)
+    if (up(f)) exit   # the walk back stopped on a loop, not on a first ticket
+    if (f != arg || l != arg) print f "→" l
+    exit
+  }
+  if (mode == "next") {
+    n = ""; o = ""
+    m = sorted(succ[arg], s)
+    for (i = 1; i <= m; i++) if (st[s[i]] != "done") { if (n == "") n = s[i]; else o = o " " s[i] }
+    if (n != "") print n "\t" ex[n] "\t" substr(o, 2)
+    exit
+  }
+  m = split(arg, hl, " ")
+  for (i = 1; i <= m; i++) { p = index(hl[i], "="); if (p) hp[substr(hl[i], 1, p - 1)] = substr(hl[i], p + 1) }
+  rl = ""
+  for (k in st) if (succ[k] != "" && !up(k)) rl = rl " " k
+  nr = sorted(rl, roots)
+  for (r = 1; r <= nr; r++) {
+    top = 0; stk[++top] = roots[r]; seq = ""
+    while (top > 0) {
+      k = stk[top--]
+      if (k in vis) continue
+      vis[k] = 1; seq = seq " " k
+      c = sorted(succ[k], kids)
+      for (i = c; i >= 1; i--) stk[++top] = kids[i]
+    }
+    n = split(seq, mem, " "); land = ""; queue = ""; ready = ""; nc = 0; fk = ""
+    for (i = 1; i <= n; i++) {
+      k = mem[i]
+      if (st[k] == "done") land = land " " k
+      else if (k in hp) carried[++nc] = hp[k] " on " k
+      else { queue = queue " " k; if (ready == "" && (!up(k) || st[aft[k]] == "done")) ready = k }
+      if (split(succ[k], tmp, " ") > 1) fk = fk " " k
+    }
+    if (queue == "" && nc == 0) continue
+    line = "  " roots[r] "→" last(roots[r]) " "
+    sep = " "
+    if (land != "") { line = line sep "landed" land; sep = " · " }
+    for (i = 1; i <= nc; i++) { line = line sep carried[i]; sep = " · " }
+    if (queue != "") line = line sep "queued" queue
+    if (nc == 0 && ready != "") line = line "  ← no session carries this chain — next: scripts/crew new " ready
+    print line
+    q = split(fk, fks, " ")
+    for (i = 1; i <= q; i++) {
+      c = sorted(succ[fks[i]], kids); fl = ""; nx = ""
+      for (j = 1; j <= c; j++) { fl = fl " " kids[j]; if (nx == "" && st[kids[j]] != "done") nx = kids[j] }
+      if (nx != "") print "    fork: " fks[i] " is followed by" fl " — crew done " fks[i] " continues into " nx "; every other one needs a session of its own"
+    }
+  }
+  cy = ""
+  for (k in st) if (up(k) && !(k in vis)) cy = cy " " k
+  c = sorted(cy, cys); cy = ""
+  for (i = 1; i <= c; i++) cy = cy " " cys[i]
+  if (cy != "") print "  note: after_ref loops back on itself through" cy " — no ticket in it can ever be first"
+}'
+chain_awk() { chain_rows | awk -F'\t' -v mode="$1" -v arg="${2:-}" "$CHAIN_AWK"; }
+
+# chain_seg <nnn> → "<first>→<last> · " for a ticket in a chain, nothing otherwise,
+# so a ticket nobody chained keeps exactly the title it had before chains existed.
+chain_seg() {
+  CS="$(chain_awk span "$1")"
+  [ -z "$CS" ] || printf '%s · ' "$CS"
+}
 
 # exec_state <tree> <branch> → processing | finishing | finished. Derived, never
 # stored, and computed in ONE place so the board and the session title can never
@@ -390,12 +519,32 @@ cmd_new() {
   # a worktree that allocated its own would collide deterministically (EXECUTION §1).
   [ -n "$F" ] || die "BACKLOG-$N not found under docs/23_backlog — no ticket, no branch (EXECUTION §1)"
   [ "$(front "$F" status)" = "done" ] && die "BACKLOG-$N is already done"
+  DEV="$(cfg dev_branch main)"
+  # A chained ticket starts only from a dev branch that already holds its
+  # predecessor: it edits what that one builds, so a branch cut earlier starts
+  # without the files it is about to change. "Landed" is either half of a
+  # close-out — the closer on the dev branch, or the doc reading done — because
+  # the gap between the two halves is real (ISSUE-014) and the code is already
+  # there in it. Checked BEFORE the fast-pair branch below, so a fast-pair session
+  # in a chain hears "wait" before it hears "no executor".
+  AF="$(front "$F" after_ref)"
+  if [ -n "$AF" ]; then
+    case "$AF" in
+      BACKLOG-[0-9]*) ;;
+      *) die "[new:after] BACKLOG-$N has after_ref: $AF — a chain links Backlog items only (EXECUTION §1)" ;;
+    esac
+    AN="$(norm "$AF")"
+    if ! has_closer "$MAIN" "$AN" -50 "$DEV" && ! ticket_done "$AN"; then
+      AH="$(exec_on "work/b$AN")"
+      [ -n "$AH" ] && note "BACKLOG-$AN is open in $(en "$AH") — the session there carries this chain, and its crew done $AN opens $N in the same tree"
+      die "[new:after] BACKLOG-$N runs after BACKLOG-$AN, which has not landed on $DEV — started now, it would not have the files $AN builds"
+    fi
+  fi
   if [ "$(front "$F" execution)" = "fast-pair" ]; then
     note "BACKLOG-$N is fast-pair: work on the dev branch in the main tree and commit in the same bout"
-    note "session  : it still gets one — title it $REPO · main · b$N · processing · crew/executor"
+    note "session  : it still gets one — title it $REPO · main · b$N · $(chain_seg "$N")processing · crew/executor"
     die "no executor for a fast-pair ticket (EXECUTION §2)"
   fi
-  DEV="$(cfg dev_branch main)"
   BR="work/b$N"
 
   # Everything from "who is free" to "the branch is checked out" is one critical
@@ -415,7 +564,19 @@ cmd_new() {
   # free, grow by one instead of refusing. Only the `worktree add` runs inside
   # the mutex, because it is what reserves the name; provisioning can take
   # minutes and happens after the claim is already this ticket's.
-  WT="$(exec_free)"
+  # The free executor the session is STANDING in comes first. A chain session
+  # whose `crew done` could not hand its tree straight on (--park, a fast-pair
+  # link, a leftover file cleared by hand) resumes here, and taking the first
+  # free tree instead would move it to another place mid-chain and rename it.
+  WT=""
+  HT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+  case "$(basename "${HT:-.}")" in
+    "$REPO"-e[0-9]*)
+      HP="$(exec_map | awk -F'\t' -v n="$(basename "$HT")" '$2 == "-" { b = $1; sub(/.*\//, "", b); if (b == n) { print $1; exit } }')"
+      [ -n "$HP" ] && [ "$(own_dirty "$HP")" -eq 0 ] && WT="$HP"
+      ;;
+  esac
+  [ -n "$WT" ] || WT="$(exec_free)"
   GREW=0
   if [ -z "$WT" ]; then
     K=1
@@ -444,15 +605,25 @@ cmd_new() {
   fi
 
   log_line NEW "$(en "$WT")" "BACKLOG-$N" "$WT"
+  SEG="$(chain_seg "$N")"
   note "executor : $(en "$WT")  $WT  (branch $BR, from $DEV)"
-  note "session  : title it $REPO · $(en "$WT") · b$N · processing · crew/executor  (scripts/crew name executor)"
+  note "session  : title it $REPO · $(en "$WT") · b$N · ${SEG}processing · crew/executor  (scripts/crew name executor)"
   note "finish   : scripts/crew done $N   (from anywhere in the repo)"
+  [ -n "$SEG" ] && note "chain    : ${SEG% · } — this session carries it; crew done opens the next ticket in this same tree"
+  return 0
 }
 
 # ---------------------------------------------------------------- crew done
 cmd_done() {
   require_on
-  N="$(norm "${1:?usage: crew done <nnn>}")"
+  PARK=0; NA=""
+  for a in "$@"; do
+    case "$a" in
+      --park) PARK=1 ;;
+      *)      NA="$a" ;;
+    esac
+  done
+  N="$(norm "${NA:?usage: crew done <nnn> [--park]}")"
   DEV="$(cfg dev_branch main)"
   TYPECHECK="$(cfg typecheck_cmd "")"
   TEST="$(cfg test_cmd "")"
@@ -573,7 +744,45 @@ cmd_done() {
   done <<LEFTOVERS
 $(own_files "$WT")
 LEFTOVERS
-  if [ "$SAFE" -eq 1 ]; then
+  # THE CHAIN NEVER LETS GO OF ITS TREE. When a ticket runs after this one, the
+  # tree goes straight from work/b<this> to work/b<next>, cut from the dev branch
+  # that now holds this merge, and is never parked in between. A parked tree is a
+  # FREE tree — exec_free reads "detached and clean" and nothing else — so the
+  # gap between this command and the session's own `crew new <next>` is exactly
+  # the window in which another session's `crew new` takes the tree the chain
+  # session is sitting in. Held across the switch by the same mutex `crew new`
+  # claims under, so a concurrent claim of <next> sees one of the two outcomes
+  # and never both. The pin stays the checked-out branch: no reservation file.
+  HANDED=""
+  if [ "$SAFE" -eq 1 ] && [ "$PARK" -eq 0 ]; then
+    NXL="$(chain_awk next "$N")"
+    NX="$(printf '%s' "$NXL" | cut -f1)"
+    NXX="$(printf '%s' "$NXL" | cut -f2)"
+    NXO="$(printf '%s' "$NXL" | cut -f3)"
+    if [ -n "$NX" ] && [ "$NXX" = "fast-pair" ]; then
+      # A fast-pair link runs in the main tree by definition, so there is nothing
+      # to hold this tree for; the chain session carries on from the main tree.
+      note "BACKLOG-$NX comes next and is fast-pair — it runs in the main tree, so $(en "$WT") is parked"
+    elif [ -n "$NX" ]; then
+      claim_lock
+      if [ -n "$(exec_on "work/b$NX")" ]; then
+        note "BACKLOG-$NX comes next but is already open in $(en "$(exec_on "work/b$NX")") — $(en "$WT") is parked"
+      elif git -C "$MAIN" show-ref --verify --quiet "refs/heads/work/b$NX"; then
+        note "BACKLOG-$NX comes next but branch work/b$NX already exists — resume it by hand; $(en "$WT") is parked"
+      elif git -C "$WT" switch -c "work/b$NX" "$DEV" >/dev/null 2>&1; then
+        HANDED="$NX"
+      else
+        note "could not open work/b$NX in $(en "$WT") — $(en "$WT") is parked; take it with: scripts/crew new $NX"
+      fi
+      claim_unlock
+    fi
+    [ -n "$NXO" ] && note "also after BACKLOG-$N: $NXO — a fork; each of those needs a session of its own (scripts/crew new <nnn>)"
+  fi
+  if [ -n "$HANDED" ]; then
+    run_setup "$WT" "$(en "$WT")"
+    log_line NEW "$(en "$WT")" "BACKLOG-$HANDED" "$WT after=BACKLOG-$N"
+    note "$(en "$WT") stays busy: the chain goes on with BACKLOG-$HANDED on work/b$HANDED (from $DEV, which now holds $N)"
+  elif [ "$SAFE" -eq 1 ]; then
     if git -C "$WT" switch --detach "$DEV" >/dev/null 2>&1; then
       git -C "$WT" reset --hard >/dev/null 2>&1
       note "$(en "$WT") is free — its deps stay in place for the next ticket"
@@ -585,6 +794,10 @@ LEFTOVERS
   fi
   log_line DONE - "BACKLOG-$N" "files=$ACTUAL"
   note "BACKLOG-$N is on $DEV. Reminder: a clean main tree does not mean nobody is reading it."
+  if [ -n "$HANDED" ]; then
+    note "next     : same session, same tree — retitle with scripts/crew name executor, then work BACKLOG-$HANDED"
+  fi
+  return 0
 }
 
 # ---------------------------------------------------------------- crew lock
@@ -980,6 +1193,21 @@ cmd_status() {
   git -C "$MAIN" worktree list --porcelain \
     | awk '/^worktree /{n=substr($0,10); sub(".*/","",n); if (n ~ /-b[0-9]+$/) print "  note: " n " is a pre-pool worktree — land it, then git worktree remove it"}'
 
+  # Chains — what is queued behind each session, which no row above can say: a
+  # row is one tree and one ticket. The holders are read from the same two places
+  # the rows are (the branch each executor has out, and main's fast-pair tickets),
+  # so the block cannot name a different holder than the row for that tree.
+  # Printed only while some chain still has a ticket not done; a repo that never
+  # chained anything sees no new line at all.
+  CHH="$(exec_map | awk -F'\t' '$2 ~ /^work\/b[0-9]+$/ { n = $1; sub(/.*\//, "", n); sub(/.*-/, "", n); b = $2; sub(/^work\/b/, "", b); printf "%s=%s ", b, n }')"
+  CHH="$CHH$(printf '%s\n' "$MPT" | awk 'NF { printf "%s=main ", $1 }')"
+  CHB="$(chain_awk board "$CHH")"
+  if [ -n "$CHB" ]; then
+    echo ""
+    echo "chains:"
+    printf '%s\n' "$CHB"
+  fi
+
   echo ""
   echo "locks:"
   FOUND=0
@@ -1350,20 +1578,21 @@ cmd_name() {
     esac
   done
   # Three grammars, one place, project first so any session list sorts by repo.
-  # A session is still ONE PER TICKET — only the tree is reused — so an executor
-  # session is born processing and ends finished, and there is deliberately no
-  # idle form: an idle executor has no session to name. All three parts are read
-  # from git rather than typed (tree → e<k>, branch → b<nnn>, trailer → state),
-  # so the cwd beats any ticket argument. A bare b157 still works for anyone
-  # outside the pool, and a hat session is just the hat. Never let a role file
-  # spell any of these out again.
+  # A session carries ONE CHAIN — a ticket nobody chained is a chain of one — and
+  # its title always names exactly one ticket, the one its tree holds now, so an
+  # executor session is born processing and ends finished, and there is
+  # deliberately no idle form: an idle executor has no session to name. The parts
+  # are read from git and the tickets rather than typed (tree → e<k>, branch →
+  # b<nnn>, after_ref → first→last, trailer → state), so the cwd beats any ticket
+  # argument. A bare b157 still works for anyone outside the pool, and a hat
+  # session is just the hat. Never let a role file spell any of these out again.
   HERE="$(git rev-parse --show-toplevel 2>/dev/null || true)"
   SUF=""
   case "$(basename "${HERE:-.}")" in "$REPO"-e[0-9]*) SUF="$(en "$HERE")" ;; esac
   if [ "$ROLE" = "executor" ] && [ -n "$SUF" ]; then
     HB="$(git -C "$HERE" symbolic-ref --short HEAD 2>/dev/null || true)"
     case "$HB" in
-      work/b*) WANT="$REPO · $SUF · ${HB#work/} · $(exec_state "$HERE" "$HB") · crew/$ROLE" ;;
+      work/b*) WANT="$REPO · $SUF · ${HB#work/} · $(chain_seg "${HB#work/b}")$(exec_state "$HERE" "$HB") · crew/$ROLE" ;;
       *)
         # A PARKED executor holds no branch, so the branch can no longer name the
         # ticket — but the session is still open, and its work has landed. This is
@@ -1378,7 +1607,7 @@ cmd_name() {
         [ -n "$TICKET" ] && PKN="$(norm "$TICKET")"
         if [ -n "$PKN" ] && has_closer "$MAIN" "$PKN" -50 "$(cfg dev_branch main)"; then
           if ticket_done "$PKN"; then
-            WANT="$REPO · $SUF · b$PKN · $(closed_state "$PKN") · crew/$ROLE"
+            WANT="$REPO · $SUF · b$PKN · $(chain_seg "$PKN")$(closed_state "$PKN") · crew/$ROLE"
           else
             # Merged, parked, never closed out. There IS no title for this: the
             # session's own `finishing` is still the honest word, because a
@@ -1418,7 +1647,7 @@ cmd_name() {
         die "take one first: scripts/crew new $PN — then name this session from the tree that prints"
         ;;
     esac
-    WANT="$REPO · main · b$PN · $(pair_state "$PN") · crew/$ROLE"
+    WANT="$REPO · main · b$PN · $(chain_seg "$PN")$(pair_state "$PN") · crew/$ROLE"
   elif [ -n "$TICKET" ]; then
     WANT="$REPO · b$(norm "$TICKET") · crew/$ROLE"
   else

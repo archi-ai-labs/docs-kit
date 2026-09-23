@@ -1,5 +1,5 @@
 ---
-description: "Vai executor — một phiếu, một nhánh, làm trọn tới done rồi tự gộp."
+description: "Vai executor — một phiếu hoặc một chuỗi phiếu, mỗi phiếu một nhánh, làm trọn tới done rồi tự gộp."
 argument-hint: "<số phiếu, ví dụ: 157>"
 disable-model-invocation: true
 ---
@@ -15,7 +15,9 @@ cây nào; rồi `scripts/crew name executor` ngay sau đó. Xanh thì làm ti�
 
 Title có ba phần lệnh tự đọc từ git, bạn không truyền gì cả:
 `<repo> · e1 · b157 · processing · crew/executor` — cây bạn ngồi, nhánh bạn mở,
-và trạng thái. Phiên sinh ra ở `processing`, **đổi sang `finishing` ngay khi bạn
+và trạng thái. Phiếu nằm trong một chuỗi (`after_ref:`) thì title có thêm đoạn
+`<đầu>→<cuối>` sau số phiếu, ví dụ `b333 · 332→336`, và đoạn đó cũng do lệnh
+tự đọc từ các phiếu. Phiên sinh ra ở `processing`, **đổi sang `finishing` ngay khi bạn
 viết commit mang trailer** (bước 4), rồi **sang `finished` khi `crew done` đã
 gộp xong và đóng sổ phiếu** (bước 5). Cứ mỗi lần trạng thái đổi thì chạy lại
 lệnh này. Trong app phiên tự đổi title của chính nó được, ngoài
@@ -64,7 +66,22 @@ cái mũ do người giao chứ không phải thứ model tự đội. Lấy n�
    Check 0 chặn ngay từ đầu nếu cây của bạn còn file chưa commit, vì thứ được
    gộp phải đúng bằng thứ bạn đang có.
 
-5b. `scripts/crew name executor $ARGUMENTS` lần cuối. Lần này bạn phải truyền
+   **Bạn đang mang một chuỗi** khi `crew done` in ra dòng `stays busy: the chain
+   goes on with BACKLOG-<kế>`. Lúc đó lệnh đã chuyển cây của bạn thẳng sang nhánh
+   `work/b<kế>`, cắt từ nhánh dev vừa nhận phiếu này, và cây chưa hề rảnh lúc
+   nào. Đừng chạy `crew new <kế>`, vì cây đã giữ phiếu đó rồi. Hãy viết báo cáo
+   cuối (bước 6) cho phiếu vừa xong, chạy `scripts/crew name executor` không kèm
+   số, rồi quay lại bước 2 với phiếu kế. Từ đây mọi bước dùng số của phiếu cây
+   đang giữ chứ không dùng `$ARGUMENTS`. Muốn dừng chuỗi sau phiếu đang làm thì
+   thay lệnh ở bước 5 bằng `scripts/crew done <số phiếu> --park`: cây được thả,
+   và `crew status` chỉ ra phiếu nào đang chờ người mang tiếp.
+
+   Phiếu kế tiếp sẽ vấp **kiểm 2** nếu phần đóng sổ của phiếu trước (`status:
+   done` và dòng audit do `docs_close` ghi) còn nằm chưa commit ở cây chính. Lệnh
+   nêu đích danh hai tệp đó; commit chúng ở cây chính rồi chạy lại `crew done`.
+
+5b. `scripts/crew name executor $ARGUMENTS` lần cuối, **sau phiếu cuối cùng của
+   chuỗi**, hoặc sau phiếu duy nhất nếu bạn không mang chuỗi. Lần này bạn phải truyền
    số phiếu, vì `crew done` đã park cây nên nhánh không còn ở đó để lệnh tự đọc
    ra. Trạng thái bây giờ là `finished`, nghĩa là phiếu không còn việc gì và
    bạn đóng phiên được. Nếu lệnh báo `[name:unclosed]` thì phần gộp đã xong
