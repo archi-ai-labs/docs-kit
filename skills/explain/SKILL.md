@@ -46,16 +46,46 @@ answers in words has answered a different question.
 All "no" → **shallow form**: one small diagram plus a few sentences — what
 shrinks in this lane is the prose, not the drawing — and write the marker line
 `LANE: fast — <reason>` at line start so the reader sees which lane you chose
-(in a crew repo the explain-gate hook looks for exactly that line, or a
-drawing-tool call).
+(in a crew repo the explain-gate hook looks for exactly that line in the chat,
+or for a drawing: a drawing-tool call, or a picture file sent to render).
 
 Any "yes" → **deep form**, everything below.
 
+## Where the picture goes — both lanes
+
+A drawing counts once the reader has it, and a tool call that returned success
+does not prove that: in one reported session the visualize widget answered
+"rendered and shown" and the user saw no picture. Pick the surface from what
+this session can do, top row first:
+
+| The session has | The surface | The chat carries |
+|---|---|---|
+| `SendUserFile` (the Claude desktop app's Code tab) | one standalone HTML file: copy `template.html` from this skill's folder into the scratchpad, fill it, send it with `display: "render"`. Every picture, the short prose and the trade-off numbers go in the file | 2–4 lines that lead into the file, then the check question |
+| no file send | the visualize widget, an Artifact page, or a mermaid block | the explanation itself |
+
+The file comes first because readers asked for it by name. In the repo that
+reported it, three explanations sent this way were each read, and the check
+question after the first was answered right on the first try; the same content
+written into the chat was called rambling twice in one session. The widget is
+not broken in that app: of 68 widget calls measured on another machine, none
+drew a report of a missing picture, and several drew replies about what the
+picture showed. It just leaves the prose in the chat, where it scrolls away.
+
+Three rules for the file surface:
+
+- **Ids go in both places.** The file names each id with its one sentence;
+  the chat lines carry the clickable links, repo-relative, because a file in
+  the scratchpad cannot resolve a repo-relative path.
+- **The fast-lane marker stays in the chat.** The hook reads the chat, never
+  the file.
+- **Believe the reader over the tool result.** A reader who says there is no
+  picture is right: move to the next surface in the table instead of drawing
+  again on the same one.
+
 ## Step 2 — The explanation (deep form)
 
-- **BEFORE vs AFTER, side by side, as a real drawing.** Use whatever drawing
-  surface the session has — the visualize widget, an Artifact page, a mermaid
-  block. A table supplements the drawing, it never replaces it. If every
+- **BEFORE vs AFTER, side by side, as a real drawing,** on the surface chosen
+  above. A table supplements the drawing, it never replaces it. If every
   surface fails, name WHICH one failed and how, then draw the fallback in a
   fenced ASCII block; a turn that explains a decision and shows no picture has
   not run this skill.

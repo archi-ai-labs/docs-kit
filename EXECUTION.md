@@ -559,7 +559,13 @@ unless the repo opts in (a `.docs-kit.json` whose `crew` key exists).
 
 1. **explain-gate** (on `AskUserQuestion`): reads the transcript **as events**,
    never as one string — it accepts a drawing-tool `tool_use` since the last
-   human turn, or the §7 marker line inside an *assistant-authored text block*.
+   human turn, a `SendUserFile` that shows a picture file (0.40.4), or the §7
+   marker line inside an *assistant-authored text block*. The file counts when
+   one path ends in `.html`, `.htm`, `.svg` or an image extension and
+   `display` is anything but `"attach"`. It is matched on that payload and not
+   through `draw_tools`, because crew-init writes that list into the config
+   verbatim: 3 of the 4 crew repos measured carry it, so a new default entry
+   would never reach them.
    Its own warning text never contains the literal marker: the origin repo's
    first gate matched strings over the whole transcript, and its refusal
    message contained both strings it was hunting, so it blocked exactly once
@@ -609,6 +615,13 @@ the two-measurement rule above has no enforcement and lives on discipline.
 That is exactly where the origin repo got bitten once — stated here so it stays
 a known hole, not a discovered one.
 
+Nor does it check *that the reader saw it*. The tool result is the only thing
+a transcript records, and in the case reported as docs-kit issue #3 the
+visualize widget returned "rendered and shown" while the user saw no picture.
+The gate opened correctly by its own rule. The `explain` skill carries the
+remedy instead: the reader's word outranks the tool result, and the session
+moves to the next surface.
+
 ## 9. Configuration — the `crew` key in `.docs-kit.json`
 
 ```json
@@ -635,7 +648,9 @@ a known hole, not a discovered one.
 **Absent `crew` key = the layer is off**: no hook fires, `crew` scripts refuse
 politely, nothing scaffolded by an earlier version changes shape — the same
 migration guarantee `owns` gives (STANDARD §9.1 rule 1). Every field has the
-default shown; a minimal opt-in is `"crew": {}`.
+default shown; a minimal opt-in is `"crew": {}`. `draw_tools` names drawing
+tools only; a picture file sent to render opens the explain-gate whatever the
+list says (§8).
 
 `/docs-kit:crew-init` writes this key (asking, never guessing — the docs-init
 asymmetry of §9.3), stamps `scripts/crew`, `.claude/crew/*.md` and

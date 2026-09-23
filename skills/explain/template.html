@@ -1,0 +1,222 @@
+<!doctype html>
+<!--
+  explain — the file surface (SKILL.md, "Where the picture goes").
+
+  Copy this file to the session's scratchpad, fill it, send it with
+  SendUserFile display "render". Rules for filling it:
+  - Replace every [bracketed] text. A bracket left in the file is shown to
+    the reader as it stands.
+  - Write every visible word in the reader's language.
+  - Keep only the sections the question needs, and renumber ① ② ③ ④.
+    Sections ① ② ③ are the skill's three shapes; ④ is the trade-off.
+  - One picture per section. Inside an <svg>: labels only, one claim per box,
+    a subtitle of five words or fewer. Prose goes in the <p> above it.
+  - Colour is meaning, never order: .a / .b for two kinds of thing,
+    .b also for "before", .ok for "after" or right, .bad for a collision or
+    a loss, no class for an ordinary step. At most three of them in one
+    picture. Never add a hue outside these tokens.
+  - Every viewBox is 640 wide, so text is one size in every picture. A 60px
+    box holds a title and a subtitle; a longer label grows the box and the
+    viewBox height, never shrinks the font.
+-->
+<html lang="[reader-language-code]">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>[Two to four words]</title>
+<style>
+  :root {
+    --bg: #f6f5f1; --card: #ffffff; --ink: #1c1f24; --ink2: #5b6270;
+    --line: #d9d6cc; --box: #f1efe8;
+    --a: #1d4ed8;   --a-wash: #e3ebfd;
+    --b: #c2410c;   --b-wash: #fdebdf;
+    --ok: #15803d;  --ok-wash: #dcf3e3;
+    --bad: #b91c1c; --bad-wash: #fbe2e2;
+    --code: #eeece5;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #15171b; --card: #1e2127; --ink: #e8e6e1; --ink2: #9aa1ad;
+      --line: #353a43; --box: #272b32;
+      --a: #7ea2f7;   --a-wash: #1c2a4d;
+      --b: #f29a63;   --b-wash: #45271a;
+      --ok: #5fcf85;  --ok-wash: #173826;
+      --bad: #f07d7d; --bad-wash: #4a1f22;
+      --code: #2a2e35;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          "Helvetica Neue", Arial, sans-serif;
+  }
+  main { max-width: 780px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 1.45rem; line-height: 1.3; margin: 0 0 6px; }
+  .lede { color: var(--ink2); margin: 0 0 18px; }
+  code { font: 0.9em ui-monospace, SFMono-Regular, Menlo, monospace;
+         background: var(--code); padding: 1px 5px; border-radius: 4px; }
+  .ids { list-style: none; margin: 0 0 22px; padding: 0; font-size: 0.93rem; }
+  .ids li { padding: 3px 0; color: var(--ink2); }
+  .ids code { color: var(--ink); }
+  .card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 14px; padding: 18px 18px 16px; margin: 0 0 18px;
+  }
+  .card h2 { font-size: 1.12rem; margin: 0 0 8px; line-height: 1.35; }
+  .n { color: var(--ink2); margin-right: 6px; }
+  .card p { margin: 0 0 12px; }
+  svg { display: block; width: 100%; height: auto; margin: 4px 0 12px; }
+  svg text { font-family: inherit; fill: var(--ink); }
+  svg .t  { font-size: 15px; font-weight: 600; }
+  svg .t2 { font-size: 12.5px; fill: var(--ink2); }
+  svg .hd { font-size: 12.5px; font-weight: 700; letter-spacing: .06em; fill: var(--ink2); }
+  svg .mono { font: 13px ui-monospace, SFMono-Regular, Menlo, monospace; }
+  svg rect { fill: var(--box); stroke: var(--line); stroke-width: 1.25; }
+  svg rect.a   { fill: var(--a-wash);   stroke: var(--a);   stroke-width: 1.75; }
+  svg rect.b   { fill: var(--b-wash);   stroke: var(--b);   stroke-width: 1.75; }
+  svg rect.ok  { fill: var(--ok-wash);  stroke: var(--ok);  stroke-width: 1.75; }
+  svg rect.bad { fill: var(--bad-wash); stroke: var(--bad); stroke-width: 1.75; }
+  svg rect.cmd { fill: var(--code); stroke: var(--ink2); stroke-dasharray: 4 3; }
+  svg circle { fill: var(--card); stroke: var(--ink2); stroke-width: 2; }
+  svg .ar { stroke: var(--ink2); stroke-width: 1.6; fill: none; }
+  svg .ah { fill: var(--ink2); }
+  .strip {
+    margin: 0; padding: 9px 12px; border-radius: 8px; font-size: 0.95rem;
+    background: var(--box); border-left: 4px solid var(--ink2);
+  }
+  .strip b { margin-right: 4px; }
+  .strip.ok  { background: var(--ok-wash);  border-color: var(--ok); }
+  .strip.bad { background: var(--bad-wash); border-color: var(--bad); }
+  .strip.a   { background: var(--a-wash);   border-color: var(--a); }
+  .options { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 0 0 12px; }
+  .opt { border: 1.5px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+  .opt.pick { border-color: var(--ok); background: var(--ok-wash); }
+  .opt h3 { font-size: 1rem; margin: 0 0 6px; }
+  .opt ul { margin: 0; padding: 0; list-style: none; font-size: 0.94rem; }
+  .opt li { padding: 2px 0 2px 22px; text-indent: -22px; }
+  .opt li::before { display: inline-block; width: 22px; text-indent: 0; font-weight: 700; }
+  .opt li.gain::before { content: "✓"; color: var(--ok); }
+  .opt li.cost::before { content: "✗"; color: var(--bad); }
+  table { width: 100%; border-collapse: collapse; font-size: 0.94rem; margin: 0 0 12px; }
+  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--ink2); font-weight: 600; }
+  td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  @media (max-width: 560px) { .options { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<main>
+
+<h1>[The question the reader asked, in one line]</h1>
+<p class="lede">[The answer in one sentence, before any picture.]</p>
+
+<!-- One line per id the explanation mentions; the clickable links go in the chat. -->
+<ul class="ids">
+  <li><code>[ID-NNN]</code> — [what it is, in one sentence]</li>
+</ul>
+
+<!-- ① what changed? — before on the left, after on the right, one row per change -->
+<section class="card">
+  <h2><span class="n">①</span>[What changes?]</h2>
+  <p>[At most three sentences that the picture does not already say.]</p>
+  <svg viewBox="0 0 640 196" role="img" aria-label="[before and after, one row per change]">
+    <defs><marker id="ah1" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+    <text class="hd" x="20" y="18">[BEFORE]</text>
+    <text class="hd" x="370" y="18">[AFTER]</text>
+    <rect class="b" x="20" y="32" width="250" height="60" rx="10"/>
+    <text class="t" x="36" y="58">[old state]</text>
+    <text class="t2" x="36" y="78">[five words at most]</text>
+    <line class="ar" x1="278" y1="62" x2="362" y2="62" marker-end="url(#ah1)"/>
+    <rect class="ok" x="370" y="32" width="250" height="60" rx="10"/>
+    <text class="t" x="386" y="58">[new state]</text>
+    <text class="t2" x="386" y="78">[five words at most]</text>
+    <rect class="b" x="20" y="116" width="250" height="60" rx="10"/>
+    <text class="t" x="36" y="142">[old state]</text>
+    <text class="t2" x="36" y="162">[five words at most]</text>
+    <line class="ar" x1="278" y1="146" x2="362" y2="146" marker-end="url(#ah1)"/>
+    <rect class="ok" x="370" y="116" width="250" height="60" rx="10"/>
+    <text class="t" x="386" y="142">[new state]</text>
+    <text class="t2" x="386" y="162">[five words at most]</text>
+  </svg>
+  <p class="strip ok"><b>[Takeaway] —</b> [one sentence]</p>
+</section>
+
+<!-- ② one input, several outcomes — the source on the left, each outcome its own box -->
+<section class="card">
+  <h2><span class="n">②</span>[What can happen to it?]</h2>
+  <p>[At most three sentences.]</p>
+  <svg viewBox="0 0 640 236" role="img" aria-label="[one input and its outcomes]">
+    <defs><marker id="ah2" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+    <rect class="a" x="20" y="88" width="190" height="60" rx="10"/>
+    <text class="t" x="36" y="114">[the input]</text>
+    <text class="t2" x="36" y="134">[five words at most]</text>
+    <path class="ar" d="M210,108 C290,108 300,46 382,46" marker-end="url(#ah2)"/>
+    <path class="ar" d="M210,118 L382,118" marker-end="url(#ah2)"/>
+    <path class="ar" d="M210,128 C290,128 300,190 382,190" marker-end="url(#ah2)"/>
+    <text class="t2" x="376" y="32" text-anchor="end">[when …]</text>
+    <text class="t2" x="376" y="110" text-anchor="end">[when …]</text>
+    <text class="t2" x="376" y="212" text-anchor="end">[when …]</text>
+    <rect class="ok" x="390" y="16" width="230" height="60" rx="10"/>
+    <text class="t" x="406" y="42">[fine outcome]</text>
+    <text class="t2" x="406" y="62">[five words at most]</text>
+    <rect x="390" y="88" width="230" height="60" rx="10"/>
+    <text class="t" x="406" y="114">[ordinary outcome]</text>
+    <text class="t2" x="406" y="134">[five words at most]</text>
+    <rect class="bad" x="390" y="160" width="230" height="60" rx="10"/>
+    <text class="t" x="406" y="186">[needs a human]</text>
+    <text class="t2" x="406" y="206">[five words at most]</text>
+  </svg>
+  <p class="strip bad"><b>[Takeaway] —</b> [one sentence]</p>
+</section>
+
+<!-- ③ what happens, in order? — stations downward, the command that moves between two in its own box -->
+<section class="card">
+  <h2><span class="n">③</span>[In what order?]</h2>
+  <p>[At most three sentences.]</p>
+  <svg viewBox="0 0 640 262" role="img" aria-label="[the steps in order]">
+    <defs><marker id="ah3" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+    <circle cx="40" cy="36" r="11"/>
+    <text class="t" x="66" y="41">[first station]</text>
+    <line class="ar" x1="40" y1="49" x2="40" y2="118" marker-end="url(#ah3)"/>
+    <rect class="cmd" x="66" y="66" width="300" height="34" rx="6"/>
+    <text class="mono" x="80" y="88">[the command that moves it]</text>
+    <circle cx="40" cy="132" r="11"/>
+    <text class="t" x="66" y="137">[second station]</text>
+    <line class="ar" x1="40" y1="145" x2="40" y2="214" marker-end="url(#ah3)"/>
+    <text class="t2" x="66" y="184">[what happens by itself]</text>
+    <circle cx="40" cy="228" r="11"/>
+    <text class="t" x="66" y="233">[last station]</text>
+  </svg>
+  <p class="strip"><b>[Takeaway] —</b> [one sentence]</p>
+</section>
+
+<!-- ④ the trade-off — option cards, or a gain/loss table; every line carries its number -->
+<section class="card">
+  <h2><span class="n">④</span>[Which option, and what does each cost?]</h2>
+  <div class="options">
+    <div class="opt pick">
+      <h3>[Option A]</h3>
+      <ul>
+        <li class="gain">[gain, with its number]</li>
+        <li class="cost">[cost, with its number]</li>
+      </ul>
+    </div>
+    <div class="opt">
+      <h3>[Option B]</h3>
+      <ul>
+        <li class="gain">[gain, with its number]</li>
+        <li class="cost">[cost, with its number]</li>
+      </ul>
+    </div>
+  </div>
+  <table>
+    <tr><th>[Measure]</th><th>[Option A]</th><th>[Option B]</th></tr>
+    <tr><td>[what is measured]</td><td class="num">[number]</td><td class="num">[number]</td></tr>
+  </table>
+  <p class="strip a"><b>[Takeaway] —</b> [one sentence]</p>
+</section>
+
+</main>
+</body>
+</html>

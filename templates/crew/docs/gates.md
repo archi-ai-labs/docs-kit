@@ -28,8 +28,11 @@ marker ở đầu dòng, kèm lý do:
 LANE: fast — <lý do>
 ```
 
-Hook explain-gate tìm đúng dòng này (hoặc một lời gọi công cụ vẽ) trong các
-trả lời của lượt hiện tại trước khi phiên được hỏi người dùng chọn.
+Hook explain-gate tìm đúng dòng này trong các trả lời của lượt hiện tại trước
+khi phiên được hỏi người dùng chọn. Hook cũng chấp nhận một hình vẽ thay cho
+dòng marker, cụ thể là một lời gọi công cụ vẽ hoặc một tệp hình (HTML, SVG,
+ảnh) gửi cho người dùng dạng render. Trong tab Code của app desktop, lời giải
+thích nằm trọn trong một tệp HTML như vậy, và skill `explain` có sẵn khuôn mẫu.
 
 ## Gate 1 — giải thích
 

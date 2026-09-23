@@ -85,6 +85,46 @@ OUT="$(run_gate "$HR" "$TS/lane.jsonl")"
 [ -z "$OUT" ] && ok "gate: declared lane satisfies the gate" \
   || bad "gate: lane case not silent (got: $OUT)"
 
+# A picture file the host renders beside the chat is a drawing (0.40.4). The
+# known-bad shapes go first: the same tool sending a file as an attachment, or
+# sending text, has shown the user no picture.
+send_file() { # send_file <files-json> [display]
+  local disp=""
+  [ -n "${2:-}" ] && disp=",\"display\":\"$2\""
+  printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"f1","name":"SendUserFile","input":{"files":%s%s,"status":"normal"}}]}}' "$1" "$disp"
+}
+printf '%s\n%s\n%s\n' "$U" "$(send_file '["/s/why.html"]' attach)" "$TR" > "$TS/file_attach.jsonl"
+printf '%s\n%s\n%s\n' "$U" "$(send_file '["/s/notes.md"]' render)" "$TR" > "$TS/file_text.jsonl"
+printf '%s\n%s\n%s\n' "$U" "$(send_file '["/s/why.html"]' render)" "$TR" > "$TS/file.jsonl"
+printf '%s\n%s\n%s\n' "$U" "$(send_file '["/s/notes.md","/s/flow.PNG"]')" "$TR" > "$TS/file_auto.jsonl"
+
+OUT="$(run_gate "$HR" "$TS/file_attach.jsonl")"
+has "$OUT" "[gate:no-draw]" && ok "gate: a picture sent as an attachment does not count" \
+  || bad "gate: an attachment opened it (got: $OUT)"
+
+OUT="$(run_gate "$HR" "$TS/file_text.jsonl")"
+has "$OUT" "[gate:no-draw]" && ok "gate: a text file shown to the user does not count" \
+  || bad "gate: a text file opened it (got: $OUT)"
+
+OUT="$(run_gate "$HR" "$TS/file.jsonl")"
+[ -z "$OUT" ] && ok "gate: a picture file sent to render satisfies the gate" \
+  || bad "gate: rendered picture file not silent (got: $OUT)"
+
+OUT="$(run_gate "$HR" "$TS/file_auto.jsonl")"
+[ -z "$OUT" ] && ok "gate: a picture file with no display set satisfies the gate" \
+  || bad "gate: default display not silent (got: $OUT)"
+
+# crew-init writes the default draw_tools list into the config verbatim, so the
+# file evidence must not depend on it: 3 of 4 real crew repos carry that list.
+HRV="$TMP/hookrepo-verbatim"
+mkdir -p "$HRV"
+( cd "$HRV" && git init -q && git checkout -q -b main \
+  && git -c user.email=t@t -c user.name=t commit -q --allow-empty -m init )
+printf '{"owns": [], "crew": {"draw_tools": ["mcp__visualize__show_widget", "Artifact"]}}\n' > "$HRV/.docs-kit.json"
+OUT="$(run_gate "$HRV" "$TS/file.jsonl")"
+[ -z "$OUT" ] && ok "gate: a verbatim draw_tools list does not hide the picture file" \
+  || bad "gate: verbatim draw_tools hid the picture file (got: $OUT)"
+
 # The stop scan reads <session>/subagents/ since 0.40.1; this gate must not copy
 # it. A sub-agent's text never reached the user as a reply, so its marker line
 # or its drawing opening the parent's question repeats rule 1's failure: text

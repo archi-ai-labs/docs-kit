@@ -1,8 +1,9 @@
 """docs-kit PreToolUse worker (AskUserQuestion): the crew explain-gate.
 
 Gate 1 of EXECUTION §7 wants an explanation on the table before a session asks
-the user to decide: a drawing-tool call, or a declared fast lane. This worker
-looks for either, in this turn's replies, and warns when neither is there.
+the user to decide: a drawing-tool call, a picture file sent to render, or a
+declared fast lane. This worker looks for any of them in this turn's replies,
+and warns when none is there.
 
 WHY WARN-ONLY BY DEFAULT (promote per repo, never here):
     STANDARD §8 doctrine: blocking on a false positive teaches users to disable
@@ -25,6 +26,13 @@ Three rules this file must never lose (each learned from a hook that failed):
 Evidence accepted, scanning backwards to the last human turn:
   - an assistant tool_use whose name is in crew.draw_tools
     (default: mcp__visualize__show_widget, Artifact)
+  - an assistant SendUserFile tool_use that shows a picture file: at least
+    one path with a picture extension, and a display other than "attach".
+    It is matched on its payload and is NOT read through draw_tools, because
+    crew-init writes the default list into .docs-kit.json verbatim (3 of the
+    4 crew repos measured for 0.40.4 carry it), so a new default entry would
+    never reach them. A name match alone would also count a changelog sent
+    as an attachment.
   - an assistant TEXT block carrying the one-line fast-lane marker of
     EXECUTION §7 — matched at line start, in assistant-authored text only.
     A tool_result event also has type "user" but carries no text block, so it
@@ -46,6 +54,8 @@ import sys
 
 DEFAULT_DRAW = ["mcp__visualize__show_widget", "Artifact"]
 MARKER_RE = re.compile(r"^LANE:\s*fast\b", re.M)
+FILE_TOOL = "SendUserFile"
+PICTURE_EXT = (".html", ".htm", ".svg", ".png", ".jpg", ".jpeg", ".gif", ".webp")
 
 
 def find_root(start):
@@ -99,6 +109,19 @@ def blocks(msg):
     return [b for b in c if isinstance(b, dict)] if isinstance(c, list) else []
 
 
+def shows_picture(block):
+    # An omitted display lets the host decide by file type, and it renders
+    # HTML and images, so only an explicit "attach" rules the send out.
+    inp = block.get("input") or {}
+    if inp.get("display") == "attach":
+        return False
+    files = inp.get("files") or []
+    if isinstance(files, str):
+        files = [files]
+    return any(isinstance(p, str) and p.lower().endswith(PICTURE_EXT)
+               for p in files)
+
+
 def main():
     try:
         data = json.load(sys.stdin)
@@ -148,6 +171,10 @@ def main():
             if b.get("type") == "tool_use" and b.get("name") in draw:
                 evidence = "draw"
                 break
+            if (b.get("type") == "tool_use" and b.get("name") == FILE_TOOL
+                    and shows_picture(b)):
+                evidence = "file"
+                break
             if b.get("type") == "text" and MARKER_RE.search(b.get("text") or ""):
                 evidence = "lane"
                 break
@@ -162,7 +189,8 @@ def main():
         "docs-kit crew [gate:no-draw]: this question is about to reach the "
         "user without a gate-1 explanation in this turn's replies. Before "
         "asking, either show the decision (a BEFORE/AFTER diagram via a "
-        "drawing tool) or declare the fast lane with its one-line marker — "
+        "drawing tool, or a picture file sent to render) or declare the "
+        "fast lane with its one-line marker — "
         "the marker format and the three lane questions are in "
         ".claude/crew/gates.md (EXECUTION §7)."
     )

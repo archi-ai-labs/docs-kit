@@ -5,6 +5,55 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
+## [0.40.4] — 2026-09-24
+
+`explain` listed three surfaces to draw on and never said which one the reader
+gets. In the desktop app's Code tab the reader asked for a fourth by name, and
+the explain-gate warned on it.
+
+### Changed — the explanation is a file where the host can show one (FEEDBACK-015, issue #3)
+
+Reported from a crew repo. Across three sessions in the Code tab, one widget
+drawing returned "rendered and shown" and the user answered that they saw no
+picture; two ASCII drawings were brushed aside; three standalone HTML files sent
+with `SendUserFile` `display: "render"` were each read, and the check question
+after the first was answered right on the first try. The user asked for that
+form by name: short, coloured, and kept apart from the chat.
+
+The report's premise, that only the file reaches the user in that tab, was
+measured before anything was edited, and it does not hold. Every transcript on
+this machine comes from the desktop app, and they hold 68 widget calls: none drew
+a report of a missing picture, and several drew replies about what the picture
+showed. So the file comes first because readers prefer it, and the widget stays
+second rather than being retired.
+
+| Where | Now |
+|---|---|
+| `skills/explain/SKILL.md`, new section "Where the picture goes" | a session that has `SendUserFile` puts the whole explanation in one HTML file and keeps 2–4 lines plus the check question in the chat; otherwise the widget, an Artifact or a mermaid block as before. Ids go in both places, since a scratchpad file cannot resolve a repo path; the fast-lane marker stays in the chat, since the hook reads only the chat; and the reader's "no picture" outranks the tool result |
+| `skills/explain/template.html`, new | the reported file's shape: numbered cards headed by the reader's question, one SVG each for the skill's three shapes, a one-sentence strip under each, option cards and a table with numbers last; colour tokens on `:root` with a dark set, every placeholder in `[brackets]` |
+| explain-gate | a `SendUserFile` counts as a drawing when a path ends in `.html`, `.htm`, `.svg` or an image extension and `display` is not `"attach"` |
+| `gates.md`, EXECUTION §8 · §9 | the new evidence, and the hole it does not close |
+
+The file evidence does not go through `crew.draw_tools`. crew-init writes the
+default list into `.docs-kit.json` verbatim, and 3 of the 4 crew repos on this
+machine carry it, so adding a default entry would have reached one repo. A name
+match alone was also wrong: it would open the gate on a changelog sent as an
+attachment.
+
+Not closed, and now stated in EXECUTION §8: the gate cannot see whether the
+reader saw the picture. The widget case above opened it by its own rule, and
+only the skill's "believe the reader" rule answers that case.
+
+### Tests
+
+Five checks, known-bad first: a picture sent as an attachment and a text file
+sent to render stay red; an HTML file sent to render, a picture with no
+`display` set, and a repo whose config carries the verbatim default list all
+open the gate. Six mutations (no attach test, any extension, the naive
+`draw_tools` route, an omitted display read as attach, a case-sensitive
+extension, no file clause) each turn their own checks red; the `draw_tools`
+route turns three. `scripts/crew_test.sh` is at **151 checks**.
+
 ## [0.40.3] — 2026-09-19
 
 `crew-init` settled where work lands, then left the one ref every tool outside
