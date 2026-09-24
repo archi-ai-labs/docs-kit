@@ -5,6 +5,43 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
+## [0.42.3] — 2026-09-25
+
+An explanation now closes with one to three check questions, one per core
+change, asked with AskUserQuestion. They lead the reader to the answer instead
+of testing them, and the explanation file carries each answer, folded under a
+click, saying where a reader goes wrong and why.
+
+### Changed — the check questions guide instead of testing
+
+Two rules from the owner on 2026-09-25. First: the check question is asked with
+AskUserQuestion, helps the reader pick the right answer and understand the
+problem instead of setting a puzzle ("if you do not know, re-read section A in
+the page"), and the page holds the answer, shown only when clicked. In the
+session that asked, two check questions typed at the end of the chat were both
+left unanswered. Second, after one question left two of an explanation's three
+main changes unchecked: ask one to three questions, each about one change to the
+workflow or the code, the most important first, and make every answer say where
+a reader goes wrong and why.
+
+| Where | Now |
+|---|---|
+| `skills/explain/SKILL.md`, step 3 | one to three questions, one per core change, most important first, never a fourth, all in one AskUserQuestion call. Options are real readings of the model (the right one and one or two misreadings the drawing could produce) plus "Not sure", whose description names the section to re-read; nothing is marked recommended and the right answer is not always first. Every answer names, per wrong option, the reading behind it, why it is tempting and the fact that rules it out. Gate 2 closes only when every question is answered right |
+| `skills/explain/template.html` | ends with one check card per question: the question word for word, where to look, and inside `<details>` the answer, its section, and a "where a reader goes wrong" list |
+| `gates.md` gate 2, EXECUTION §8, README, the crew snippet | the same rule; the snippet says "1–3 câu kiểm" in the bytes "một câu kiểm" took, still 2390 of 2400 |
+| explain-gate hook | unchanged: an HTML file sent to render earlier in the same turn already opens the gate for the AskUserQuestion that follows (0.40.4) |
+
+Stated ceiling: the page cannot tell whether the reader opened an answer before
+choosing, so a right answer after a look reads the same as one without. The
+questions still find what the drawing failed to carry, which is what they are
+for.
+
+Four checks, each red on 0.42.2 or on this entry's first draft (the template had
+no check card; step 3 asked one question and named no misreadings); five
+mutations (no fold, the answer beside the question, step 3 without the tool,
+step 3 without the one-to-three rule, an answer with no misreading list) each
+turn at least one red. Suite 230 → 234.
+
 ## [0.42.2] — 2026-09-24
 
 An executor that commits its ticket straight onto the dev branch in the main tree

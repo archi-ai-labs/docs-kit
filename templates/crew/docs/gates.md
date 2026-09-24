@@ -53,10 +53,25 @@ khả năng chứng minh con số SAI.
 |---|---|---|
 | 0 | họ nói "ok, hiểu rồi" | không ai |
 | 1 | họ nhắc lại bằng lời của họ | của họ |
-| 2 | **phiên hỏi ngược một câu kiểm** chỉ trả lời đúng được nếu đã nắm mô hình | của **cả hai** |
+| 2 | **phiên hỏi ngược 1–3 câu kiểm**, mỗi câu chỉ trả lời đúng được nếu đã nắm mô hình | của **cả hai** |
 
-Ghi lại **mức** xác nhận, đừng chỉ ghi "đã xác nhận". Im lặng hoặc trả lời mơ
-hồ đọc là CHƯA hiểu: dừng lại, không đưa lựa chọn.
+**Từ 1 đến 3 câu, mỗi câu một thay đổi cốt lõi (0.42.3).** Mỗi câu kiểm hỏi về
+một thay đổi trong chu trình hoặc trong code mà lời giải thích mang theo, và
+thay đổi quan trọng nhất được hỏi trước. Một thay đổi thì một câu; nhiều thay
+đổi thì tối đa ba câu, chọn theo mức quan trọng. Đừng hỏi chi tiết bên lề, vì
+nó không xác nhận được điều mà quyết định dựa vào.
+
+**Hỏi bằng AskUserQuestion, dẫn người đọc tới đáp án chứ không đánh đố.** Các
+câu kiểm nằm trong một lệnh gọi AskUserQuestion, không phải những dòng cuối
+chat. Các lựa chọn là những cách hiểu thật của mô hình: cách hiểu đúng, và một
+hai cách hiểu sai mà hình vẽ có thể gây ra. Câu nào cũng có một lựa chọn "Chưa
+chắc" ghi rõ mục cần đọc lại. Trang HTML lặp lại từng câu hỏi và có sẵn đáp án,
+nhưng đáp án được gập lại, bấm mới hiện. Đáp án nói rõ người đọc dễ sai ở đâu và
+vì sao, mỗi lựa chọn sai một dòng.
+
+Ghi lại **mức** xác nhận, đừng chỉ ghi "đã xác nhận". Im lặng, chọn "Chưa chắc"
+hoặc trả lời mơ hồ đọc là CHƯA hiểu: giải thích lại mục đó, không đưa lựa chọn.
+Cổng 2 chỉ đóng khi mọi câu đều được trả lời đúng.
 
 ## Gate 3 — bây giờ mới hỏi
 

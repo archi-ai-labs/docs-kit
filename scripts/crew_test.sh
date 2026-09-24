@@ -2301,6 +2301,40 @@ printf '%s\n' "$OUT" | grep -q "^  BACKLOG-005  .*bypass=$STRAY5" \
   && ok "bypass: the carried summary row names the stray closer, so the final report does" \
   || bad "bypass: summary row (out: $OUT)"
 
+# ---------------------------------------------------------------- the check question guides (0.42.3)
+# The owner, 2026-09-25: the check question is asked with AskUserQuestion and
+# leads the reader to the right answer instead of setting a puzzle, and the
+# explanation file carries the answer, shown only on a click. In the session
+# that asked, two check questions typed at the end of the chat were both left
+# unanswered. Known-bad first: the template had no check card at all.
+EXT="$KIT/skills/explain/template.html"
+CHK="$(awk '/<section class="card check">/,/<\/section>/' "$EXT")"
+if has "$CHK" "<details" && has "$CHK" "<summary>"; then
+  ok "explain: the template ends with a check card whose answer folds under a click"
+else
+  bad "explain: no folded check card in template.html"
+fi
+OPEN="$(printf '%s\n' "$CHK" | awk '/<details/ { exit } { print }')"
+if [ -n "$CHK" ] && ! has "$OPEN" "[The right answer"; then
+  ok "explain: the answer sits inside the fold, never beside the question"
+else
+  bad "explain: the check card shows its answer before the fold"
+fi
+S3="$(awk '/^## Step 3/,0' "$KIT/skills/explain/SKILL.md")"
+if has "$S3" "AskUserQuestion" && has "$S3" "Not sure" && has "$S3" "one to three"; then
+  ok "explain: step 3 asks one to three questions with AskUserQuestion, each with a way back to the page"
+else
+  bad "explain: step 3 does not name AskUserQuestion, one to three questions and a not-sure option"
+fi
+# The owner, same day: the answer says where a reader goes wrong and why, not
+# only which option was right.
+FOLD="$(printf '%s\n' "$CHK" | awk '/<details/,/<\/details>/')"
+if has "$FOLD" "goes wrong" && has "$S3" "goes wrong"; then
+  ok "explain: the folded answer names where a reader goes wrong, and why"
+else
+  bad "explain: the folded answer gives the right option only"
+fi
+
 # ---------------------------------------------------------------- summary
 echo ""
 echo "crew_test: $PASS passed, $FAIL failed"

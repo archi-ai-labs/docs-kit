@@ -27,7 +27,7 @@ khác nhau ở chỗ `full` đã có Decision. Chi tiết: `.claude/crew/tickets
 
 **Lane test có BA câu** (câu 3: có thao tác không lùi được không — nó thắng
 hai câu kia). "Không" cả ba → khai `LANE: fast — <lý do>` ngay trong trả lời.
-Trước khi hỏi người dùng quyết việc full lane: giải thích đạt cổng 1 rồi một
+Trước khi hỏi người dùng quyết việc full lane: giải thích đạt cổng 1 rồi 1–3
 câu kiểm mức 2 — luật trong `.claude/crew/gates.md`; user cần bản giải thích
 chuẩn thì gõ `/docs-kit:explain <vấn đề>`.
 

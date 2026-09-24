@@ -9,6 +9,12 @@
   - Write every visible word in the reader's language.
   - Keep only the sections the question needs, and renumber ① ② ③ ④.
     Sections ① ② ③ are the skill's three shapes; ④ is the trade-off.
+  - Always end with the check cards (SKILL.md step 3): one card per question,
+    one to three, one per core change, most important first. Each question is
+    word for word the one the session then asks with AskUserQuestion, and its
+    answer stays inside <details>: the page carries the answers, folded, so an
+    unsure reader opens one instead of guessing. Every answer names where a
+    reader goes wrong and why, one line per wrong option.
   - One picture per section. Inside an <svg>: labels only, one claim per box,
     a subtitle of five words or fewer. Prose goes in the <p> above it.
   - Colour is meaning, never order: .a / .b for two kinds of thing,
@@ -102,6 +108,22 @@
   th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
   th { color: var(--ink2); font-weight: 600; }
   td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .check { border-color: var(--a); }
+  .check .hint { color: var(--ink2); }
+  details.answer { border-top: 1px solid var(--line); padding-top: 12px; }
+  details.answer summary {
+    display: inline-block; cursor: pointer; list-style: none;
+    font-weight: 600; color: var(--a);
+    padding: 6px 14px; border: 1.5px solid var(--a); border-radius: 8px;
+  }
+  details.answer summary::-webkit-details-marker { display: none; }
+  details.answer summary:focus-visible { outline: 2px solid var(--a); outline-offset: 2px; }
+  details.answer[open] summary { background: var(--a-wash); }
+  details.answer .body { margin-top: 12px; }
+  .wrong-h { font-weight: 600; margin: 12px 0 4px; }
+  ul.wrong { margin: 0; padding-left: 20px; }
+  ul.wrong li { padding: 3px 0; }
+  ul.wrong b { color: var(--bad); }
   @media (max-width: 560px) { .options { grid-template-columns: 1fr; } }
 </style>
 </head>
@@ -215,6 +237,25 @@
     <tr><td>[what is measured]</td><td class="num">[number]</td><td class="num">[number]</td></tr>
   </table>
   <p class="strip a"><b>[Takeaway] —</b> [one sentence]</p>
+</section>
+
+<!-- ? the check questions — always last (SKILL.md step 3). One card per
+     question, one to three, one per core change, most important first. The
+     same words the session asks with AskUserQuestion; each answer stays folded. -->
+<section class="card check">
+  <h2><span class="n">?1</span>[The check question, word for word as it is asked]</h2>
+  <p class="hint">[Where to look if unsure, e.g. "Not sure? Re-read ②, then open the answer."]</p>
+  <details class="answer">
+    <summary>[Show the answer]</summary>
+    <div class="body">
+      <p class="strip ok"><b>[The right answer] —</b> [why, in one or two sentences, naming the section that shows it]</p>
+      <p class="wrong-h">[Where a reader goes wrong]</p>
+      <ul class="wrong">
+        <li><b>[A wrong option]</b> — [the reading behind it, why it is tempting, and the fact in the page that rules it out]</li>
+        <li><b>[Another wrong option]</b> — [the same three things]</li>
+      </ul>
+    </div>
+  </details>
 </section>
 
 </main>

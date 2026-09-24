@@ -1,6 +1,6 @@
 ---
 name: explain
-description: "Explain a docs-kit layer-2 document or its chain — an Issue, Backlog item, Proposal, or Decision — or a mechanism this repo runs on, such as a script, a hook, a skill, a command or a config key, to the four-gates standard: at least one drawing, BEFORE/AFTER, trade-offs with numbers, ids as links, one level-2 check question to close. Trigger when the user asks what or why about an ISSUE-/BACKLOG-/PROPOSAL-/DECISION- id, a lane choice, the workflow between them, or how a piece of this repo's own tooling actually works; every other topic waits to be typed explicitly."
+description: "Explain a docs-kit layer-2 document or its chain — an Issue, Backlog item, Proposal, or Decision — or a mechanism this repo runs on, such as a script, a hook, a skill, a command or a config key, to the four-gates standard: at least one drawing, BEFORE/AFTER, trade-offs with numbers, ids as links, level-2 check questions to close. Trigger when the user asks what or why about an ISSUE-/BACKLOG-/PROPOSAL-/DECISION- id, a lane choice, the workflow between them, or how a piece of this repo's own tooling actually works; every other topic waits to be typed explicitly."
 arguments: topic
 argument-hint: "<điều chưa hiểu — một id, một tệp, một quyết định>"
 ---
@@ -60,8 +60,8 @@ this session can do, top row first:
 
 | The session has | The surface | The chat carries |
 |---|---|---|
-| `SendUserFile` (the Claude desktop app's Code tab) | one standalone HTML file: copy `template.html` from this skill's folder into the scratchpad, fill it, send it with `display: "render"`. Every picture, the short prose and the trade-off numbers go in the file | 2–4 lines that lead into the file, then the check question |
-| no file send | the visualize widget, an Artifact page, or a mermaid block | the explanation itself |
+| `SendUserFile` (the Claude desktop app's Code tab) | one standalone HTML file: copy `template.html` from this skill's folder into the scratchpad, fill it, send it with `display: "render"`. Every picture, the short prose and the trade-off numbers go in the file | 2–4 lines that lead into the file, then the check questions, asked with AskUserQuestion (Step 3) |
+| no file send | the visualize widget, an Artifact page, or a mermaid block | the explanation itself, then the check questions with AskUserQuestion |
 
 The file comes first because readers asked for it by name. In the repo that
 reported it, three explanations sent this way were each read, and the check
@@ -133,19 +133,58 @@ redraw:
 - **One picture answers one question.** A second question earns a second
   picture, never a second panel bolted onto the first.
 
-## Step 3 — Close with exactly one level-2 check question
+## Step 3 — Close with one to three level-2 check questions, asked with AskUserQuestion
 
-End with one question that can only be answered correctly by someone holding
-the model. Not "does this make sense?" — level 0 catches nobody, a real nod
-and a polite nod look identical. Not "can you repeat it back?" — level 1
-catches only the reader, while the usual error belongs to the drawer. A good
-level-2 question makes the reader RUN the model ("if X happened here, what
-breaks first?"), and a wrong answer teaches you which part to redraw.
+Each check question can only be answered correctly by someone holding the
+model. Not "does this make sense?" — level 0 catches nobody, a real nod and a
+polite nod look identical. Not "can you repeat it back?" — level 1 catches only
+the reader, while the usual error belongs to the drawer. A good level-2
+question makes the reader RUN the model ("if X happened here, what breaks
+first?"), and a wrong answer teaches you which part to redraw.
 
-The reply decides what happens next: a correct answer closes gate 2; silence
-or a vague answer reads as NOT understood — re-explain the part they stumbled
-on, and never move on to offering choices past it. If a decision follows,
-record WHICH level the confirmation reached (a "confirmed" that was really
-level 0 makes the decision harder to challenge later than no record at all),
-and only then present the options — gate 3, never earlier, and the gates do
-not merge.
+**How many: one to three, one per core change.** A question is about one change
+the explanation carries, to the workflow or to the code, and the most
+important change is asked first. One change gets one question; an explanation
+that carries several gets up to three, picked by importance, and never a
+fourth, which tests stamina rather than the model. Stay on the core of the
+explanation: a question about a side detail confirms nothing the decision
+rests on. The owner's rule, 2026-09-25, after a single question left two of an
+explanation's three main changes unchecked.
+
+**Ask them with AskUserQuestion, and make them guide, not trap.** The owner's
+rule of the same day, after two check questions typed at the end of the chat
+in one session were both left unanswered: the questions go in ONE
+AskUserQuestion call (it takes up to four), the reader answers each with one
+click, and their job is to find what the drawing failed to carry, not to grade
+the reader.
+
+- **The options are real readings of the model**: the right one, and one or
+  two misreadings the drawing could actually produce. No near-identical
+  wording, no "all of the above", nothing marked recommended, and the right
+  answer is not always first.
+- **Each question has a "Not sure" option**, written in the reader's language,
+  whose description names the section to re-read: "re-read ② in the page, then
+  open the answer at the bottom".
+- **Each question text ends with the same pointer**, so a reader who is unsure
+  knows where to look before choosing.
+- **The file carries every answer, folded.** `template.html` ends with one card
+  per question: the question word for word, where to look, and inside
+  `<details>`, shown only on a click, the answer with why and the section that
+  shows it. An Artifact page or the widget folds them the same way; a mermaid
+  block cannot, so there the answers come in the reply.
+- **An answer says where a reader goes wrong, and why.** For every wrong
+  option: the reading behind it, why that reading is tempting, and the fact in
+  the explanation that rules it out. A reader who picked it learns what to
+  unlearn, which a bare "B is right" never teaches.
+
+The replies decide what happens next. A right answer is confirmed in one
+sentence that says why. A wrong answer is met with where it goes wrong and
+why, the section is redrawn, and that question is asked once more. "Not
+sure", silence, or a vague answer under "Other" reads as NOT understood:
+re-explain that section more simply. Gate 2 closes only when every question is
+answered right; never move on to offering choices past an open one. If a
+decision follows, record WHICH level the confirmation reached and what each
+answer was (a "confirmed" that was really level 0 makes the decision harder to
+challenge later than no record at all), and only then present the options —
+gate 3, a separate AskUserQuestion call, never earlier, and the gates do not
+merge.

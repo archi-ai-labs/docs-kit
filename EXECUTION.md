@@ -713,11 +713,19 @@ LANE: fast — <reason>
 |---|---|
 | 0 · lane | three questions; all-no → marker line, skip gate 2 |
 | 1 · explain | BEFORE/AFTER diagram, two-sided trade-offs with numbers |
-| 2 · confirm | ask **one check question back** that is only answerable from inside the model (level 2 — levels 0 "ok, got it" and 1 "repeat it back" catch only the reader's errors; the drawer's errors are the common ones) |
+| 2 · confirm | ask **one to three check questions back**, one per core change, with AskUserQuestion, each only answerable from inside the model (level 2 — levels 0 "ok, got it" and 1 "repeat it back" catch only the reader's errors; the drawer's errors are the common ones) |
 | 3 · ask | only now present the options |
 
 Silence or a vague answer at gate 2 reads as *not understood* — stop; do not
-present options. Record **which level** the confirmation reached, not just
+present options. Since 0.42.3 there are one to three questions, one per core
+change of the explanation (workflow or code), most important first, all in one
+AskUserQuestion call. They guide rather than trap: the options are real
+readings of the model plus a "not sure" option that names the section to
+re-read, and an explanation file carries each answer folded under a click,
+saying where a reader goes wrong and why. The owner asked for it after two
+check questions typed at the end of the chat went unanswered in one session;
+picking "not sure" reads as not understood, and gate 2 closes only when every
+question is answered right. Record **which level** the confirmation reached, not just
 "confirmed": a level-0 trace filed as "understood" makes the decision harder to
 challenge later than no trace at all.
 
