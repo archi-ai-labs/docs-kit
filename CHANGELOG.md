@@ -5,6 +5,88 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
+## [0.42.0] — 2026-09-24
+
+From a ticket number you can now tell which planner to go back to: every title
+reads project → role → task, the task names the document the work serves, and a
+planner working one subject wears that same document in its title.
+
+### Changed — one title grammar, `<repo> · <role> [· <task>]`
+
+Measured 2026-09-24 on four repos: with several planners open, every one was
+titled `<repo> · crew/planner`, and from `b<nnn>` alone the user could not say
+which planner to return to. The user set the order (project, then role, then
+task) and dropped the `crew/` prefix to win the width back.
+
+| Session | Before | Now |
+|---|---|---|
+| executor in the pool | `myapp · e1 · b157 · processing · crew/executor` | `myapp · executor · b157 · d009 · e1 · processing` |
+| executor on a chain | `myapp · e1 · b334 · 332→336 · processing · crew/executor` | `myapp · executor · b334 · d009 · 332→336 · e1 · processing` |
+| fast-pair executor | `myapp · main · b010 · processing · crew/executor` | `myapp · executor · b010 · i020 · main · processing` |
+| hat on a ticket | `myapp · b157 · crew/tester` | `myapp · tester · b157` |
+| subject planner | none | `myapp · planner · d009 co-vi-the-theo-von-hien-tai` |
+| any other hat | `myapp · crew/steward` | `myapp · steward` |
+
+The ticket leads the task part, because a list that cuts a long title keeps its
+head. The executor grammar lives in one function, `exec_title`, which `crew name`
+compares against and `crew new` prints; before, `crew new` spelled it out twice.
+
+### Added — the subject, read from `source_ref`
+
+A ticket's **subject** is the document its `source_ref` names, shown as a token:
+`d009` for DECISION-009, `i020` for ISSUE-020. The link was already in every
+ticket and already resolved by the validator; nothing showed it. A ticket with no
+readable `source_ref` keeps the rest of its title.
+
+| Where | Now |
+|---|---|
+| `crew name planner <subject>` | titles a subject planner `<repo> · planner · d009 <slug>`, the words read from the document's file name. Takes `d009`, `D9` or `DECISION-009`; refuses an id with no document (`[name:subject]`) |
+| `crew name <hat> <nnn>` | `<repo> · <hat> · b<nnn>` |
+| `crew name executor <subject>` | refused: an executor's subject is its ticket's `source_ref` |
+| `crew name … --group` | prints the desktop sidebar groups the session belongs in, best first: `<repo> · d009 <slug>`, then `<repo>` |
+| planner hat | a **subject planner** section: open one only for a subject that will produce more than one ticket (3 of 49 source documents did, across four repos); how to open it; its group; retitling when the Issue becomes a Decision; closing its group when the subject is done; the id race between planners cutting tickets at once |
+| executor, steward, navigator, tester, devops hats | the new title, and one line: join the sidebar group `--group` prints |
+| `roles.md` | the grammar table, and a **sidebar groups** procedure every hat follows |
+
+Three other keys were dropped, with the reasons in EXECUTION §3: a number per
+planner, the kind of work (`techdebt`, `hotfix`, `ft/<name>` — the user's own
+first scheme), and the app's `spawnedFrom` link. That link is present on 40 of 40
+chip-born executors, but it names the session that made the chip, so with a
+coordinating planner every executor would point at the coordinator.
+
+### Added — sidebar groups, desktop only, opt-in by the user's own sidebar
+
+Measured on the user's sidebar on 2026-09-24: moving one session into a group
+switched the whole sidebar out of its project view, every other session fell
+into one bucket, and the user read it as the rest being gone. So a session joins
+a group only when that group already exists, the kit never creates a project
+group, and only a subject planner creates a group — its own — and only when the
+project's group already exists. Groups sit in creation order and nothing
+reorders them, so a subject group lands at the bottom until the user drags it.
+
+### Changed — title-nag reads the new grammar and carries the old one over
+
+With no `crew/` marker, a title's second field is a crew role only when `crew
+role` finds a stamped role file for it, so `myapp · notes · …` is left alone. A
+title in the pre-0.42 grammar is still a crew title by its marker; it gets one
+nag that says `this session's title is in the grammar before 0.42.0` and the
+title to move to.
+
+Upgrading: every open crew session is nagged once at its next stop. The always-
+loaded crew snippet is at 2390 of its 2400 bytes.
+
+Suite 208 → 222 checks. Run against 0.41.2's script and hook, 12 of the 14 new
+checks are red; the other two assert silence, and both turn red when the hook's
+role-file gate is removed.
+
+### Shipped with it — 0.40.0 through 0.41.2
+
+Those nine versions were built on parallel branches and never pushed one by one;
+they reach `main` in this push, stacked in version order. 0.40.4 and 0.40.5 now
+sit under 0.41.0, so the check counts in the 0.41.x entries below are those of
+the stacked history (11 higher than on their own branches). Only `v0.42.0` is
+tagged.
+
 ## [0.41.2] — 2026-09-24
 
 A chain is carried by a session that was given it, not by any session that
@@ -37,7 +119,7 @@ Upgrading mid-chain: a chain session opened on 0.41.0 has no `chain` mark on its
 `NEW` lines, so its next `crew done` parks with `[done:alone]` and prints the
 `crew new <next> --chain` that resumes it, from the same tree.
 
-Suite 183 → 197 checks. Ten mutations of the new code, each run against the full
+Suite 194 → 208 checks. Ten mutations of the new code, each run against the full
 suite, turn at least one check red.
 
 ### Fixed — the crew suite could commit into the kit checkout
@@ -97,7 +179,7 @@ executor had flipped the status inside its own ticket) was titled
 `docs: close-out BACKLOG-docs/92_audit/LOG.md`, because `set --` had reused the
 positional parameters and `$1` was a path by then; every close-out body named the
 wrong `crew done` for the same reason. It was red before the fix.
-`scripts/crew_test.sh` is at **183 checks**.
+`scripts/crew_test.sh` is at **194 checks**.
 
 ## [0.41.0] — 2026-09-24
 
@@ -156,7 +238,8 @@ mutations each turn their own checks red: no handoff, park-then-switch (exactly
 one check, the reflog one), no gate, no cwd preference, no title segment, no
 board block, and no loop guard on the title (exactly one check). The chain's two
 awk programs print byte-identical output under BSD awk and mawk.
-`scripts/crew_test.sh` is at **172 checks**.
+`scripts/crew_test.sh` is at **183 checks**.
+
 ## [0.40.5] — 2026-09-24
 
 Every reader of `.docs-kit.json` falls back to the kit's default only when a key
@@ -443,6 +526,7 @@ suite differs from a clean 0.39.0 baseline by exactly that step. Five narrower
 mutations (flat glob, no `session_id`, no per-file fail-open, every session's
 directory, sub-agent document edits dropped) each turn exactly their own case
 red. `scripts/crew_test.sh` is at **140 checks**.
+
 ## [0.40.0] — 2026-09-19
 
 Cleaning up Layer 2 is now a thing you ask for by chain, and read before it

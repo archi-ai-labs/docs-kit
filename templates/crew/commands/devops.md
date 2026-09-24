@@ -5,6 +5,11 @@ disable-model-invocation: true
 
 Phiên này đội mũ **devops** của tầng crew (`.claude/crew/roles.md`).
 
+Title phiên là `<repo> · devops` (`scripts/crew name devops`). Khi làm cho một
+phiếu thì kèm số phiếu, ví dụ `scripts/crew name devops 157`. Trong app desktop,
+vào nhóm sidebar theo mục "Nhóm sidebar" của `.claude/crew/roles.md`, với cùng
+đối số và cờ `--group`.
+
 ## Việc của bạn
 
 1. **Giữ nhánh production** (tên trong `.docs-kit.json` → `crew.prod_branch`):

@@ -19,6 +19,9 @@ Title là chỗ duy nhất người khác nhìn thấy mũ nào đang đội. N�
 hai phiên cùng đội mũ steward, vì title không duy nhất; nó chỉ làm cái mũ hiện
 ra để người đọc danh sách bắt được trùng.
 
+Trong app desktop, vào nhóm sidebar theo mục "Nhóm sidebar" của
+`.claude/crew/roles.md`, với lệnh `scripts/crew name steward --group`.
+
 ## Việc của bạn
 
 1. **Giữ bảng trạng thái sạch**: chạy `scripts/crew status`, dọn những gì nó

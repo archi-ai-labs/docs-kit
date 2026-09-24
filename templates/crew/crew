@@ -18,7 +18,9 @@
 #   crew lock release <res> <nnn>
 #   crew status                          executors · locks · pacing signals
 #   crew report [<period>] [--write]     the week's numbers for the navigator's report
-#   crew name <role> [<nnn>]             is this session wearing its name?
+#   crew name <role> [<nnn>|<subject>]   is this session wearing its name?
+#     [--want]                           print the title it should wear, nothing else
+#     [--group]                          the sidebar groups it belongs in, best first
 #   crew role <role>                     print a role file (works from a worktree)
 set -u
 
@@ -354,6 +356,79 @@ chain_seg() {
   [ -z "$CS" ] || printf '%s · ' "$CS"
 }
 
+# ---------------------------------------------------------------- subjects
+# A ticket serves the layer-2 document its `source_ref` names: an Issue on the
+# fast lane, a Decision on the full lane (STANDARD §5). That document is the
+# ticket's SUBJECT, and titles carry it as a short token — `d009`, `i020` — so an
+# executor and the planner working the same subject share one visible string.
+#
+# WHY THE SOURCE_REF AND NOT A NEW FIELD: measured 2026-09-24 on four repos, from
+# `b<nnn>` alone the user could not tell which planner to go back to. The link
+# was already in every ticket and already resolved by the validator; nothing
+# showed it. A `planner:` field was considered and dropped: typed by hand, and it
+# names a session, which ends, instead of the work, which does not.
+#
+# WHY NOT THE APP'S OWN PARENT LINK: every chip-born executor records the session
+# that made its chip (40 of 40 measured). That names whoever made the chip, not
+# who holds the context — with a coordinating planner making the chips, every
+# executor points at the coordinator. It is also desktop-only, unreadable here.
+
+# subj_id d009 | DECISION-009 | i20 | ISSUE-020 → DECISION-009, ISSUE-020; fails otherwise
+subj_id() {
+  case "$1" in
+    [dD][0-9]*) SJT=DECISION; SJN="${1#?}" ;;
+    [iI][0-9]*) SJT=ISSUE;    SJN="${1#?}" ;;
+    [pP][0-9]*) SJT=PROPOSAL; SJN="${1#?}" ;;
+    DECISION-*|ISSUE-*|PROPOSAL-*) SJT="${1%%-*}"; SJN="${1#*-}" ;;
+    *) return 1 ;;
+  esac
+  case "$SJN" in ''|*[!0-9]*) return 1 ;; esac
+  printf '%s-%03d' "$SJT" "$((10#$SJN))"
+}
+
+# subj_tok DECISION-009 → d009, the same shape as b<nnn>
+subj_tok() { printf '%s%s' "$(printf '%s' "$1" | cut -c1 | tr 'DIP' 'dip')" "${1#*-}"; }
+
+# doc_file <ID> → the layer-2 doc whose frontmatter id is <ID>, archive included
+doc_file() {
+  grep -rlE "^id:[[:space:]]*\"?$1\"?[[:space:]]*(#.*)?\$" "$MAIN/docs" 2>/dev/null | head -1
+}
+
+# subj_label <ID> → "d009 co-vi-the-theo-von-hien-tai": the token, then the slug
+# the doc's own file name carries, so the words are read, not typed. Fails when no
+# document has that id: a subject is always something that exists.
+subj_label() {
+  DFP="$(doc_file "$1")"
+  [ -n "$DFP" ] || return 1
+  DFB="$(basename "$DFP" .md)"
+  case "$DFB" in
+    "$1"-?*) printf '%s %s' "$(subj_tok "$1")" "${DFB#"$1"-}" ;;
+    *)       subj_tok "$1" ;;
+  esac
+}
+
+# ticket_subject <nnn> → the ID its source_ref names, or nothing (fail open: a
+# ticket with no readable source keeps the rest of its title)
+ticket_subject() {
+  TSF="$(ticket_file "$1")"
+  [ -n "$TSF" ] || return 0
+  subj_id "$(front "$TSF" source_ref)" || true
+}
+
+# subj_seg <nnn> → "d009 · ", or nothing — same shape as chain_seg
+subj_seg() {
+  SJ="$(ticket_subject "$1")"
+  [ -z "$SJ" ] || printf '%s · ' "$(subj_tok "$SJ")"
+}
+
+# exec_title <nnn> <place> <state> → the executor session title. ONE place: crew
+# name compares against it and crew new prints it, so the grammar is spelled once.
+# The ticket leads the task part because a list that cuts a long title keeps its
+# head: what goes first is what still reads when the rest is an ellipsis.
+exec_title() {
+  printf '%s · executor · b%s · %s%s%s · %s' "$REPO" "$1" "$(subj_seg "$1")" "$(chain_seg "$1")" "$2" "$3"
+}
+
 # carried <nnn> → true when the tree holding BACKLOG-<nnn> belongs to a session
 # that carries the chain: its `crew new` said --chain, or it reached this ticket
 # by a handoff from one that did. Read from the LAST NEW line for the ticket in
@@ -628,7 +703,7 @@ cmd_new() {
   fi
   if [ "$(front "$F" execution)" = "fast-pair" ]; then
     note "BACKLOG-$N is fast-pair: work on the dev branch in the main tree and commit in the same bout"
-    note "session  : it still gets one — title it $REPO · main · b$N · $(chain_seg "$N")processing · crew/executor"
+    note "session  : it still gets one — title it $(exec_title "$N" main processing)"
     die "no executor for a fast-pair ticket (EXECUTION §2)"
   fi
   BR="work/b$N"
@@ -696,7 +771,7 @@ cmd_new() {
   SEG="$(chain_seg "$N")"
   NXT="$(chain_awk next "$N" | cut -f1)"
   note "executor : $(en "$WT")  $WT  (branch $BR, from $DEV)"
-  note "session  : title it $REPO · $(en "$WT") · b$N · ${SEG}processing · crew/executor  (scripts/crew name executor)"
+  note "session  : title it $(exec_title "$N" "$(en "$WT")" processing)  (scripts/crew name executor)"
   note "finish   : scripts/crew done $N   (from anywhere in the repo)"
   if [ "$CHAIN" -eq 1 ] && [ -n "$NXT" ]; then
     note "chain    : ${SEG% · } — this session carries it: crew done $N opens BACKLOG-$NXT in this same tree"
@@ -1747,36 +1822,51 @@ session_file() {
 
 cmd_name() {
   ROLE="${1:-}"
-  [ -n "$ROLE" ] || die "usage: crew name <role> [<nnn>] [--want]"
+  [ -n "$ROLE" ] || die "usage: crew name <role> [<nnn>|<subject>] [--want|--group]"
   # --want prints the computed title and nothing else. It exists so the Stop hook
   # can compare a session's title against the truth WITHOUT re-deriving the
   # grammar: three parts read from git, one place, and nothing else spelling them
   # out again. Everything below is unchanged for a call without the flag.
+  #
+  # --group prints the desktop sidebar groups this session belongs in, best first:
+  # the subject's group, then the project's. The kit cannot touch the sidebar —
+  # only the model in the app can — so this is the one fact it hands over, and the
+  # role file says what to do with it (EXECUTION §3).
   WANTONLY=0
+  GROUPONLY=0
   TICKET=""
+  SUBJ=""
   shift
   for a in "$@"; do
     case "$a" in
-      --want) WANTONLY=1 ;;
-      *)      TICKET="$a" ;;
+      --want)  WANTONLY=1 ;;
+      --group) GROUPONLY=1 ;;
+      *) if SA="$(subj_id "$a")"; then SUBJ="$SA"; else TICKET="$a"; fi ;;
     esac
   done
-  # Three grammars, one place, project first so any session list sorts by repo.
+  [ "$ROLE" = "executor" ] && [ -n "$SUBJ" ] \
+    && die "an executor is named by its ticket; its subject is read from the ticket's source_ref"
+  # One grammar, one place: project, then role, then the task — `<repo> · <role>
+  # [· <task>]`. The fixed part leads and the optional part trails, so a hat with
+  # no task is the head of the same title with one. The user chose that order on
+  # 2026-09-24 and dropped the old `crew/` prefix to buy the width back.
   # A session carries ONE CHAIN — a ticket nobody chained is a chain of one — and
   # its title always names exactly one ticket, the one its tree holds now, so an
   # executor session is born processing and ends finished, and there is
   # deliberately no idle form: an idle executor has no session to name. The parts
-  # are read from git and the tickets rather than typed (tree → e<k>, branch →
-  # b<nnn>, after_ref → first→last, trailer → state), so the cwd beats any ticket
-  # argument. A bare b157 still works for anyone outside the pool, and a hat
-  # session is just the hat. Never let a role file spell any of these out again.
+  # are read from git and the tickets rather than typed (branch → b<nnn>,
+  # source_ref → subject, after_ref → first→last, tree → e<k>, trailer → state),
+  # so the cwd beats any ticket argument. A hat takes a ticket (`b157`) or a
+  # subject (`d009 <slug>`) when it is working one. Never let a role file spell
+  # any of these out again.
   HERE="$(git rev-parse --show-toplevel 2>/dev/null || true)"
   SUF=""
+  TN=""
   case "$(basename "${HERE:-.}")" in "$REPO"-e[0-9]*) SUF="$(en "$HERE")" ;; esac
   if [ "$ROLE" = "executor" ] && [ -n "$SUF" ]; then
     HB="$(git -C "$HERE" symbolic-ref --short HEAD 2>/dev/null || true)"
     case "$HB" in
-      work/b*) WANT="$REPO · $SUF · ${HB#work/} · $(chain_seg "${HB#work/b}")$(exec_state "$HERE" "$HB") · crew/$ROLE" ;;
+      work/b*) TN="${HB#work/b}"; WANT="$(exec_title "$TN" "$SUF" "$(exec_state "$HERE" "$HB")")" ;;
       *)
         # A PARKED executor holds no branch, so the branch can no longer name the
         # ticket — but the session is still open, and its work has landed. This is
@@ -1791,7 +1881,7 @@ cmd_name() {
         [ -n "$TICKET" ] && PKN="$(norm "$TICKET")"
         if [ -n "$PKN" ] && has_closer "$MAIN" "$PKN" -50 "$(cfg dev_branch main)"; then
           if ticket_done "$PKN"; then
-            WANT="$REPO · $SUF · b$PKN · $(chain_seg "$PKN")$(closed_state "$PKN") · crew/$ROLE"
+            TN="$PKN"; WANT="$(exec_title "$PKN" "$SUF" "$(closed_state "$PKN")")"
           else
             # Merged, parked, never closed out. There IS no title for this: the
             # session's own `finishing` is still the honest word, because a
@@ -1817,7 +1907,7 @@ cmd_name() {
     # title are read from git, which answers "which tree am I in" and never
     # "which tree should this ticket be in". Measured before this guard: from the
     # main tree, a `full` ticket was blessed as `<repo> · main · b077 ·
-    # processing · crew/executor`, so a session that skipped `crew new` was told
+    # processing` (the pre-0.42 grammar), so a session that skipped `crew new` was told
     # its title was correct and went on to edit the shared tree — where check 2
     # then refuses every crew done in flight. Fail open on a missing field:
     # `execution:` is optional (EXECUTION §3) and the kit does not guess a level
@@ -1831,14 +1921,28 @@ cmd_name() {
         die "take one first: scripts/crew new $PN — then name this session from the tree that prints"
         ;;
     esac
-    WANT="$REPO · main · b$PN · $(chain_seg "$PN")$(pair_state "$PN") · crew/$ROLE"
+    TN="$PN"; WANT="$(exec_title "$PN" main "$(pair_state "$PN")")"
+  elif [ -n "$SUBJ" ]; then
+    # A subject planner is named by the document it drives, so the list says what
+    # it is working on, and the executors serving that document carry the same
+    # token. Refuse an id with no document behind it: the words come from its
+    # file name, and a subject nobody wrote down is not one.
+    SL="$(subj_label "$SUBJ")" \
+      || die "[name:subject] no document with id $SUBJ under docs/ — a subject is a document that exists"
+    WANT="$REPO · $ROLE · $SL"
   elif [ -n "$TICKET" ]; then
-    WANT="$REPO · b$(norm "$TICKET") · crew/$ROLE"
+    WANT="$REPO · $ROLE · b$(norm "$TICKET")"
   else
-    WANT="$REPO · crew/$ROLE"
+    WANT="$REPO · $ROLE"
   fi
 
   [ "$WANTONLY" = "1" ] && { printf '%s\n' "$WANT"; return 0; }
+  if [ "$GROUPONLY" = "1" ]; then
+    [ -n "$TN" ] && SUBJ="$(ticket_subject "$TN")"
+    [ -n "$SUBJ" ] && GL="$(subj_label "$SUBJ")" && printf '%s · %s\n' "$REPO" "$GL"
+    printf '%s\n' "$REPO"
+    return 0
+  fi
 
   skip() { note "name: $1 — check skipped"; note "name: this session should be titled: $WANT"; }
 

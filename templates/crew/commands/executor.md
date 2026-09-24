@@ -13,15 +13,22 @@ Chạy `scripts/crew new $ARGUMENTS` (bước 1) trước, vì title cần biế
 cây nào; rồi `scripts/crew name executor` ngay sau đó. Xanh thì làm tiếp; đỏ thì
 đặt lại title rồi chạy lại.
 
-Title có ba phần lệnh tự đọc từ git, bạn không truyền gì cả:
-`<repo> · e1 · b157 · processing · crew/executor` — cây bạn ngồi, nhánh bạn mở,
-và trạng thái. Phiếu nằm trong một chuỗi (`after_ref:`) thì title có thêm đoạn
-`<đầu>→<cuối>` sau số phiếu, ví dụ `b333 · 332→336`, và đoạn đó cũng do lệnh
-tự đọc từ các phiếu. Phiên sinh ra ở `processing`, **đổi sang `finishing` ngay khi bạn
+Title gồm các phần lệnh tự đọc từ git và từ phiếu, bạn không truyền gì cả:
+`<repo> · executor · b157 · d009 · e1 · processing` — nhánh bạn mở, tài liệu gốc
+mà phiếu phục vụ (`source_ref`, ở đây là DECISION-009), cây bạn ngồi, và trạng
+thái. Ô gốc là thứ cho người dùng biết phải quay lại planner nào. Phiếu nằm trong
+một chuỗi (`after_ref:`) thì title có thêm đoạn `<đầu>→<cuối>` sau ô gốc, ví dụ
+`b333 · d009 · 332→336`, và đoạn đó cũng do lệnh tự đọc từ các phiếu. Phiên sinh
+ra ở `processing`, **đổi sang `finishing` ngay khi bạn
 viết commit mang trailer** (bước 4), rồi **sang `finished` khi `crew done` đã
 gộp xong và đóng sổ phiếu** (bước 5). Cứ mỗi lần trạng thái đổi thì chạy lại
 lệnh này. Trong app phiên tự đổi title của chính nó được, ngoài
 terminal thì đưa dòng `/rename` mà lệnh in ra cho người dùng.
+
+Trong app desktop, vào nhóm sidebar theo mục "Nhóm sidebar" của
+`.claude/crew/roles.md`, với lệnh `scripts/crew name executor --group` (phiếu
+fast-pair thì kèm số phiếu). Làm lại khi ô gốc trong title đổi, ví dụ khi chuỗi
+chuyển sang một phiếu phục vụ tài liệu khác.
 
 Nếu bạn được mở từ một task chứ không do người dùng gõ `/executor`: bạn không
 **gọi** được tệp vai này, vì mọi tệp vai đều khoá `disable-model-invocation` —

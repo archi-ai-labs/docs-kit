@@ -9,8 +9,9 @@ phiếu nên nó mang địa chỉ executor:
 BACKLOG-157                                 phiếu (docs/23_backlog/)
 work/b157                                   nhánh
 BACKLOG-157                                 chủ khoá (crew lock acquire … 157)
-<repo> · e1 · b157 · processing · …         tên phiên (fast-pair thì e1 → main; phiếu
-                                            trong chuỗi thêm đoạn 157→160 sau b157)
+<repo> · executor · b157 · d009 · e1 · …    tên phiên (d009 là gốc, đọc từ source_ref;
+                                            fast-pair thì e1 → main; phiếu trong
+                                            chuỗi thêm đoạn 157→160 trước e1)
 ../<repo>-e1                                cây của executor (dùng lại)
 ```
 
@@ -82,11 +83,11 @@ Một phiên executor mang trọn một chuỗi khi nó mở phiếu đầu bằ
 việc phiên nào mang chuỗi do prompt quyết định, nên cờ `--chain` chỉ nằm trong
 prompt chuỗi. Phiếu không ai xâu vào chuỗi là chuỗi một phần tử, nên nó vẫn đi
 một phiên như trước. Title luôn chỉ đúng một phiếu,
-là phiếu cây đang giữ, và thêm đoạn `<đầu>→<cuối>` để biết phiếu thuộc chuỗi
-nào:
+là phiếu cây đang giữ, và thêm đoạn `<đầu>→<cuối>` sau ô gốc để biết phiếu
+thuộc chuỗi nào:
 
 ```
-<repo> · e1 · b333 · 332→336 · processing · crew/executor
+<repo> · executor · b333 · d009 · 332→336 · e1 · processing
 ```
 
 | Lệnh | Chuỗi đổi gì |

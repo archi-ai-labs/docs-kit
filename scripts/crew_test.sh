@@ -564,7 +564,7 @@ run_name() { # run_name <args...>
 printf '{"type":"custom-title","customTitle":"Diagram explanations"}\n' > "$PROJ/s1.jsonl"
 OUT="$(run_name steward)" && RC=0 || RC=$?
 if [ "$RC" -ne 0 ] && has "$OUT" "[name:wrong]" \
-   && has "$OUT" "/rename $RNAME · crew/steward"; then
+   && has "$OUT" "/rename $RNAME · steward"; then
   ok "name: wrong title is red, and prints the line the human must type"
 else
   bad "name: wrong title (rc=$RC, got: $OUT)"
@@ -578,7 +578,7 @@ OUT="$(run_name steward)" && RC=0 || RC=$?
 
 # The LAST custom-title wins — a rename lands as another record, not an edit.
 { printf '{"type":"custom-title","customTitle":"old name"}\n'
-  printf '{"type":"custom-title","customTitle":"%s · crew/steward"}\n' "$RNAME"; } > "$PROJ/s1.jsonl"
+  printf '{"type":"custom-title","customTitle":"%s · steward"}\n' "$RNAME"; } > "$PROJ/s1.jsonl"
 OUT="$(run_name steward)" && RC=0 || RC=$?
 [ "$RC" -eq 0 ] && has "$OUT" "name ok" && ok "name: the newest title is the title" \
   || bad "name: correct title rejected (rc=$RC, got: $OUT)"
@@ -587,7 +587,7 @@ OUT="$(run_name steward)" && RC=0 || RC=$?
 # origin repo really opened one (BACKLOG-010, titled `· b010 · crew/executor`).
 # So it reads in the same shape as any executor session, with `main` as the
 # place, and the token is zero-padded the way `crew new 42` pads it.
-printf '{"type":"custom-title","customTitle":"%s · main · b042 · processing · crew/executor"}\n' "$RNAME" > "$PROJ/s1.jsonl"
+printf '{"type":"custom-title","customTitle":"%s · executor · b042 · main · processing"}\n' "$RNAME" > "$PROJ/s1.jsonl"
 OUT="$(run_name executor 42)" && RC=0 || RC=$?
 [ "$RC" -eq 0 ] && ok "name: a fast-pair session sits at main, padded token, born processing" \
   || bad "name: fast-pair grammar (rc=$RC, got: $OUT)"
@@ -597,7 +597,7 @@ OUT="$(run_name executor 42)" && RC=0 || RC=$?
 ( cd "$WR" && echo p > pair.txt && git add pair.txt \
     && git -c user.email=t@t -c user.name=t commit -qm "fast-pair edit" -m "Closes: BACKLOG-042" )
 OUT="$(run_name executor 42)" && RC=0 || RC=$?
-if [ "$RC" -ne 0 ] && has "$OUT" "main · b042 · finishing"; then
+if [ "$RC" -ne 0 ] && has "$OUT" "b042 · main · finishing"; then
   ok "name: a fast-pair trailer on the dev branch flips the title to finishing"
 else
   bad "name: fast-pair finishing (rc=$RC, got: $OUT)"
@@ -631,7 +631,7 @@ fi
 # in one place, which is what a real repo does anyway.
 ( cd "$E1" && git switch -q -c work/b045 2>/dev/null )
 en_title() { printf '{"type":"custom-title","customTitle":"%s"}\n' "$1" > "$PROJ/s1.jsonl"; }
-en_title "$RNAME · e1 · b045 · processing · crew/executor"
+en_title "$RNAME · executor · b045 · e1 · processing"
 OUT="$( (cd "$E1" && CREW_SESSIONS_DIR="$SESS" CREW_PROJECTS_DIR="$TMP/projects" scripts/crew name executor) 2>&1 )" && RC=0 || RC=$?
 [ "$RC" -eq 0 ] && ok "name: a new executor session is born processing" \
   || bad "name: processing grammar (rc=$RC, got: $OUT)"
@@ -640,12 +640,12 @@ OUT="$( (cd "$E1" && CREW_SESSIONS_DIR="$SESS" CREW_PROJECTS_DIR="$TMP/projects"
 ( cd "$E1" && echo z > z.txt && git add z.txt \
     && git -c user.email=t@t -c user.name=t commit -qm "done" -m "Closes: BACKLOG-045" )
 OUT="$( (cd "$E1" && CREW_SESSIONS_DIR="$SESS" CREW_PROJECTS_DIR="$TMP/projects" scripts/crew name executor) 2>&1 )" && RC=0 || RC=$?
-if [ "$RC" -ne 0 ] && has "$OUT" "b045 · finishing"; then
+if [ "$RC" -ne 0 ] && has "$OUT" "b045 · e1 · finishing"; then
   ok "name: the trailer flips the title to finishing, and the old one is red"
 else
   bad "name: finishing grammar (rc=$RC, got: $OUT)"
 fi
-en_title "$RNAME · e1 · b045 · finishing · crew/executor"
+en_title "$RNAME · executor · b045 · e1 · finishing"
 OUT="$( (cd "$E1" && CREW_SESSIONS_DIR="$SESS" CREW_PROJECTS_DIR="$TMP/projects" scripts/crew name executor) 2>&1 )" && RC=0 || RC=$?
 [ "$RC" -eq 0 ] && ok "name: the retitled session matches again" \
   || bad "name: finishing match (rc=$RC, got: $OUT)"
@@ -654,7 +654,7 @@ OUT="$( (cd "$E1" && CREW_SESSIONS_DIR="$SESS" CREW_PROJECTS_DIR="$TMP/projects"
 # Blind checker must not make the role unrunnable (§8 fail-open doctrine).
 OUT="$( (cd "$WR" && CREW_SESSIONS_DIR="$TMP/no-sessions" scripts/crew name steward) 2>&1 )" && RC=0 || RC=$?
 if [ "$RC" -eq 0 ] && has "$OUT" "check skipped" \
-   && has "$OUT" "$RNAME · crew/steward"; then
+   && has "$OUT" "$RNAME · steward"; then
   ok "name: fails open with no session entry, and still states the name"
 else
   bad "name: fail-open on session entry (rc=$RC, got: $OUT)"
@@ -1060,7 +1060,7 @@ has "$(nm 078)" "[name:place]" \
 # THE ALLOWED CASE: fast-pair belongs in the main tree, so it must still name.
 mkticket "$NL" 042 in-progress fast-pair
 OUT="$(nm 042)"
-if ! has "$OUT" "[name:place]" && has "$OUT" "· main · b042 ·"; then
+if ! has "$OUT" "[name:place]" && has "$OUT" "· b042 · i001 · main ·"; then
   ok "name level: a fast-pair ticket still names from the main tree"
 else
   bad "name level: fast-pair was refused (got: $OUT)"
@@ -1298,7 +1298,7 @@ OUT="$( (cd "$NVS" && cp -R "$NVS/.claude" "$NV/" 2>/dev/null; cd "$NV" && scrip
 
 OUT="$( (cd "$NV" && CREW_SESSIONS_DIR="$TMP/no-sessions" scripts/crew name navigator) 2>&1 )" \
   && RC=0 || RC=$?
-[ "$RC" -eq 0 ] && has "$OUT" "$(basename "$NV") · crew/navigator" \
+[ "$RC" -eq 0 ] && has "$OUT" "$(basename "$NV") · navigator" \
   && ok "navigator: the hat's session title follows the existing grammar" \
   || bad "navigator: crew name navigator (rc=$RC, got: $OUT)"
 
@@ -1315,6 +1315,9 @@ mkdir -p "$NG/docs/23_backlog" "$NG/scripts"
   git init -q && git checkout -q -b dev
   git config user.email t@t && git config user.name t
   cp "$KIT/templates/crew/crew" scripts/crew && chmod +x scripts/crew
+  # Since 0.42.0 a title with no `crew/` marker is a crew title only when its
+  # second field names a role this repo stamped.
+  mkdir -p .claude/commands && echo executor > .claude/commands/executor.md
   printf '{"owns": [], "crew": {"dev_branch": "dev"}}\n' > .docs-kit.json
   git add -A && git commit -qm init >/dev/null
 )
@@ -1339,21 +1342,21 @@ print(json.loads(raw).get("systemMessage", "") if raw else "", end="")'
 
 # KNOWN-BAD: the trailer is written, so git says finishing; the title still says
 # processing. This is the exact shape that was reported as forgotten.
-mktitle "titlenag · main · b043 · processing · crew/executor" stale
+mktitle "titlenag · executor · b043 · i001 · main · processing" stale
 OUT="$(run_nag "$NG" "$NGT/stale.jsonl")"
-if has "$OUT" "b043 · finishing · crew/executor" && has "$OUT" "/rename"; then
+if has "$OUT" "b043 · i001 · main · finishing" && has "$OUT" "/rename"; then
   ok "title nag: a stale processing title is caught, with the /rename line"
 else
   bad "title nag: stale title (got: $OUT)"
 fi
 # It must show BOTH halves — a nag that prints only the right answer leaves the
 # reader guessing what was wrong with theirs.
-has "$OUT" "now  : titlenag · main · b043 · processing" \
+has "$OUT" "now  : titlenag · executor · b043 · i001 · main · processing" \
   && ok "title nag: it prints the wrong title beside the right one" \
   || bad "title nag: only one half shown (got: $OUT)"
 
 # THE QUIET FORM: the title already matches, so there is nothing to say.
-mktitle "titlenag · main · b043 · finishing · crew/executor" fresh
+mktitle "titlenag · executor · b043 · i001 · main · finishing" fresh
 [ -z "$(run_nag "$NG" "$NGT/fresh.jsonl")" ] \
   && ok "title nag: a correct title is silent" \
   || bad "title nag: fired on a correct title"
@@ -1378,9 +1381,9 @@ NOC="$TMP/nocrew"; mkdir -p "$NOC"
 # has nothing left to do — and for a fast-pair ticket the trailer never moves,
 # so the close-out is the only thing that can tell the two apart.
 mkticket "$NG" 043 done fast-pair
-mktitle "titlenag · main · b043 · finishing · crew/executor" landed
+mktitle "titlenag · executor · b043 · i001 · main · finishing" landed
 OUT="$(run_nag "$NG" "$NGT/landed.jsonl")"
-if has "$OUT" "b043 · finished · crew/executor"; then
+if has "$OUT" "b043 · i001 · main · finished"; then
   ok "title nag: a closed-out ticket moves the title from finishing to finished"
 else
   bad "title nag: finished not caught (got: $OUT)"
@@ -1390,10 +1393,99 @@ fi
 # `full` ticket named from the main tree makes `crew name --want` refuse. The
 # hook must go quiet, not relay a refusal it cannot act on.
 mkticket "$NG" 077 in-progress full
-mktitle "titlenag · main · b077 · processing · crew/executor" refused
+mktitle "titlenag · executor · b077 · i001 · main · processing" refused
 [ -z "$(run_nag "$NG" "$NGT/refused.jsonl")" ] \
   && ok "title nag: a title crew name refuses to compute is silent, not relayed" \
   || bad "title nag: relayed a refusal (got: $(run_nag "$NG" "$NGT/refused.jsonl"))"
+
+# ---------------------------------------------------------------- subjects (0.42.0)
+# From `b<nnn>` alone the user could not tell which planner to go back to (four
+# repos, 2026-09-24). The link was already in every ticket — `source_ref` — and
+# nothing showed it. Since 0.42.0 the executor title carries the source as a
+# token, a subject planner carries the same token plus the words its document's
+# file name already holds, and `--group` hands the desktop the two sidebar groups.
+mkdir -p "$NG/docs/10_issues" "$NG/docs/22_decisions/_archive"
+printf -- '---\nid: ISSUE-001\n---\n' > "$NG/docs/10_issues/ISSUE-001-nut-luu-khong-chep.md"
+printf -- '---\nid: DECISION-009\n---\n' > "$NG/docs/22_decisions/DECISION-009-co-vi-the.md"
+printf -- '---\nid: DECISION-010\n---\n' > "$NG/docs/22_decisions/_archive/DECISION-010.md"
+( cd "$NG" && git add -A && git commit -qm "subjects" >/dev/null )
+ngn() { (cd "$NG" && scripts/crew name "$@") 2>&1; }
+
+OUT="$(ngn planner d009 --want)" && RC=0 || RC=$?
+[ "$RC" -eq 0 ] && [ "$OUT" = "titlenag · planner · d009 co-vi-the" ] \
+  && ok "subject: a subject planner is named by its document, words read from the file name" \
+  || bad "subject: planner title (rc=$RC, got: $OUT)"
+[ "$(ngn planner DECISION-009 --want)" = "$(ngn planner D9 --want)" ] \
+  && [ "$(ngn planner D9 --want)" = "titlenag · planner · d009 co-vi-the" ] \
+  && ok "subject: d009, D9 and DECISION-009 name the same subject" \
+  || bad "subject: id forms disagree ($(ngn planner D9 --want))"
+[ "$(ngn planner d010 --want)" = "titlenag · planner · d010" ] \
+  && ok "subject: an archived document with no slug still names its subject, as the bare token" \
+  || bad "subject: bare token (got: $(ngn planner d010 --want))"
+
+# KNOWN-BAD: an id with no document behind it. The words come from a file name,
+# so there is nothing to read — and a subject nobody wrote down is not a subject.
+OUT="$(ngn planner d999 --want)" && RC=0 || RC=$?
+[ "$RC" -ne 0 ] && has "$OUT" "[name:subject]" \
+  && ok "subject: an id with no document is refused, not titled" \
+  || bad "subject: missing doc (rc=$RC, got: $OUT)"
+OUT="$(ngn executor d009 --want)" && RC=0 || RC=$?
+[ "$RC" -ne 0 ] && has "$OUT" "named by its ticket" \
+  && ok "subject: an executor takes no subject argument — its ticket's source_ref is the subject" \
+  || bad "subject: executor subject arg (rc=$RC, got: $OUT)"
+
+# A hat working one ticket keeps the ticket as its task; a hat with nothing is the hat.
+[ "$(ngn tester 157 --want)" = "titlenag · tester · b157" ] \
+  && [ "$(ngn steward --want)" = "titlenag · steward" ] \
+  && ok "subject: a hat is <repo> · <role>, with its ticket after it when it has one" \
+  || bad "subject: hat grammar ($(ngn tester 157 --want) / $(ngn steward --want))"
+
+# A ticket with no source_ref keeps the rest of its title (fail open).
+printf -- '---\nid: BACKLOG-044\ndescription: "x"\nstatus: in-progress\nexecution: fast-pair\n---\n' \
+  > "$NG/docs/23_backlog/t044.md"
+( cd "$NG" && git add -A && git commit -qm "t044" >/dev/null )
+[ "$(ngn executor 44 --want)" = "titlenag · executor · b044 · main · processing" ] \
+  && ok "subject: a ticket with no source_ref is titled without a subject, not refused" \
+  || bad "subject: no source_ref (got: $(ngn executor 44 --want))"
+
+# --group: the subject's group first, then the project's — and only the project's
+# when the subject has no document to take its words from.
+OUT="$(ngn planner d009 --group)"
+[ "$OUT" = "$(printf 'titlenag · d009 co-vi-the\ntitlenag')" ] \
+  && ok "group: a subject planner belongs in its subject's group, then the project's" \
+  || bad "group: planner groups (got: $OUT)"
+OUT="$(ngn executor 43 --group)"
+[ "$OUT" = "$(printf 'titlenag · i001 nut-luu-khong-chep\ntitlenag')" ] \
+  && ok "group: an executor's first group is the subject its ticket's source_ref names" \
+  || bad "group: executor groups (got: $OUT)"
+[ "$(ngn executor 44 --group)" = "titlenag" ] && [ "$(ngn steward --group)" = "titlenag" ] \
+  && ok "group: no subject, one group — the project's" \
+  || bad "group: project only ($(ngn executor 44 --group) / $(ngn steward --group))"
+
+# The hook follows the same grammar. A title in the pre-0.42 grammar is still a
+# crew title by its `crew/` marker, and is nagged once into the new one.
+mktitle "titlenag · main · b043 · finishing · crew/executor" legacy
+OUT="$(run_nag "$NG" "$NGT/legacy.jsonl")"
+has "$OUT" "grammar before 0.42.0" \
+  && has "$OUT" "true : titlenag · executor · b043 · i001 · main · finished" \
+  && ok "title nag: a pre-0.42 title is carried into the new grammar" \
+  || bad "title nag: legacy title (got: $OUT)"
+
+# With no marker, the second field is only a candidate: it counts when the repo
+# stamped a role file for it. A plain session named like a project is left alone.
+mktitle "titlenag · notes · họp tuần với khách" notes
+[ -z "$(run_nag "$NG" "$NGT/notes.jsonl")" ] \
+  && ok "title nag: a second field that is no stamped role is silent" \
+  || bad "title nag: nagged a non-role title"
+mktitle "titlenag · planner · d009" nslug
+[ -z "$(run_nag "$NG" "$NGT/nslug.jsonl")" ] \
+  && ok "title nag: a role this repo never stamped is silent" \
+  || bad "title nag: nagged an unstamped role"
+echo planner > "$NG/.claude/commands/planner.md"
+OUT="$(run_nag "$NG" "$NGT/nslug.jsonl")"
+has "$OUT" "true : titlenag · planner · d009 co-vi-the" \
+  && ok "title nag: a subject planner missing its words is given them" \
+  || bad "title nag: subject planner (got: $OUT)"
 
 
 # ---------------------------------------------------------------- finished (0.39.0)
@@ -1442,7 +1534,7 @@ grep -q "^status: done" "$FNR/docs/23_backlog/t001.md" \
 [ -z "$(fst e1)" ] && ok "finished: the parked tree still reads idle on the board" \
   || bad "finished: expected an idle row, got '$(fst e1)'"
 OUT="$(fwant e1 1)" && RC=0 || RC=$?
-if [ "$RC" -eq 0 ] && has "$OUT" "e1 · b001 · finished · crew/executor"; then
+if [ "$RC" -eq 0 ] && has "$OUT" "executor · b001 · i001 · e1 · finished"; then
   ok "finished: a parked executor whose ticket is closed out is named, and the word is finished"
 else
   bad "finished: parked title (rc=$RC, got: $OUT)"
@@ -1460,7 +1552,7 @@ fi
   && ok "finished: a merge with no close-out holds at finishing instead of falling back" \
   || bad "finished: merged-but-unclosed read '$(fst e1)' — the 0.39.0 regression is back"
 OUT="$(fwant e1 2)" && RC=0 || RC=$?
-if [ "$RC" -eq 0 ] && has "$OUT" "b002 · finishing"; then
+if [ "$RC" -eq 0 ] && has "$OUT" "b002 · i001 · e1 · finishing"; then
   ok "finished: the title agrees with the board inside that gap"
 else
   bad "finished: gap title (rc=$RC, got: $OUT)"
@@ -1642,7 +1734,7 @@ else
 fi
 
 OUT="$(chwant e1 101)"
-has "$OUT" "e1 · b101 · 101→103 · processing · crew/executor" \
+has "$OUT" "b101 · i001 · 101→103 · e1 · processing" \
   && ok "chain: the title names one ticket and the chain it belongs to" \
   || bad "chain: chained title (got: $OUT)"
 OUT="$(chcrew status)"
@@ -1689,10 +1781,11 @@ else
 fi
 
 # The session's old title still reads 101; the nag must move it to 102, not to
-# `finished` — the chain is not over.
+# `finished` — the chain is not over. Written in the pre-0.42 grammar on purpose:
+# a chain session titled before the upgrade must be carried over too.
 mktitle "repo · e1 · b101 · 101→103 · finishing · crew/executor" chainstale
 OUT="$(run_nag "$CH/repo-e1" "$NGT/chainstale.jsonl")"
-has "$OUT" "true : repo · e1 · b102 · 101→103 · processing · crew/executor" \
+has "$OUT" "true : repo · executor · b102 · i001 · 101→103 · e1 · processing" \
   && ok "chain: the title nag moves a chain session on to its next ticket" \
   || bad "chain: nag after handoff (got: $OUT)"
 
@@ -1726,14 +1819,14 @@ OUT="$(chcrew done 103)" && RC=0 || RC=$?
   || bad "chain: last ticket did not park (rc=$RC out: $OUT)"
 chclose
 OUT="$(chwant e3 103)"
-has "$OUT" "e3 · b103 · 101→103 · finished · crew/executor" \
+has "$OUT" "b103 · i001 · 101→103 · e3 · finished" \
   && ok "chain: the session carrying a chain ends finished on its last ticket" \
   || bad "chain: finished title (got: $OUT)"
 has "$(chcrew status)" "chains:" \
   && bad "chain: a chain with every ticket done is still on the board" \
   || ok "chain: a chain whose tickets are all done drops off the board"
 OUT="$(chwant e2 200)"
-has "$OUT" "e2 · b200 · processing · crew/executor" \
+has "$OUT" "b200 · i001 · e2 · processing" \
   && ok "chain: a ticket nobody chained keeps exactly the title it had" \
   || bad "chain: unchained title changed (got: $OUT)"
 
@@ -1785,7 +1878,7 @@ has "$OUT" "loops back on itself through" \
   && ok "chain: an after_ref loop is named on the board instead of hanging it" \
   || bad "chain: loop not reported (got: $OUT)"
 OUT="$( (cd "$CHR" && scripts/crew name executor 601 --want) 2>&1 )"
-if has "$OUT" "b601 · processing" && ! has "$OUT" "→"; then
+if has "$OUT" "b601 · i001 · main · processing" && ! has "$OUT" "→"; then
   ok "chain: a ticket inside a loop gets no chain in its title, since no ticket there is first"
 else
   bad "chain: looped title (got: $OUT)"

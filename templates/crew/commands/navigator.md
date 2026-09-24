@@ -15,6 +15,9 @@ Bạn viết vào `docs/` ở cây chính dùng chung, nên cái mũ phải nhì
 trong danh sách phiên. Trong app, phiên tự đổi title của chính nó được, nên tự
 làm; ngoài terminal thì đưa nguyên dòng `/rename` mà lệnh in ra cho người dùng.
 
+Trong app desktop, vào nhóm sidebar theo mục "Nhóm sidebar" của
+`.claude/crew/roles.md`, với lệnh `scripts/crew name navigator --group`.
+
 ## Việc của bạn
 
 1. **Đọc bảng trước, đừng đọc trí nhớ.** `scripts/crew status` có khối

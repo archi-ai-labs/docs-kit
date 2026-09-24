@@ -20,6 +20,13 @@ WHY WARN-ONLY:
     teaches people to switch hooks off, which loses every warning. Never blocks,
     always exits 0, silent whenever anything is uncertain.
 
+WHICH TITLES ARE CREW TITLES:
+    Since 0.42.0 the grammar is `<repo> · <role> [· <task>]` with no marker, so
+    the second field is only a CANDIDATE role: it counts when `crew role` finds a
+    role file for it, which keeps a plain session titled `myapp · notes` out of
+    reach. A title still in the old grammar (`… · crew/<role>` at the end) is a
+    crew title by its marker, and is nagged once into the new one.
+
 Silent when: the repo has no `scripts/crew`, the transcript has no title, the
 title is not a crew title, `crew name --want` fails for any reason, or the title
 already matches.
@@ -30,8 +37,10 @@ import re
 import subprocess
 import sys
 
-TITLE_RE = re.compile(r"·\s*crew/([a-z][a-z-]*)\s*$")
-TICKET_RE = re.compile(r"·\s*b([0-9]{3,})\s*·")
+LEGACY_RE = re.compile(r"·\s*crew/([a-z][a-z-]*)\s*$")
+ROLE_RE = re.compile(r"^[^·]+·\s*([a-z][a-z-]*)\s*(?:·|$)")
+TICKET_RE = re.compile(r"·\s*b([0-9]{3,})\s*(?:·|$)")
+SUBJECT_RE = re.compile(r"·\s*([dip][0-9]{3,})(?=\s|·|$)")
 
 
 def last_title(path):
@@ -66,19 +75,35 @@ def main():
         return
 
     got = last_title(transcript)
-    role = TITLE_RE.search(got)
-    if not role:
-        return
+    legacy = LEGACY_RE.search(got)
+    if legacy:
+        role = legacy.group(1)
+    else:
+        cand = ROLE_RE.match(got)
+        if not cand:
+            return
+        role = cand.group(1)
+        try:
+            known = subprocess.run(["bash", crew, "role", role], cwd=cwd,
+                                   capture_output=True, text=True, timeout=20)
+        except Exception:
+            return
+        if known.returncode != 0:
+            return
 
-    argv = ["bash", crew, "name", role.group(1)]
-    # An executor session names its ticket; every other hat takes no number. A
-    # wrong state word still leaves the b<nnn> readable, which is the part this
-    # needs — and since 0.39.0 it is load-bearing rather than a convenience: once
-    # `crew done` has parked the tree there is no branch left to read the ticket
-    # from, so this number is the only way `crew name` can still say `finished`.
+    argv = ["bash", crew, "name", role]
+    # An executor session names its ticket. A wrong state word still leaves the
+    # b<nnn> readable, which is the part this needs — and since 0.39.0 it is
+    # load-bearing rather than a convenience: once `crew done` has parked the tree
+    # there is no branch left to read the ticket from, so this number is the only
+    # way `crew name` can still say `finished`. Any other hat passes the ticket or
+    # the subject it is working on, when its title names one.
     tick = TICKET_RE.search(got)
+    subj = SUBJECT_RE.search(got)
     if tick:
         argv.append(tick.group(1))
+    elif subj and role != "executor":
+        argv.append(subj.group(1))
     argv.append("--want")
 
     try:
@@ -92,6 +117,8 @@ def main():
         return
 
     print(json.dumps({"systemMessage": "\n".join([
+        "crew: this session's title is in the grammar before 0.42.0."
+        if legacy else
         "crew: this session's title no longer matches what git says.",
         "  now  : %s" % got,
         "  true : %s" % want,

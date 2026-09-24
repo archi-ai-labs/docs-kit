@@ -5,6 +5,11 @@ disable-model-invocation: true
 
 Phiên này đội mũ **tester** của tầng crew (`.claude/crew/roles.md`).
 
+Title phiên là `<repo> · tester` (`scripts/crew name tester`). Khi làm cho một
+phiếu thì kèm số phiếu, ví dụ `scripts/crew name tester 157`. Trong app desktop,
+vào nhóm sidebar theo mục "Nhóm sidebar" của `.claude/crew/roles.md`, với cùng
+đối số và cờ `--group`.
+
 ## Việc của bạn
 
 1. **Nghiệm thu** phiếu vừa lên nhánh dev: chạy lại điều kiện chấp nhận của

@@ -83,24 +83,38 @@ vai cho một vai không tồn tại là một sự thật sai nằm trong repo.
 
 ## Tên phiên là phần nhìn thấy được của mũ
 
+Văn phạm chung là `<repo> · <vai> · <nhiệm vụ>`: tên project, rồi vai, rồi việc
+đang làm. Mũ không có việc cụ thể thì dừng ở vai.
+
 | Loại phiên | Tên | Ví dụ |
 |---|---|---|
-| phiên executor trong pool | `<repo> · e<k> · b<nnn> · <trạng thái> · crew/executor` | `lop-hoc-zalo · e1 · b157 · processing · crew/executor` |
-| phiên executor mang chuỗi | `<repo> · e<k> · b<nnn> · <đầu>→<cuối> · <trạng thái> · crew/executor` | `lop-hoc-zalo · e1 · b334 · 332→336 · processing · crew/executor` |
-| phiên executor fast-pair | `<repo> · main · b<nnn> · <trạng thái> · crew/executor` | `lop-hoc-zalo · main · b010 · processing · crew/executor` |
-| phiên mũ (năm vai còn lại) | `<repo> · crew/<vai>` | `lop-hoc-zalo · crew/navigator` |
+| phiên executor trong pool | `<repo> · executor · b<nnn> · <gốc> · e<k> · <trạng thái>` | `lop-hoc-zalo · executor · b157 · d009 · e1 · processing` |
+| phiên executor mang chuỗi | `<repo> · executor · b<nnn> · <gốc> · <đầu>→<cuối> · e<k> · <trạng thái>` | `lop-hoc-zalo · executor · b334 · d009 · 332→336 · e1 · processing` |
+| phiên executor fast-pair | `<repo> · executor · b<nnn> · <gốc> · main · <trạng thái>` | `lop-hoc-zalo · executor · b010 · i020 · main · processing` |
+| planner chủ đề | `<repo> · planner · <gốc> <mô tả>` | `lop-hoc-zalo · planner · d009 layer-1-noi-dung-su-that` |
+| phiên mũ không có việc cụ thể | `<repo> · <vai>` | `lop-hoc-zalo · navigator` |
 
-Tên repo đứng trước để danh sách phiên tự gom theo dự án. Ba phần còn lại đều
-đọc từ git chứ không gõ tay: tên cây cho biết executor nào, nhánh cho biết phiếu
-nào, trailer cho biết trạng thái. Ô đầu là **chỗ session đang ngồi**: `e<k>` khi
-nó ở một cây trong pool, `main` khi đó là phiếu fast-pair làm thẳng ở cây chính.
+Tên repo đứng trước để danh sách phiên tự gom theo dự án. Các phần còn lại đều
+đọc từ git và từ phiếu chứ không gõ tay: nhánh cho biết phiếu nào, `source_ref`
+của phiếu cho biết **gốc** (tài liệu mà phiếu phục vụ: `d009` là DECISION-009,
+`i020` là ISSUE-020), tên cây cho biết executor nào, trailer cho biết trạng
+thái. Số phiếu đứng ngay sau vai, vì danh sách phiên cắt title dài ở cuối, và
+phần đứng trước là phần còn đọc được. Ô chỗ là **nơi session đang ngồi**: `e<k>`
+khi nó ở một cây trong pool, `main` khi đó là phiếu fast-pair làm thẳng ở cây chính.
+Phiếu không có `source_ref` đọc được thì title bỏ ô gốc, chứ lệnh không từ chối.
+
+**Ô gốc là đường quay về planner.** Planner lo một chủ đề lớn mang cùng token đó
+trong title, kèm phần mô tả lấy từ tên file của tài liệu gốc
+(`scripts/crew name planner d009`). Nhìn `b157 · d009` là biết phải quay lại
+planner nào; không planner nào mang token đó thì quay về planner chung
+`<repo> · planner`.
 Mỗi chuỗi phiếu có một phiên riêng, và phiếu không nằm trong chuỗi nào là chuỗi
 một phần tử (`tickets.md`). Phiên sinh ra ở `processing`, kết thúc ở `finished`,
 và title luôn chỉ đúng một phiếu, là phiếu cây đang giữ.
 Executor rảnh thì không có phiên nào để đặt tên, và một phiên executor không có
 số phiếu cũng vậy, nên `crew name` báo lỗi thay vì bịa ra một cái title.
 
-`scripts/crew name <vai>` đọc **title** của phiên đang chạy rồi so với hai dòng
+`scripts/crew name <vai>` đọc **title** của phiên đang chạy rồi so với bảng
 trên, và title chưa đúng thì vai chưa bắt đầu.
 
 Một phiên mang hai nhãn khác nhau, và phép kiểm đọc nhãn nào là chuyện có hậu
@@ -115,6 +129,26 @@ duy nhất, nên nó **không** chặn được hai phiên cùng đội một m�
 mũ hiện ra, và người đọc danh sách mới là thứ bắt được trùng. Hiện
 `steward.md` và `navigator.md` bắt buộc chạy phép kiểm — hai vai ghi thẳng vào
 cây chính dùng chung; các vai khác mới dừng ở mức khai tên.
+
+## Nhóm sidebar — chỉ trong app desktop, và chỉ khi người dùng đã dùng nhóm
+
+App desktop cho xếp phiên vào nhóm tự tạo. Kit không chạm được vào sidebar, nên
+việc này do chính phiên làm, theo đúng các bước sau:
+
+1. Chạy `scripts/crew name <vai> [<số phiếu>|<gốc>] --group`. Lệnh in một hoặc
+   hai tên nhóm, nhóm hợp nhất đứng đầu: nhóm của chủ đề (`<repo> · d009 …`),
+   rồi nhóm của project (`<repo>`).
+2. Liệt kê các nhóm đang có bằng công cụ của app, rồi chuyển **chính phiên này**
+   vào nhóm đầu tiên trong danh sách lệnh in ra mà đã tồn tại.
+3. Không nhóm nào tồn tại thì bỏ qua bước này. Đừng tạo nhóm project: nếu người
+   dùng đang xếp sidebar theo project, việc chuyển phiên vào nhóm sẽ bật cả
+   sidebar sang chế độ nhóm, và họ mất cách xếp theo project.
+4. Phiên đang được ghim thì để nguyên, vì chuyển vào nhóm sẽ làm nó mất ghim.
+
+Chỉ planner chủ đề được tạo nhóm, và chỉ khi nhóm project đã có (`planner.md`).
+Ngoài app, ví dụ trong terminal, không có công cụ nào cho việc này, nên bỏ qua
+toàn bộ mục này. Title và `crew status` vẫn là nguồn sự thật; nhóm chỉ là cách
+hiển thị.
 
 ## Steward và cây bút luật
 

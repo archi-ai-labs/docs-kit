@@ -30,7 +30,7 @@ five, verbatim:
 | Branch | `work/b<nnn>` | `work/b157` |
 | Lock owner | full id | `crew lock acquire e2e-harness 157` → owner `BACKLOG-157` |
 | Executor tree | `../<repo>-e<k>` | `../myapp-e1` |
-| Session name | `<repo> · <e<k>\|main> · b<nnn> · [<first>→<last> ·] <state> · crew/executor` | `myapp · e1 · b157 · processing · crew/executor` |
+| Session name | `<repo> · executor · b<nnn> · [<subject> ·] [<first>→<last> ·] <e<k>\|main> · <state>` | `myapp · executor · b157 · d009 · e1 · processing` |
 
 `<nnn>` is the zero-padded number exactly as it appears in `id:` — `crew`
 normalizes `crew new 42` to `b042`.
@@ -42,7 +42,10 @@ executor has checked out**: git already stores it, git refuses to check one
 branch out in two trees, and no file can disagree with it. `crew status` reads
 that pin; nothing writes it. The session title is read off the same three
 things — place, ticket, trailer — so it answers "where, which ticket, how far
-along" without opening the board, and it cannot drift from what git says. The
+along" without opening the board, and it cannot drift from what git says. Since
+0.42.0 it also carries the ticket's **subject** — the document its `source_ref`
+names, as a token (`d009` is DECISION-009, `i020` is ISSUE-020) — which is the
+way back from a ticket to the planner working on it (§3). The
 place is `e<k>` for a pooled executor and **`main` for a fast-pair session**,
 which skips the worktree and the branch but is still a session of its own. There
 is deliberately **no idle title** and no ticketless one: an executor session
@@ -132,7 +135,7 @@ lone ticket. With both in place:
 |---|---|
 | `crew new <nnn> [--chain]` | refuses with `[new:after]` until the predecessor has landed on the dev branch (closer on dev, or doc `done`), and says whether the session holding the predecessor carries the chain; `--chain` makes this session carry it from `<nnn>` on |
 | `crew done <nnn>` | for a session carrying the chain, when a ticket runs after this one, the tree goes **straight** from `work/b<this>` to `work/b<next>`, cut from the dev branch that now holds this merge, and prints the chain's progress line; `--park` ends the chain session here instead. A session that opened the ticket without `--chain` gets a park tagged `[done:alone]` that names `scripts/crew new <next> --chain`. The carrying session's last `crew done` prints the tickets it carried, each with the sha that closed it and its logged size, for the final report |
-| `crew name executor` | adds `<first>→<last> ·` after the ticket: `myapp · e1 · b334 · 332→336 · processing · crew/executor` |
+| `crew name executor` | adds `<first>→<last> ·` after the subject: `myapp · executor · b334 · d009 · 332→336 · e1 · processing` |
 | `crew status` | a `chains:` block: what landed, who holds which ticket (`(this ticket only)` when that session does not carry the chain), what is queued, and an arrow when no session carries a chain that has a ticket ready, with `--chain` when more than one ticket is left |
 
 **The chain's executor never reads `idle` between two of its tickets.** A parked
@@ -283,13 +286,75 @@ this was written: flat gave `status -> done` alone, the subfolder gave
 and never an open id. (The underlying containment check is worth narrowing on its
 own; it is a defect of close-out, not of this hat, and it is not fixed here.)
 
-**A hat is only worn if the session list shows it.** §1 titles a ticket session
-`<repo> · b157 · crew/executor`; a hat session drops the middle field and takes
-`<repo> · crew/<role>`. The repo leads so any session list sorts by project, and
-the ticket keeps the §1 token verbatim — `b157`, the same string the worktree
-and the branch carry. `crew name <role> [<nnn>]` compares the running session
-against that grammar and exits 1 when it does not match; `steward.md` runs it as
-a hard first step, ahead of even read-only work.
+**A hat is only worn if the session list shows it.** Every session title reads
+`<repo> · <role> [· <task>]`: the project, then the hat, then what it is working
+on. An executor's task is its ticket (§1); a hat working one ticket takes it as
+`<repo> · tester · b157`; a subject planner takes its document,
+`<repo> · planner · d009 <slug>`; a hat with nothing in hand stops at the role.
+The repo leads so any session list sorts by project, and the fixed part leads
+the optional one, so a hat with no task is the head of the same title with one.
+The ticket keeps the §1 token verbatim — `b157`, the same string the worktree
+and the branch carry. `crew name <role> [<nnn>|<subject>]` compares the running
+session against that grammar and exits 1 when it does not match; `steward.md`
+runs it as a hard first step, ahead of even read-only work.
+
+Until 0.42.0 the role came last, behind a `crew/` prefix
+(`myapp · e1 · b157 · processing · crew/executor`). The user reordered it to
+project → role → task and dropped the prefix to win back the width, and the
+ticket moved to the head of the task part because a list that cuts a long title
+keeps its head: the ticket sits at characters 31–34 of
+`long-wave-finder · executor · b015 · d009 · e1 · processing`, close to the 25–28
+it had before. A title still in the old grammar is carried over by title-nag (§8).
+
+**The subject is the way back to the planner.** Measured 2026-09-24 on four
+repos: with several planners open, every one of them was titled
+`<repo> · crew/planner`, and from a `b<nnn>` alone the user could not tell which
+one to go back to. The link already existed in every ticket — `source_ref`, which
+the validator already resolves — and nothing showed it. So the executor title
+carries the source as a token, a planner working one subject carries the same
+token plus the words its document's file name already holds
+(`crew name planner d009` → `<repo> · planner · d009 co-vi-the-theo-von-hien-tai`),
+and a token no planner wears means the general planner, `<repo> · planner`. The
+words are read, not typed, and an id with no document behind it is refused.
+
+Four other keys were considered and dropped:
+
+| Key | Why not |
+|---|---|
+| a number per planner (`planner 1`, `planner 2`) | says nothing about the work; the user rejected it in as many words |
+| the kind of work (`techdebt`, `hotfix`, `ft/<name>`) | the user's own first scheme, dropped by the user: it still does not say what the planner is doing |
+| the app's parent link (`spawnedFrom`) | present on 40 of 40 chip-born executors, but it names the session that MADE the chip — with a coordinating planner making the chips, every executor points at the coordinator. It is also desktop-only and not readable from bash |
+| a `planner:` field in the ticket | typed by hand, and it names a session, which ends, instead of the work, which does not |
+
+A subject planner is worth opening only when its subject will produce more than
+one ticket: across the same four repos, 53 tickets came from 49 source documents,
+and only 3 of those produced more than one. Most Issues stay with the general
+planner, so the list grows by a planner per big subject, not per ticket.
+
+**Sidebar groups are a view, desktop only, and opt-in by the user's own
+sidebar.** The desktop app files sessions under custom groups, and only the model
+inside the app can move them — so `crew name … --group` prints the groups a
+session belongs in, subject's first, project's second, and the role files say
+what to do with them (`roles.md`, "Nhóm sidebar"). Three facts measured on the
+user's own sidebar on 2026-09-24 set the rules:
+
+- **Groups and the project view exclude each other.** Moving one session into a
+  group switched the whole sidebar from "by project" to "custom groups", every
+  ungrouped session fell into one bucket, and the user read it as "the others are
+  all gone". So a session joins a group only if that group already exists, and
+  the kit never creates a project group: the user who wants groups creates them,
+  and their existence is the opt-in. Only a subject planner creates a group — its
+  subject's — and only when its project group already exists.
+- **Group order is creation order**, and no tool reorders groups, so a subject
+  group created later lands at the bottom; the planner tells the user to drag it.
+- **A chip-born session appeared inside its parent's group without anyone moving
+  it** (one observation, BACKLOG-015 of long-wave-finder). The executor's own step
+  still moves it, because one observation is not a contract, and because the
+  parent that made the chip is not always the planner of the subject.
+
+Moving a pinned session into a group unpins it, so a pinned session is left where
+it is. The title and `crew status` stay the source of truth; a group is only how
+the desktop shows them.
 
 **It reads the session TITLE, and the difference is not cosmetic.** A session
 carries two labels: a `name` in the live entry `~/.claude/sessions/<pid>.json`,
@@ -686,6 +751,12 @@ unless the repo opts in (a `.docs-kit.json` whose `crew` key exists).
    the flag precisely so nothing else spells them out. Silent on a non-crew
    title, on a repo with no `scripts/crew`, and whenever `--want` refuses.
 
+   Since 0.42.0 a title carries no `crew/` marker, so its second field is only a
+   candidate role: it counts when `crew role` finds a stamped role file for it,
+   which keeps a plain session titled `myapp · notes · …` out of reach. A title
+   still in the pre-0.42 grammar is a crew title by its marker, and gets one nag
+   that says so and carries it into the new grammar.
+
    **Known hole, stated rather than discovered:** `--want` is exactly what the
    `[name:place]` guard refuses for a `fast`/`full` ticket named from the main
    tree, so the hook goes quiet in the very case a nag would help most — a
@@ -817,6 +888,8 @@ does not exist, so one fault is reported once.
 | Reports drawn on the HTML views | `docs_render.py` reads `92_audit/LOG.md` only, and the renderer is not touched this release; the audit line makes the report reachable from `changes.html` until someone draws it |
 | A hook nagging an overdue report | hooks read events (§8) and a calendar is not one; the always-loaded snippet is at 2379 of its 2400-byte cap, so the reminder lives on the board that sessions are already told to run |
 | A `roadmap_owner` / `report_every_days` key | one writer is a rule, not a setting, and the cadence is derived from landed work (§6.1) |
+| Project groups made by the kit | measured once on the user's own sidebar: moving a session into a group flipped the whole sidebar out of its project view. A session joins a group only when the user already made it (§3) |
+| A hook that files sessions into groups | hooks run in bash, and the sidebar is reachable only from the model inside the desktop app; the hook would need a tool it cannot call |
 | A hook that blocks a stale title | title-nag warns and never denies: a title is a label on work already done, so blocking a session from ending over one would cost more than the wrong label does (§12) |
 | Assigning a fork's other lanes | at a fork `crew done` continues into one successor and names the rest; who carries a second lane is the planner's call, like any other ticket, and a command that picked a session for it would be assigning work from a board |
 | A chain field the validator checks for shape | `after_ref:` is a `*_ref`, so check 1 already resolves it; a loop or an Issue in it is caught where it bites — `crew new` refuses the Issue, `crew status` names the loop — and the validator stays on document shape (STANDARD §7) |

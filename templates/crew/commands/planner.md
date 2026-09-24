@@ -5,6 +5,19 @@ disable-model-invocation: true
 
 Phiên này đội mũ **planner** của tầng crew (`.claude/crew/roles.md`).
 
+## Bước 0 — title và nhóm
+
+Planner chung lấy title `<repo> · planner` bằng `scripts/crew name planner`.
+Planner chủ đề lấy title theo tài liệu gốc mà nó lo, bằng
+`scripts/crew name planner <gốc>`, ví dụ `scripts/crew name planner d009` cho
+DECISION-009. Lệnh tự đọc phần mô tả từ tên file của tài liệu đó, và từ chối
+một id không có tài liệu nào đứng sau. Trong app phiên tự đổi title của chính
+nó; ngoài terminal thì đưa dòng `/rename` mà lệnh in ra cho người dùng.
+
+Rồi vào nhóm sidebar theo mục "Nhóm sidebar" của `.claude/crew/roles.md`, với
+cùng đối số và cờ `--group`. Planner chủ đề có thêm quyền tạo nhóm (mục
+"Planner chủ đề" bên dưới).
+
 ## Việc của bạn
 
 1. **Đo trước, viết sau.** Nhận một yêu cầu hoặc một phát hiện → tái hiện và
@@ -29,6 +42,47 @@ Phiên này đội mũ **planner** của tầng crew (`.claude/crew/roles.md`).
    phiên đang mở, vì mọi thứ khác suy ra từ con số. Kiểm `scripts/crew status`
    trước khi giao thêm phiếu nặng.
 
+## Planner chủ đề
+
+Planner chung nhận mọi thứ. Khi một chủ đề đủ lớn để cần phiên riêng, planner
+chung mở một **planner chủ đề** cho nó. Chủ đề là một tài liệu gốc: Issue, hoặc
+Proposal và Decision nếu việc đi full lane. Mọi phiếu cắt ra cho chủ đề đó có
+`source_ref` trỏ về tài liệu ấy, nên title executor của chúng mang cùng token
+`d009` với title planner chủ đề, và người dùng nhìn số phiếu là biết quay lại đâu.
+
+**Chỉ mở khi chủ đề sẽ sinh hơn một phiếu**, hoặc cần bàn qua nhiều lượt trước
+khi cắt được phiếu. Đo trên bốn repo ngày 2026-09-24: chỉ 3 trong 49 tài liệu
+gốc sinh ra hơn một phiếu. Vì vậy phần lớn Issue ở lại với planner chung, và một
+planner chủ đề cho Issue chỉ ra một phiếu là thêm một dòng vào sidebar mà không
+đổi được gì.
+
+**Cách mở.** Dựng một task cho người dùng bấm. Tiêu đề task là dòng
+`scripts/crew name planner <gốc> --want` in ra. Prompt phải tự đứng được: id và
+đường dẫn tài liệu gốc, lệnh `scripts/crew role planner` để lấy luật vai, và một
+câu nói rõ phiên này là planner chủ đề của tài liệu đó.
+
+**Nhóm của chủ đề.** Ở bước 0, planner chủ đề chạy
+`scripts/crew name planner <gốc> --group`. Nếu nhóm chủ đề (dòng đầu) chưa có mà
+nhóm project (dòng cuối) đã có, tạo nhóm chủ đề với đúng tên lệnh in ra rồi
+chuyển chính phiên này vào. Nhóm project chưa có nghĩa là người dùng không dùng
+nhóm, nên không tạo gì cả. Executor của chủ đề tự tìm vào nhóm này ở bước 0 của
+chúng. Nhóm mới luôn nằm cuối sidebar và app không cho sắp lại bằng lệnh, nên
+nói với người dùng rằng họ có thể kéo nó lên cạnh nhóm project.
+
+**Khi tài liệu gốc đổi.** Một chủ đề thường đi từ Issue sang Proposal rồi
+Decision. Khi tài liệu mới ra đời, phiếu sẽ trỏ về nó, nên đặt lại title bằng
+`scripts/crew name planner <gốc mới>` và đổi tên nhóm chủ đề sang dòng đầu mà
+`--group` in ra.
+
+**Khi chủ đề xong**, tức mọi phiếu của nó đã `done`: chuyển các phiên trong nhóm
+chủ đề về nhóm project, rồi xoá nhóm chủ đề. App sẽ hỏi người dùng trước khi
+chuyển phiên khác, và đó là chủ đích.
+
+**Số id.** STANDARD §3 cấp id theo luật "số lớn nhất + 1", và chưa có lệnh nào
+khoá bước này, nên hai planner cắt phiếu cùng lúc có thể lấy trùng số. Chạy
+validator ngay sau khi ghi Issue hoặc phiếu; nếu trùng id thì đổi số của tài
+liệu mình vừa viết.
+
 ## Mở một phiên executor mới
 
 Mỗi chuỗi phiếu là một phiên riêng, và phiếu không nằm trong chuỗi nào là
@@ -41,8 +95,10 @@ Bạn không mở phiên trực tiếp được; thứ bạn dựng là một ta
 Hai thứ bạn viết lúc ấy quyết định phiên mới chạy đúng hay sai.
 
 **Tiêu đề task chính là title của phiên.** Đặt đúng văn phạm executor —
-`<repo> · <chỗ> · b<nnn> · processing · crew/executor` — chứ không phải một câu
-mô tả việc. Phiếu `fast-pair` thì chỗ là `main` và bạn đặt được ngay; phiếu
+`<repo> · executor · b<nnn> · <gốc> · <chỗ> · processing` — chứ không phải một câu
+mô tả việc. `<gốc>` là token của `source_ref` trong phiếu, ví dụ `d009` cho
+DECISION-009 hoặc `i020` cho ISSUE-020, và bỏ ô này nếu phiếu không có
+`source_ref`. Phiếu `fast-pair` thì chỗ là `main` và bạn đặt được ngay; phiếu
 `fast`/`full` thì bạn chưa biết `e<k>` lúc dựng chip vì cây do `crew new` chọn,
 nên để executor tự sửa lại title ở bước 0 sau khi nó nhận cây.
 
@@ -88,7 +144,7 @@ cho cùng một thứ.
 **Tiêu đề task chính là title phiên.** Chép nguyên văn:
 
 ```
-<repo> · <chỗ> · b<nnn> · processing · crew/executor
+<repo> · executor · b<nnn> · <gốc> · <chỗ> · processing
 ```
 
 `<chỗ>` là `main` với phiếu `fast-pair`. Phiếu `fast`/`full` thì ghi `e?`, vì cây
@@ -115,13 +171,13 @@ Xong khi      : <điều kiện đo được>
 `crew new` nằm trong prompt dù bước 1 của tệp vai đã có nó, và đây là ngoại lệ
 duy nhất của luật "đừng chép lại". Lý do đo được: `crew name executor` tính chỗ
 từ câu hỏi "tôi đang ngồi ở cây nào", nên trước 0.37.0 nó xác nhận
-`<repo> · main · b077 · processing · crew/executor` là đúng cho một phiếu `full`.
+`<repo> · main · b077 · processing` (văn phạm lúc đó) là đúng cho một phiếu `full`.
 Phiên bỏ qua `crew new` được bảo là title hợp lệ rồi sửa thẳng vào cây chính dùng
 chung, và check 2 chặn mọi `crew done` đang chờ. Từ 0.37.0 lệnh từ chối ca đó,
 nhưng một dòng trong prompt rẻ hơn là trông vào lưới đỡ.
 
 **Prompt cho một chuỗi** — một task cho cả chuỗi, tiêu đề theo phiếu đầu:
-`<repo> · e? · b<đầu> · <đầu>→<cuối> · processing · crew/executor`.
+`<repo> · executor · b<đầu> · <gốc> · <đầu>→<cuối> · e? · processing`.
 
 ```
 Bạn nhận chuỗi BACKLOG-<đầu> → BACKLOG-<cuối>, theo đúng thứ tự:
