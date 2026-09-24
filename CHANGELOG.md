@@ -5,6 +5,55 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
+## [0.41.1] — 2026-09-24
+
+`crew done` closed a ticket out and then left the close-out lying in the main
+tree, where it stopped the next `crew done` and never reached the remote.
+
+### Fixed — the next `crew done` died on the last one's close-out
+
+`crew done` ran `docs_close --apply` on the main tree, which flips the Backlog
+doc to `status: done` and appends the audit line, and committed neither. The next
+`crew done` for any ticket then died at check 2, naming exactly those two files,
+and its hint guessed "an open fast-pair edit?". Reproduced on 0.40.3 with two
+tickets back to back. Two parallel executors met it already; a chain session
+(0.41.0) met it on every ticket after the first, and 0.41.0 shipped that as a
+stated ceiling. The push also ran BEFORE the close-out. Measured on 0.41.0 with
+three tickets, each close-out committed by hand: ticket N's `status: done` reached
+the remote only with ticket N+1's push, and the last ticket's never left the
+machine (remote held 001 and 002, not 003).
+
+| Where | Now |
+|---|---|
+| `crew done`, step 6 | commits exactly what `docs_close` wrote, as `docs: close-out BACKLOG-<nnn>` on the dev branch, with no `Closes:` trailer of its own; then pushes, so the remote gets the merge and the close-out together |
+| what counts as "what it wrote" | the paths that became dirty while `docs_close` ran, bounded to a Backlog doc and `92_audit/LOG.md` — the only files `docs_close --apply` can write. An edit another session starts meanwhile stays out, and stays put |
+| a file already dirty when the close-out starts | left out of the commit and named, tagged `[done:closeout]`: it holds someone else's edit |
+| a commit the repo's pre-commit hook refuses | reported with `[done:closeout]` and the files; never bypassed, and the merge that already landed does not fail |
+| check 2's message | names the other cause: "an open fast-pair edit, or a close-out nobody committed ([done:closeout])?" |
+| EXECUTION §1 · §5 · §6, `tickets.md`, `worktrees.md`, `executor.md`, the `pair_state` comment | the 0.41.0 ceiling is gone; §5's asymmetry keeps its rule and changes its reason: the main tree is still shared, and `/docs-kit:docs-sync` still leaves a fast-pair ticket's close-out uncommitted there |
+
+With `docs_close` unreachable (a plain terminal, ISSUE-014) nothing is written,
+so nothing is committed — never an empty close-out commit.
+
+### Tests
+
+Eleven checks on a fixture with a bare remote, the known-bad shape first: the second
+`crew done` in a row, red on 0.41.0 with check 2's two files. The race is made
+deterministic twice: a `docs_close` wrapper that edits `README.md` while it runs,
+and a `post-merge` hook that edits `LOG.md` between check 2 and the close-out —
+git runs it on the main tree's `--ff-only` merge, which is exactly that window.
+A refusing `pre-commit` hook covers the reported-not-bypassed path, and a chain
+of two runs end to end with no hand commit. Five mutations each turn exactly their
+own check red — push before the close-out, no write-scope bound, no before/after
+difference, a silent refusal, a trailer on the close-out commit — and removing
+the commit altogether turns the nine that depend on it red. The eleventh came
+from explaining this mechanism before shipping it: an audit-only close-out (the
+executor had flipped the status inside its own ticket) was titled
+`docs: close-out BACKLOG-docs/92_audit/LOG.md`, because `set --` had reused the
+positional parameters and `$1` was a path by then; every close-out body named the
+wrong `crew done` for the same reason. It was red before the fix.
+`scripts/crew_test.sh` is at **183 checks**.
+
 ## [0.41.0] — 2026-09-24
 
 A run of dependent tickets can now be written down as a chain, and one executor

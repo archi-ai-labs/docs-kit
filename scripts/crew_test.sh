@@ -1785,6 +1785,190 @@ else
   bad "chain: looped title (got: $OUT)"
 fi
 
+# ---------------------------------------------------------------- close-out is committed (0.41.1)
+# `crew done` ran docs_close on the main tree and left what it wrote there —
+# the Backlog doc's `status: done` and the audit line — uncommitted. The very
+# next `crew done` then died at check 2, naming exactly those two files and
+# guessing "an open fast-pair edit?". Reproduced 2026-09-24 on 0.40.3 with two
+# tickets back to back. Two parallel executors met it already; a chain session
+# (0.41.0) met it on every ticket after the first. And because the push ran
+# BEFORE the close-out, even a hand-committed close-out reached the remote one
+# ticket late, riding the next push, and the last ticket's not at all.
+CO="$TMP/closeout"
+COR="$CO/repo"
+COB="$CO/origin.git"
+mkdir -p "$COR/scripts" "$COR/docs/92_audit"
+git init -q --bare "$COB"
+(
+  cd "$COR"
+  git init -q && git checkout -q -b main
+  git config user.email t@t && git config user.name t
+  echo hello > README.md
+  printf '# audit log\n' > docs/92_audit/LOG.md
+  printf '{"owns": [], "crew": {"dev_branch": "main", "copy": [], "link": []}}\n' > .docs-kit.json
+  cp "$KIT/templates/crew/crew" scripts/crew && chmod +x scripts/crew
+  git add -A && git commit -qm init >/dev/null
+  git remote add origin "$COB" && git push -q origin main 2>/dev/null
+)
+coticket() { # coticket <nnn> [<after nnn>]
+  mkdir -p "$COR/docs/23_backlog"
+  printf -- '---\nid: BACKLOG-%s\ndescription: "x"\nsource_ref: ISSUE-001\nstatus: open\n' "$1" \
+    > "$COR/docs/23_backlog/t$1.md"
+  [ -z "${2:-}" ] || printf 'after_ref: BACKLOG-%s\n' "$2" >> "$COR/docs/23_backlog/t$1.md"
+  printf -- '---\n' >> "$COR/docs/23_backlog/t$1.md"
+  ( cd "$COR" && git add -A && git commit -qm "ticket $1" >/dev/null )
+}
+cowork() { # cowork <nnn> — commit the ticket's work, with its closer, in whichever tree holds it
+  CT="$(git -C "$COR" worktree list --porcelain | awk -v b="branch refs/heads/work/b$1" '
+    /^worktree /{ p = substr($0, 10) } $0 == b { print p; exit }')"
+  ( cd "$CT" && echo "$1" >> "w$1.txt" && git add -A \
+      && git -c user.email=t@t -c user.name=t commit -qm "work $1" -m "Closes: BACKLOG-$1" )
+}
+codone() { (cd "$COR" && CREW_DOCS_CLOSE="${CODC:-$KIT/scripts/docs_close.sh}" scripts/crew done "$@") 2>&1; }
+coticket 001
+coticket 002
+( cd "$COR" && scripts/crew executor add >/dev/null 2>&1 \
+    && scripts/crew new 1 >/dev/null 2>&1 && scripts/crew new 2 >/dev/null 2>&1 )
+cowork 001
+cowork 002
+
+OUT="$(codone 1)" && RC=0 || RC=$?
+[ "$RC" -eq 0 ] || bad "close-out: crew done 1 failed (out: $OUT)"
+# KNOWN-BAD, the reported shape: the second crew done in a row.
+OUT="$(codone 2)" && RC=0 || RC=$?
+if [ "$RC" -eq 0 ] && ! has "$OUT" "check 2"; then
+  ok "close-out: a second crew done in a row is not refused by the first one's close-out"
+else
+  bad "close-out: back-to-back crew done (rc=$RC out: $OUT)"
+fi
+[ -z "$(git -C "$COR" status --porcelain)" ] \
+  && ok "close-out: crew done leaves the main tree clean" \
+  || bad "close-out: main tree left dirty: $(git -C "$COR" status --porcelain | tr '\n' ' ')"
+SUBJ="$(git -C "$COR" log -1 --format=%s main)"
+FILES="$(git -C "$COR" show --name-only --format= main | sort | tr '\n' ' ')"
+if [ "$SUBJ" = "docs: close-out BACKLOG-002" ] \
+   && [ "$FILES" = "docs/23_backlog/t002.md docs/92_audit/LOG.md " ]; then
+  ok "close-out: it is one commit on the dev branch, holding exactly what docs_close wrote"
+else
+  bad "close-out: commit shape (subject: $SUBJ · files: $FILES)"
+fi
+# A close-out commit that carried the trailer would be a second closer for the
+# same ticket, and every reader of closers would have to know which one counts.
+[ "$(git -C "$COR" log -1 --format=%B main | grep -c '^Closes:')" -eq 0 ] \
+  && ok "close-out: the close-out commit carries no Closes: trailer of its own" \
+  || bad "close-out: the close-out commit repeats the trailer"
+[ "$(git --git-dir="$COB" log -1 --format=%s main 2>/dev/null)" = "docs: close-out BACKLOG-002" ] \
+  && ok "close-out: the push goes after the close-out, so the remote has status: done" \
+  || bad "close-out: remote main is not the local close-out ($(git --git-dir="$COB" log -1 --format=%s main 2>/dev/null))"
+
+# Only what docs_close wrote. The main tree is shared, and between check 2 and
+# the close-out a fast-pair session can start an edit; sweeping it into a commit
+# titled "close-out" would land half-typed work on the dev branch under the
+# wrong name. The wrapper makes that race deterministic.
+coticket 003
+( cd "$COR" && scripts/crew new 3 >/dev/null 2>&1 )
+cowork 003
+printf '#!/bin/bash\necho half-typed >> "%s/README.md"\nexec bash "%s/scripts/docs_close.sh" "$@"\n' \
+  "$COR" "$KIT" > "$CO/dc-race.sh"
+OUT="$(CODC="$CO/dc-race.sh" codone 3)" && RC=0 || RC=$?
+FILES="$(git -C "$COR" show --name-only --format= main | sort | tr '\n' ' ')"
+if [ "$FILES" = "docs/23_backlog/t003.md docs/92_audit/LOG.md " ] \
+   && [ "$(git -C "$COR" status --porcelain)" = " M README.md" ]; then
+  ok "close-out: an edit another session starts meanwhile stays out of the commit, and stays put"
+else
+  bad "close-out: race (files: $FILES · left: $(git -C "$COR" status --porcelain | tr '\n' ' ') · out: $OUT)"
+fi
+git -C "$COR" checkout -q -- README.md
+
+# A file that was ALREADY dirty when the close-out started holds somebody's edit
+# and docs_close's line together. It is left for its owner and named, with the
+# tag. The edit lands between check 2 and docs_close through a post-merge hook —
+# git runs it on the main tree's --ff-only merge, which is exactly that window —
+# and only in the main tree, since every executor shares the hooks directory.
+coticket 004
+( cd "$COR" && scripts/crew new 4 >/dev/null 2>&1 )
+cowork 004
+printf '#!/bin/sh\n[ "$(basename "$PWD")" = repo ] || exit 0\necho "hand note" >> docs/92_audit/LOG.md\n' \
+  > "$COR/.git/hooks/post-merge" && chmod +x "$COR/.git/hooks/post-merge"
+OUT="$(codone 4)" && RC=0 || RC=$?
+rm -f "$COR/.git/hooks/post-merge"
+FILES="$(git -C "$COR" show --name-only --format= main | sort | tr '\n' ' ')"
+if has "$OUT" "[done:closeout]" && has "$OUT" "docs/92_audit/LOG.md" \
+   && [ "$FILES" = "docs/23_backlog/t004.md " ] && grep -q "hand note" "$COR/docs/92_audit/LOG.md" \
+   && [ "$(git -C "$COR" status --porcelain)" = " M docs/92_audit/LOG.md" ]; then
+  ok "close-out: a file that was already dirty is left for its owner and named, with [done:closeout]"
+else
+  bad "close-out: pre-dirty file (rc=$RC · files: $FILES · left: $(git -C "$COR" status --porcelain | tr '\n' ' ') · out: $OUT)"
+fi
+( cd "$COR" && git commit -qam "hand note" >/dev/null )
+
+# A refused commit (a repo's own pre-commit hook) must not fail a merge that has
+# already landed. It is reported with the tag and the files, and never bypassed.
+coticket 005
+( cd "$COR" && scripts/crew new 5 >/dev/null 2>&1 )
+cowork 005
+printf '#!/bin/sh\nexit 1\n' > "$COR/.git/hooks/pre-commit" && chmod +x "$COR/.git/hooks/pre-commit"
+OUT="$(codone 5)" && RC=0 || RC=$?
+rm -f "$COR/.git/hooks/pre-commit"
+if [ "$RC" -eq 0 ] && has "$OUT" "[done:closeout]" && has "$OUT" "docs/23_backlog/t005.md" \
+   && [ "$(git -C "$COR" log -1 --format=%s main)" = "work 005" ]; then
+  ok "close-out: a refused commit is reported with [done:closeout] and the files, not bypassed"
+else
+  bad "close-out: refused commit (rc=$RC · head: $(git -C "$COR" log -1 --format=%s main) · out: $OUT)"
+fi
+( cd "$COR" && git commit -qam "close-out by hand" >/dev/null )
+
+# An executor may flip `status: done` inside its own ticket and forget the audit
+# line; docs_close then writes LOG.md alone, and no Backlog doc names the ticket.
+# The commit must still be titled after the ticket crew done closed, and say which
+# crew done wrote it — found by explaining this very mechanism, when the subject
+# came out as `BACKLOG-docs/92_audit/LOG.md`.
+coticket 007
+( cd "$COR" && scripts/crew new 7 >/dev/null 2>&1 )
+CT7="$(git -C "$COR" worktree list --porcelain | awk '/^worktree /{ p = substr($0, 10) } $0 == "branch refs/heads/work/b007" { print p; exit }')"
+( cd "$CT7" && sed 's/^status: open$/status: done/' docs/23_backlog/t007.md > t7.tmp && mv t7.tmp docs/23_backlog/t007.md \
+    && echo 7 > w007.txt && git add -A \
+    && git -c user.email=t@t -c user.name=t commit -qm "work 007" -m "Closes: BACKLOG-007" )
+OUT="$(codone 7)" && RC=0 || RC=$?
+SUBJ="$(git -C "$COR" log -1 --format=%s main)"
+BODY="$(git -C "$COR" log -1 --format=%b main)"
+FILES="$(git -C "$COR" show --name-only --format= main | sort | tr '\n' ' ')"
+if [ "$SUBJ" = "docs: close-out BACKLOG-007" ] && has "$BODY" "crew done 007 " \
+   && [ "$FILES" = "docs/92_audit/LOG.md " ]; then
+  ok "close-out: an audit-only close-out is still titled after its ticket, and names its crew done"
+else
+  bad "close-out: audit-only close-out (subject: $SUBJ · body: $BODY · files: $FILES)"
+fi
+
+# No docs_close reachable (a plain terminal, ISSUE-014): nothing was written, so
+# nothing is committed — never an empty close-out commit.
+coticket 006
+( cd "$COR" && scripts/crew new 6 >/dev/null 2>&1 )
+cowork 006
+mkdir -p "$CO/emptyhome"
+OUT="$( (cd "$COR" && env -u CLAUDE_PLUGIN_ROOT -u CREW_DOCS_CLOSE HOME="$CO/emptyhome" scripts/crew done 6) 2>&1 )" || true
+if [ "$(git -C "$COR" log -1 --format=%s main)" = "work 006" ] && has "$OUT" "docs_close is not reachable"; then
+  ok "close-out: with docs_close unreachable nothing is written and nothing is committed"
+else
+  bad "close-out: unreachable path (head: $(git -C "$COR" log -1 --format=%s main) · out: $OUT)"
+fi
+
+# The chain case, end to end with no hand commit anywhere: this is the run a
+# chain session meets on every ticket after the first.
+coticket 101
+coticket 102 101
+( cd "$COR" && scripts/crew new 101 >/dev/null 2>&1 )
+cowork 101
+OUT1="$(codone 101)"
+cowork 102
+OUT="$(codone 102)" && RC=0 || RC=$?
+if [ "$RC" -eq 0 ] && has "$OUT1" "stays busy" && ! has "$OUT" "check 2" \
+   && grep -q "^status: done" "$COR/docs/23_backlog/t102.md"; then
+  ok "close-out: a chain runs ticket after ticket with no close-out committed by hand"
+else
+  bad "close-out: chain run (rc=$RC out: $OUT)"
+fi
+
 # ---------------------------------------------------------------- summary
 echo ""
 echo "crew_test: $PASS passed, $FAIL failed"

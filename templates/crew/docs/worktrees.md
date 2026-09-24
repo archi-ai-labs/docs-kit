@@ -73,8 +73,10 @@ scripts/crew done 157
 Sáu bước nằm trong ruột lệnh: merge nhánh dev vào executor đang giữ `work/b157`
 (xung đột giải tại đó), typecheck + test đúng nội dung sắp lên, **kiểm 1** cây
 chính đang đúng nhánh dev, **kiểm 2** cây chính sạch (bẩn thì nêu đích danh
-tệp), `merge --ff-only`, push, rồi phần đóng phiếu: đọc trailer
-`Closes: BACKLOG-NNN` để chạy docs_close, trả khoá, rồi thả executor. Nếu một
+tệp), `merge --ff-only`, rồi phần đóng phiếu: đọc trailer `Closes: BACKLOG-NNN`
+để chạy docs_close, commit đúng những gì nó ghi thành `docs: close-out
+BACKLOG-NNN`, push, trả khoá, rồi thả executor. Push đứng sau commit đóng sổ nên
+remote nhận cả phần gộp lẫn `status: done` trong một lần. Nếu một
 phiếu khai `after_ref:` trỏ tới phiếu vừa gộp thì cây không được thả: lệnh chuyển
 nó thẳng sang nhánh của phiếu đó để chuỗi giữ nguyên cây (`tickets.md`).
 
@@ -119,7 +121,8 @@ quay lại `idle`.
 Phiên `fast-pair` đọc cùng ba trạng thái `processing`, `finishing` và
 `finished`, chỉ khác chỗ tìm: nó không có nhánh riêng nên trailer được tìm
 thẳng trên nhánh dev. Luật "cây sạch" **không** áp cho nó, vì cây chính là của
-chung và chính `crew done` để lại thay đổi chưa commit ở đó sau mỗi lượt.
+chung: phiên fast-pair khác sửa dở ở đó, và `/docs-kit:docs-sync` cũng để lại
+phần đóng sổ của phiếu fast-pair mà không commit.
 
 Chỉ trạng thái nào có người phản ứng lại mới được đặt tên. `finishing` xứng đáng
 vì repo gốc đo được việc xong nằm chờ **7h18** mà không bảng nào nói ra, và phản

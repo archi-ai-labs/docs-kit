@@ -102,10 +102,9 @@ nhất chưa xong và nêu tên các phiếu còn lại, vì mỗi phiếu ấy 
 riêng. Phiếu kế tiếp khai `execution: fast-pair` thì chạy ở cây chính, nên cây
 executor được park.
 
-**Giới hạn đã biết:** `docs_close` ghi phần đóng sổ (`status: done` và dòng
-audit) vào cây chính mà không commit. Vì vậy `crew done` của phiếu kế tiếp trong
-chuỗi sẽ vấp kiểm 2 cho tới khi có người commit hai tệp đó, giống hệt hai
-executor chạy song song.
+Từ 0.41.1, `crew done` tự commit phần đóng sổ (`status: done` và dòng audit) lên
+nhánh dev trước khi push. Vì vậy chuỗi chạy liền từ phiếu này sang phiếu kế mà
+không ai phải commit tay ở cây chính.
 
 ## Chẻ nếu
 

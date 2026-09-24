@@ -371,11 +371,12 @@ exec_state() {
 # about a session still open.
 # NOTE the asymmetry, and do not "fix" it into symmetry: the uncommitted-work
 # rule above holds because an executor tree belongs to exactly ONE ticket, so
-# anything uncommitted in it is that ticket's. The main tree is shared, and
-# `crew done` itself leaves writes there every run — docs_close flips the status
-# and appends the audit line without committing either. Reading dirtiness as
-# "still working" here would pin every fast-pair session at `processing`
-# forever. The main tree gets its own guard instead: check 2 of `crew done`.
+# anything uncommitted in it is that ticket's. The main tree is shared: other
+# sessions' fast-pair edits sit there, and so does the close-out docs-sync writes
+# for a fast-pair ticket, which it never commits (crew done commits its own since
+# 0.41.1). Reading dirtiness as "still working" here would pin every fast-pair
+# session at `processing` whenever anyone else left a file open. The main tree
+# gets its own guard instead: check 2 of `crew done`.
 # pair_tickets → the nnn of every Backlog item that is in-progress AND declares
 # `execution: fast-pair`. Every other executor is found from its branch, but a
 # fast-pair ticket has no work branch by design, so it must be found from the
@@ -614,6 +615,67 @@ cmd_new() {
 }
 
 # ---------------------------------------------------------------- crew done
+# THE CLOSE-OUT IS COMMITTED, AND ONLY THE CLOSE-OUT. Until 0.41.1 docs_close's
+# writes — the Backlog doc's `status: done` and the audit line — stayed
+# uncommitted in the main tree, so the very next `crew done` died at check 2
+# naming exactly those two files. Reproduced 2026-09-24 with two tickets back to
+# back; a chain session (0.41.0) met it on every ticket after the first. The push
+# also ran before the close-out, so even a hand-committed close-out reached the
+# remote one ticket late, and the last ticket's not at all.
+#
+# "What docs_close wrote" is measured AND bounded. Measured: the paths that became
+# dirty while it ran, because the main tree is shared and a fast-pair session can
+# start an edit after check 2. Bounded: `docs_close --apply` (no --archive) can
+# only write a Backlog doc's status and `92_audit/LOG.md`, so nothing outside
+# those is ever a close-out, even if it changed in the same second. A path that
+# was already dirty when the close-out started holds somebody else's edit, so it
+# is left out and named, never committed under the close-out's name. A refused
+# commit (a repo's own pre-commit hook) is reported, never bypassed, and never
+# fails a merge that has already landed.
+main_changed() { # → paths in the main tree that differ from HEAD or are untracked, sorted
+  # quotepath off: a non-ASCII file name must come back as a path `git add` can
+  # take, not as an octal-escaped string.
+  { git -C "$MAIN" -c core.quotepath=off diff --name-only HEAD 2>/dev/null
+    git -C "$MAIN" -c core.quotepath=off ls-files --others --exclude-standard 2>/dev/null
+  } | sort -u
+}
+closeout_scope() { grep -E '^docs/(23_backlog/.*\.md|92_audit/LOG\.md)$' || true; }
+closeout_commit() { # closeout_commit <nnn> <paths dirty before docs_close ran>
+  # Read both arguments NOW: `set --` below reuses the positional parameters to
+  # hold the paths, and a later "$1" would be the first path, not the ticket.
+  CO_N="$1"
+  CO_NEW="$(comm -13 <(printf '%s\n' "$2") <(main_changed) | closeout_scope)"
+  CO_HELD="$(printf '%s\n' "$2" | closeout_scope)"
+  if [ -n "$CO_HELD" ]; then
+    note "[done:closeout] these already had uncommitted edits when the close-out ran, so they stay out of its commit — whoever owns the edits commits them:"
+    printf '%s\n' "$CO_HELD" | sed 's/^/  /'
+  fi
+  [ -n "$CO_NEW" ] || return 0
+  set --
+  CO_IDS=""
+  while IFS= read -r co_p; do
+    [ -n "$co_p" ] || continue
+    set -- "$@" "$co_p"
+    case "$co_p" in
+      docs/23_backlog/*) co_id="$(front "$MAIN/$co_p" id)"; [ -n "$co_id" ] && CO_IDS="$CO_IDS, $co_id" ;;
+    esac
+  done <<CO_PATHS
+$CO_NEW
+CO_PATHS
+  CO_IDS="${CO_IDS#, }"
+  [ -n "$CO_IDS" ] || CO_IDS="BACKLOG-$CO_N"
+  if git -C "$MAIN" add -- "$@" \
+     && git -C "$MAIN" commit -q --only -m "docs: close-out $CO_IDS" \
+          -m "Written by crew done $CO_N through docs_close (STANDARD §6.1): only the files it wrote." \
+          -- "$@"; then
+    note "close-out committed on $(main_branch): $CO_IDS"
+  else
+    git -C "$MAIN" reset -q -- "$@" 2>/dev/null
+    note "[done:closeout] the close-out was written but not committed (git's reason is above); commit these before the next crew done, or check 2 will refuse it:"
+    printf '%s\n' "$@" | sed 's/^/  /'
+  fi
+}
+
 cmd_done() {
   require_on
   PARK=0; NA=""
@@ -667,7 +729,7 @@ cmd_done() {
     DIRTY="$(git -C "$MAIN" status --porcelain)"
     if [ -n "$DIRTY" ]; then
       echo "$DIRTY" | sed 's/^/  /' >&2
-      die "check 2: main tree is dirty (files above) — an open fast-pair edit? commit or stash it, then rerun"
+      die "check 2: main tree is dirty (files above) — an open fast-pair edit, or a close-out nobody committed ([done:closeout])? commit or stash it, then rerun"
     fi
     # 5. Fast-forward only; if the dev branch moved underneath us, go around
     #    (merge → test → checks) at most twice, then hand it back to a human.
@@ -679,14 +741,10 @@ cmd_done() {
     note "$DEV moved under the merge — retry $tries/2"
   done
 
-  if git -C "$MAIN" remote | grep -q .; then
-    git -C "$MAIN" push origin "$DEV" "work/b$N" || note "push failed — push by hand when the remote is back"
-  else
-    note "no remote configured — push skipped"
-  fi
-
   # 6. Close-out through the trailer (STANDARD §6.1): the audit line should cite
-  #    a sha, not a session's recollection.
+  #    a sha, not a session's recollection. It runs BEFORE the push, and its
+  #    writes are committed (closeout_commit), so the remote gets the merge and
+  #    the close-out together.
   if has_closer "$MAIN" "$N" -50 "$DEV"; then
     DC="${CREW_DOCS_CLOSE:-}"
     if [ -z "$DC" ] && [ -f "${CLAUDE_PLUGIN_ROOT:-/nonexistent}/scripts/docs_close.sh" ]; then
@@ -706,12 +764,20 @@ cmd_done() {
       [ -f "$DC" ] || DC=""
     fi
     if [ -n "$DC" ]; then
+      CO_BEFORE="$(main_changed)"
       bash "$DC" --apply "$MAIN" || note "docs_close reported a problem — check its output"
+      closeout_commit "$N" "$CO_BEFORE"
     else
       note "trailer found but docs_close is not reachable — /docs-kit:docs-sync will flip the status"
     fi
   else
     note "no 'Closes: BACKLOG-$N' trailer on $DEV — set status: done + audit line yourself, or via docs-sync (STANDARD §6.1)"
+  fi
+
+  if git -C "$MAIN" remote | grep -q .; then
+    git -C "$MAIN" push origin "$DEV" "work/b$N" || note "push failed — push by hand when the remote is back"
+  else
+    note "no remote configured — push skipped"
   fi
 
   # Size calibration: declared S (planner's estimate) vs files actually touched.

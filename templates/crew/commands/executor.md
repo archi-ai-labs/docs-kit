@@ -76,9 +76,11 @@ cái mũ do người giao chứ không phải thứ model tự đội. Lấy n�
    thay lệnh ở bước 5 bằng `scripts/crew done <số phiếu> --park`: cây được thả,
    và `crew status` chỉ ra phiếu nào đang chờ người mang tiếp.
 
-   Phiếu kế tiếp sẽ vấp **kiểm 2** nếu phần đóng sổ của phiếu trước (`status:
-   done` và dòng audit do `docs_close` ghi) còn nằm chưa commit ở cây chính. Lệnh
-   nêu đích danh hai tệp đó; commit chúng ở cây chính rồi chạy lại `crew done`.
+   `crew done` tự commit phần đóng sổ (`status: done` và dòng audit) lên nhánh
+   dev, nên bạn không phải commit gì ở cây chính. Nếu lệnh in dòng
+   `[done:closeout]` thì commit ấy chưa thành, thường vì pre-commit hook của repo
+   từ chối. Lệnh nêu đích danh các tệp; hãy commit chúng ở cây chính trước
+   `crew done` kế tiếp, vì kiểm 2 sẽ chặn nếu chúng còn nằm đó.
 
 5b. `scripts/crew name executor $ARGUMENTS` lần cuối, **sau phiếu cuối cùng của
    chuỗi**, hoặc sau phiếu duy nhất nếu bạn không mang chuỗi. Lần này bạn phải truyền

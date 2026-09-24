@@ -135,13 +135,13 @@ One predecessor per ticket makes a chain a line and a fork a tree. At a fork
 `crew done` continues into the lowest-numbered successor not yet done and
 names the others, each of which needs a session of its own. A `fast-pair`
 successor runs in the main tree by definition, so the tree is parked and the
-session carries on from there. Two ceilings, stated: the close-out
-`docs_close` writes lands uncommitted in the main tree (§5), so the next
-`crew done` in the chain meets check 2 until someone commits it, exactly as
-two parallel executors already do; and a leftover file that keeps the tree on
-the old branch also stops the handoff, so after clearing it the session runs
-`crew new <next>` from inside that tree, which `crew new` prefers over any
-other free one.
+session carries on from there. One ceiling, stated: a leftover file that
+keeps the tree on the old branch also stops the handoff, so after clearing it
+the session runs `crew new <next>` from inside that tree, which `crew new`
+prefers over any other free one. (0.41.0 stated a second one — each ticket's
+close-out left uncommitted in the main tree, so the next `crew done` in the
+chain met check 2 — and 0.41.1 removed it: `crew done` now commits its own
+close-out, §6.)
 
 ## 2. Execution levels — where the work happens
 
@@ -403,11 +403,13 @@ and without the word the pool would grow with no reason visible on the board.
 
 The rule holds for an executor because an executor tree belongs to exactly one
 ticket, so anything uncommitted in it is that ticket's. **It is deliberately not
-applied to the main tree**, where a fast-pair session works: that tree is shared,
-and `crew done` leaves writes there every run — `docs_close` flips the status and
-appends the audit line without committing either. Reading dirtiness as "still
-working" there would pin every fast-pair session at `processing` forever. The
-main tree has its own guard instead, check 2 in §6.
+applied to the main tree**, where a fast-pair session works: that tree is shared.
+Other sessions' fast-pair edits sit there, and so does the close-out
+`/docs-kit:docs-sync` writes for a fast-pair ticket, which it never commits.
+(`crew done` stopped adding its own to that list in 0.41.1, by committing its
+close-out, §6.) Reading dirtiness as "still working" there would pin every
+fast-pair session at `processing` whenever anyone else left a file open. The main
+tree has its own guard instead, check 2 in §6.
 
 A fast-pair session reads the same two states, only from a different place: it
 has no branch of its own, so the trailer is looked for on the dev branch itself.
@@ -521,19 +523,40 @@ executor row uses — filtering there would report a clean tree and then let the
 merge refuse, which is worse than not reporting. It also prints how far the main
 tree is from dev: against the remote when it is on dev, against dev itself when
 it is on anything else, because "in sync" is a different question in each case.
-5. `git -C <main> merge --ff-only work/b157`, then push dev branch and work
-   branch (skipped with a note when no remote exists). If the dev branch moved:
-   back to step 1, at most twice.
+5. `git -C <main> merge --ff-only work/b157`. If the dev branch moved: back to
+   step 1, at most twice.
 6. Close-out: if a commit on the branch carries `Closes: BACKLOG-NNN`, run
    `docs_close` (STANDARD §6.1) so `status: done` and the audit line cite the
-   sha; otherwise print the reminder and leave the flip to `docs-sync`. Release
-   any locks still held by the ticket. Then, when a ticket names this one in its
+   sha, then **commit exactly what it wrote** on the dev branch as
+   `docs: close-out BACKLOG-NNN`; otherwise print the reminder and leave the
+   flip to `docs-sync`. Then push the dev branch and the work branch (skipped with
+   a note when no remote exists), so the remote gets the merge and the close-out
+   together. Release any locks still held by the ticket. Then, when a ticket names this one in its
    `after_ref:`, **hand the tree on**: switch it straight to that ticket's branch,
    cut from the dev branch that now holds this merge, so the chain's executor
    never reads free (§1). Otherwise, or with `--park`, **park** the executor —
    detach it back onto the dev branch, which is what makes it free again. Its
    provisioned payload stays; any other uncommitted file keeps the executor on
    the branch and is named, exactly as the old teardown refused to delete it.
+
+**The close-out is committed, and only the close-out (0.41.1).** Before, the
+status flip and the audit line stayed uncommitted in the main tree, so the next
+`crew done` anywhere died at check 2 naming exactly those two files, and its own
+hint guessed "an open fast-pair edit?". Reproduced on 2026-09-24 with two tickets
+back to back. Two parallel executors met it already, and a chain session (§1) met
+it on every ticket after the first. The push also ran before the close-out, so
+even a close-out committed by hand reached the remote one ticket late, riding the
+next ticket's push, and the last one of a run not at all. What is committed is measured and
+bounded. It is measured as the paths that became dirty while `docs_close` ran,
+because the tree is shared and a fast-pair session can start an edit after
+check 2. It is bounded to a Backlog doc and `92_audit/LOG.md`, the only files
+`docs_close --apply` can write, so nothing else is ever swept in under the
+close-out's name. A file that was already dirty when the close-out started holds
+someone else's edit, so it stays out and is named with `[done:closeout]`. A
+commit the repo's own pre-commit hook refuses is reported with the same tag and
+the files, never bypassed, and it does not fail a merge that has already landed.
+The commit carries no `Closes:` trailer, because a second closer for the same
+ticket would force every reader of closers to decide which one counts.
 
 Executors merge their own finished work — no human review gate holds a green
 branch. The gate that was removed was measured first: finished work waited
