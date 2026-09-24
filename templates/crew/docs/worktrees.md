@@ -81,6 +81,15 @@ phiếu khai `after_ref:` trỏ tới phiếu vừa gộp và phiên mang chuỗ
 --chain`) thì cây không được thả: lệnh chuyển nó thẳng sang nhánh của phiếu đó
 để chuỗi giữ nguyên cây (`tickets.md`).
 
+Kiểm 2 chỉ thấy tệp **chưa** commit ở cây chính. Một phiên executor lỡ commit
+phiếu của mình thẳng lên nhánh dev ở cây chính thì không để lại gì chưa commit,
+nên từ 0.42.2 lệnh tìm dấu vết khác: commit mang `Closes: BACKLOG-NNN` mà không
+nằm trên đường first-parent của `work/bNNN`. Bảng ghi `bypass=<sha>` ở dòng của
+cây ngay khi commit đó xuất hiện, còn `crew done` vẫn gộp nhưng in
+`[done:bypass]` và ghi dòng `BYPASS` vào `log.tsv`. Lệnh chỉ cảnh báo chứ không
+từ chối, vì commit ấy đã nằm trên nhánh dùng chung và từ chối cũng không gỡ được
+nó.
+
 Vì sao không gõ tay: thủ tục để dạng văn xuôi sẽ được gõ lại theo trí nhớ, và
 hai phép kiểm giữa là thứ rơi trước tiên lúc mệt — trong khi kiểm 1 là "merge
 đáp xuống nhánh cây chính ĐANG mở, không phải nhánh bạn nghĩ", và kiểm 2 thường

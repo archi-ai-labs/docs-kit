@@ -2188,6 +2188,119 @@ has "$OUT" "--chain changes nothing" \
   && ok "chain-optin: --chain on a lone ticket says it changes nothing" \
   || bad "chain-optin: lone --chain (out: $OUT)"
 
+# ---------------------------------------------------------------- a closer that skipped its branch (0.42.2)
+# Measured 2026-09-24, twice, with a real executor session (Haiku): it ran
+# `crew new 332` and got e1 on work/b332, then committed the ticket's work —
+# trailer and all — straight onto main in the MAIN tree, redid it in e1 and ran
+# `crew done 332`. Nothing said a word: check 2 sees only uncommitted files,
+# log.tsv got `SIZE declared=1 actual=0`, and from the moment of the stray commit
+# the board read e1 as `finishing` while e1 had no commit at all. The signature
+# is a commit carrying the ticket's closer that is not on work/b<nnn>'s own
+# (first-parent) line. Known-bad first.
+BP="$TMP/bypass"
+BPR="$BP/repo"
+mkdir -p "$BPR/scripts" "$BPR/docs/92_audit"
+(
+  cd "$BPR"
+  git init -q && git checkout -q -b main
+  git config user.email t@t && git config user.name t
+  printf '# audit log\n' > docs/92_audit/LOG.md
+  # The test fails while the flag file exists, so a crew done can be made to die
+  # AFTER it has merged the dev branch into the work branch.
+  printf '{"owns": [], "crew": {"dev_branch": "main", "copy": [], "link": [], "test_cmd": "test ! -f %s/redtest"}}\n' "$BP" > .docs-kit.json
+  cp "$KIT/templates/crew/crew" scripts/crew && chmod +x scripts/crew
+  git add -A && git commit -qm init >/dev/null
+)
+bpticket() { # bpticket <nnn> — a Backlog item, committed
+  mkdir -p "$BPR/docs/23_backlog"
+  printf -- '---\nid: BACKLOG-%s\ndescription: "x"\nsource_ref: ISSUE-001\nstatus: open\nscope_files: 1\n---\n' "$1" \
+    > "$BPR/docs/23_backlog/t$1.md"
+  ( cd "$BPR" && git add -A && git commit -qm "ticket $1" >/dev/null )
+}
+bpcrew() { (cd "$BPR" && CREW_DOCS_CLOSE="$KIT/scripts/docs_close.sh" scripts/crew "$@") 2>&1; }
+bpcommit() { # bpcommit <dir> <nnn> — the ticket's work with its closer, committed in <dir>
+  # Same file, same content in both trees, as measured — but the message names the
+  # tree: two commits with one tree, one parent, one author and one second ARE one
+  # commit to git, and the stray one would vanish into the executor's own.
+  ( cd "$1" && echo "$2" >> "w$2.txt" && git add "w$2.txt" \
+      && git -c user.email=t@t -c user.name=t commit -qm "work $2" -m "in $(basename "$1")" -m "Closes: BACKLOG-$2" )
+}
+bprow() { bpcrew status | awk -v e="$1" '$1 == e'; }
+bpticket 001
+bpticket 002
+bpticket 005
+bpticket 100
+( cd "$BPR" && scripts/crew executor add >/dev/null 2>&1 )
+
+# KNOWN-BAD, the measured shape: e1 holds 001, the work lands on main from the main tree.
+bpcrew new 1 >/dev/null
+bpcommit "$BPR" 001
+STRAY="$(git -C "$BPR" rev-parse --short HEAD)"
+ROW="$(bprow e1)"
+if has "$ROW" "processing" && has "$ROW" "bypass=$STRAY"; then
+  ok "bypass: the board stops reading a tree with no commit as finishing, and names the stray closer"
+else
+  bad "bypass: board row after a main-tree closer (got: $ROW)"
+fi
+OUT="$( (cd "$BP/repo-e1" && "$BPR/scripts/crew" name executor --want) 2>&1 )"
+has "$OUT" "b001 · i001 · e1 · processing" \
+  && ok "bypass: the title agrees with the board — the tree's own work is not done" \
+  || bad "bypass: title after a main-tree closer (got: $OUT)"
+
+# The session redoes the work in e1, as measured. First run dies on a red test
+# AFTER merging main into work/b001; the stray closer is then a second parent of
+# the branch, and a range test (work/b001..main) would read clean on the rerun.
+bpcommit "$BP/repo-e1" 001
+: > "$BP/redtest"
+OUT="$(bpcrew done 1)" && RC=0 || RC=$?
+[ "$RC" -ne 0 ] && has "$OUT" "tests failed" \
+  || bad "bypass: the red-test run did not die where it should (rc=$RC out: $OUT)"
+rm -f "$BP/redtest"
+OUT="$(bpcrew done 1)" && RC=0 || RC=$?
+if [ "$RC" -eq 0 ] && has "$OUT" "[done:bypass]" && has "$OUT" "$STRAY"; then
+  ok "bypass: crew done names the closer that skipped the branch, tagged [done:bypass], even on a rerun"
+else
+  bad "bypass: crew done rerun (rc=$RC out: $OUT)"
+fi
+grep -q "^status: done" "$BPR/docs/23_backlog/t001.md" \
+  && ok "bypass: the ticket still lands and closes out — the stray commit is already on the shared branch" \
+  || bad "bypass: the ticket did not close out"
+grep -q "BYPASS	-	BACKLOG-001	$STRAY" "$BP/repo-crew/log.tsv" \
+  && ok "bypass: the stray closer is logged as a BYPASS line" \
+  || bad "bypass: no BYPASS line (log: $(grep BACKLOG-001 "$BP/repo-crew/log.tsv" | tr '\n' '|'))"
+
+# Silent where nothing skipped the branch: the executor merges main into its own
+# branch by hand (legitimate), and main already holds 001's stray closer.
+bpcrew new 2 >/dev/null
+( cd "$BP/repo-e1" && git -c user.email=t@t -c user.name=t merge -q --no-edit main >/dev/null 2>&1 )
+bpcommit "$BP/repo-e1" 002
+ROW="$(bprow e1)"
+OUT="$(bpcrew done 2)" && RC=0 || RC=$?
+if ! has "$ROW" "bypass=" && [ "$RC" -eq 0 ] && ! has "$OUT" "[done:bypass]"; then
+  ok "bypass: a ticket whose closer was made on its own branch never reads as a bypass"
+else
+  bad "bypass: false positive (row: $ROW · out: $OUT)"
+fi
+# A four-digit id is not a three-digit one: BACKLOG-1000 on main is not 100's.
+bpcrew new 100 >/dev/null
+( cd "$BPR" && echo x > w1000.txt && git add w1000.txt \
+    && git -c user.email=t@t -c user.name=t commit -qm "work 1000" -m "Closes: BACKLOG-1000" )
+has "$(bprow e1)" "bypass=" \
+  && bad "bypass: BACKLOG-1000's closer was read as BACKLOG-100's (row: $(bprow e1))" \
+  || ok "bypass: a closer for BACKLOG-1000 is not read as one for BACKLOG-100"
+bpcommit "$BP/repo-e1" 100
+bpcrew done 100 >/dev/null
+
+# The carrying session's summary rows carry the flag into the chain report.
+bpcrew new 5 --chain >/dev/null
+bpcommit "$BPR" 005
+STRAY5="$(git -C "$BPR" rev-parse --short HEAD)"
+bpcommit "$BP/repo-e1" 005
+OUT="$(bpcrew done 5)"
+printf '%s\n' "$OUT" | grep -q "^  BACKLOG-005  .*bypass=$STRAY5" \
+  && ok "bypass: the carried summary row names the stray closer, so the final report does" \
+  || bad "bypass: summary row (out: $OUT)"
+
 # ---------------------------------------------------------------- summary
 echo ""
 echo "crew_test: $PASS passed, $FAIL failed"

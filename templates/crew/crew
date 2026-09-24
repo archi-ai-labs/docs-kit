@@ -512,8 +512,56 @@ exec_state() {
   # `crew done`, when the closer is the tip, so the window bites only a session
   # retitled 50+ commits later — and there the board's `orphan` flag is what
   # names the tree instead.
-  if has_closer "$MAIN" "$ES_N" -50 "$ES_DEV"; then closed_state "$ES_N"; return; fi
+  # A closer on the dev branch counts only when this branch made it (own_landed).
+  # Measured 2026-09-24: a session committed its ticket straight onto main in the
+  # main tree, and from that second the row read `finishing` for a tree that had
+  # no commit at all.
+  if has_closer "$MAIN" "$ES_N" -50 "$ES_DEV" && own_landed "$ES_N"; then closed_state "$ES_N"; return; fi
   if has_closer "$1" "$ES_N" "$ES_DEV..$2"; then echo finishing; else echo processing; fi
+}
+
+# closer_split <nnn> → "own <sha>" or "bypass <sha>" for every commit carrying the
+# ticket's closer on the dev branch or on work/b<nnn>. Own means it sits on the
+# branch's first-parent line, so the branch itself made it; bypass means it
+# reached the code some other way — measured twice on 2026-09-24, an executor
+# session committing its ticket onto main in the MAIN tree, which skips check 0,
+# the tests and checks 1–2, and which check 2 cannot see because nothing is left
+# uncommitted.
+# WHY FIRST-PARENT AND NOT A RANGE: `work/b<nnn>..<dev>` finds the stray commit
+# only until crew done merges the dev branch into the branch. A run that then
+# dies on a red test leaves it merged, and the rerun would read clean. On the
+# first-parent line it stays a second parent for good, so crew done, the board
+# and the title read the same answer before and after any merge.
+# The id is matched whole: BACKLOG-1000's closer is not BACKLOG-100's.
+closer_split() {
+  CL_DEV="$(cfg dev_branch main)"
+  git -C "$MAIN" rev-parse -q --verify "refs/heads/work/b$1" >/dev/null || return 0
+  CL_OWN="
+$(git -C "$MAIN" rev-list --first-parent -200 "work/b$1" 2>/dev/null)
+"
+  { git -C "$MAIN" log -E --format=%H --grep="^Closes: BACKLOG-$1([^0-9]|\$)" -50 "$CL_DEV" 2>/dev/null
+    git -C "$MAIN" log -E --format=%H --grep="^Closes: BACKLOG-$1([^0-9]|\$)" -50 "work/b$1" 2>/dev/null
+  } | sort -u | while IFS= read -r cl_h; do
+    [ -n "$cl_h" ] || continue
+    case "$CL_OWN" in
+      *"
+$cl_h
+"*) echo "own $cl_h" ;;
+      *)  echo "bypass $cl_h" ;;
+    esac
+  done
+}
+own_landed() { # own_landed <nnn> → true when a closer work/b<nnn> made is on the dev branch
+  OL_DEV="$(cfg dev_branch main)"
+  for ol_h in $(closer_split "$1" | awk '$1 == "own" { print $2 }'); do
+    git -C "$MAIN" merge-base --is-ancestor "$ol_h" "$OL_DEV" 2>/dev/null && return 0
+  done
+  return 1
+}
+bypass_shas() { # bypass_shas <nnn> → the stray closers as short shas, comma-joined, or nothing
+  for bs_h in $(closer_split "$1" | awk '$1 == "bypass" { print $2 }'); do
+    git -C "$MAIN" rev-parse --short "$bs_h"
+  done | paste -sd, -
 }
 
 # The same three states for a fast-pair session, which has no branch of its own:
@@ -1040,6 +1088,13 @@ LEFTOVERS
     note "$(en "$WT") stays on work/b$N: the files above are neither committed nor crew-provisioned — commit or delete them, then: git -C $WT switch --detach $DEV"
   fi
   log_line DONE - "BACKLOG-$N" "files=$ACTUAL"
+  # Warn, never refuse: the stray commit is already on the shared dev branch, so
+  # refusing here undoes nothing and only holds back the close-out (closer_split).
+  BPS="$(bypass_shas "$N")"
+  if [ -n "$BPS" ]; then
+    log_line BYPASS - "BACKLOG-$N" "$BPS"
+    note "[done:bypass] BACKLOG-$N was also closed on $DEV by $BPS, a commit not made on work/b$N — it skipped check 0, the tests and checks 1–2. It landed anyway, since it is already on the shared $DEV. Say so in the final report; a ticket's commits belong in its executor tree."
+  fi
   note "BACKLOG-$N is on $DEV. Reminder: a clean main tree does not mean nobody is reading it."
   if [ -n "$HANDED" ]; then
     note "next     : same session, same tree — retitle with scripts/crew name executor, then work BACKLOG-$HANDED"
@@ -1057,7 +1112,8 @@ LEFTOVERS
       CSZ="$(awk -F'\t' -v t="$CT" '$2 == "SIZE" && $3 == "-" && $4 == t { s = $5 } END { print s }' "$STATE/log.tsv" 2>/dev/null)"
       CTF="$(ticket_file "${CT#BACKLOG-}")"
       CST="-"; [ -n "$CTF" ] && CST="$(front "$CTF" status)"
-      echo "  $CT  ${CSHA:--}  ${CSZ:--}  status=${CST:--}"
+      CBP="$(bypass_shas "${CT#BACKLOG-}")"
+      echo "  $CT  ${CSHA:--}  ${CSZ:--}  status=${CST:--}${CBP:+  bypass=$CBP}"
     done
     CNX="$(chain_awk next "$N" | cut -f1)"
     [ -n "$CNX" ] && echo "  not carried yet: BACKLOG-$CNX — $(next_cmd "$CNX")"
@@ -1445,7 +1501,8 @@ cmd_status() {
       FLAG=""
       [ -z "$TF" ] && FLAG="  ← orphan: branch without a Backlog item"
       [ "$TSTAT" = "done" ] && FLAG="  ← orphan: ticket is done but the executor still holds the branch"
-      echo "  $(en "$P")  $B  BACKLOG-$NUM  $STATE  dirty=$DIRTYC  ticket=$TSTAT$FLAG"
+      BPS="$(bypass_shas "$NUM")"
+      echo "  $(en "$P")  $B  BACKLOG-$NUM  $STATE  dirty=$DIRTYC  ticket=$TSTAT${BPS:+  bypass=$BPS}$FLAG"
     fi
   done
   POOL="$(exec_map | wc -l | tr -d ' ')"

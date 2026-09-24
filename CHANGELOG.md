@@ -5,6 +5,41 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
+## [0.42.2] — 2026-09-24
+
+An executor that commits its ticket straight onto the dev branch in the main tree
+is now seen: by the board the moment it happens, and by `crew done` when the
+ticket lands.
+
+### Fixed — a closer that skipped its branch went unnoticed
+
+Measured twice on 2026-09-24 with a real executor session (Haiku): it ran
+`crew new 332` and got e1 on `work/b332`, then committed the ticket's work,
+trailer and all, straight onto main in the main tree, redid it in e1 and ran
+`crew done 332`. Check 2 sees only uncommitted files, so nothing warned;
+`log.tsv` got `SIZE declared=1 actual=0`; and from the second the stray commit
+landed, the board and the title read e1 as `finishing` while e1 had no commit at
+all. Reproduced in a fixture, which also showed the audit line citing the stray
+commit's sha.
+
+| Where | Now |
+|---|---|
+| the signature | a commit carrying `Closes: BACKLOG-<nnn>` that is not on `work/b<nnn>`'s first-parent line. A range test (`work/b<nnn>..<dev>`) reads clean again after a `crew done` that merged the dev branch in and then died on a red test; the first-parent line does not. The id is matched whole, so BACKLOG-1000's closer is not BACKLOG-100's |
+| `crew status`, `crew name` | the executor row ends `bypass=<sha>`, and the stray commit no longer moves the tree to `finishing`: that state now needs a closer the branch made itself |
+| `crew done` | still lands and closes out (the commit is already on the shared dev branch, so refusing would undo nothing), then prints `[done:bypass]` with the sha and logs a `BYPASS` line |
+| the carried summary (0.41.2) | the ticket's row ends `bypass=<sha>`, so a chain's final report carries it |
+| executor hat, `worktrees.md` | a ticket's commits belong in its executor tree; on `[done:bypass]`, report the sha rather than rewrite the dev branch |
+
+Stated ceiling: a stray commit **without** the trailer looks like any other
+commit on the dev branch, and nothing here can tell whose it was. Considered and
+not built, by the owner's choice: a PreToolUse warning at `git commit` time (the
+only place that could see it before it happens, but it reads command text, so
+`git commit -F <file>` slips past), and a refusing `crew done` (it would need an
+override flag, one more option for an agent to get wrong).
+
+Suite 222 → 230 checks; eight mutations of the new code each turn at least one
+check red.
+
 ## [0.42.1] — 2026-09-24
 
 The chain code in `scripts/crew` crashed under gawk, so 0.42.0 went red on GitHub
@@ -104,6 +139,7 @@ they reach `main` in this push, stacked in version order. 0.40.4 and 0.40.5 now
 sit under 0.41.0, so the check counts in the 0.41.x entries below are those of
 the stacked history (11 higher than on their own branches). Only `v0.42.0` is
 tagged.
+
 
 ## [0.41.2] — 2026-09-24
 

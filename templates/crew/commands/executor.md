@@ -103,7 +103,12 @@ cái mũ do người giao chứ không phải thứ model tự đội. Lấy n�
    rồi làm tiếp.
 
    `crew done` tự commit phần đóng sổ (`status: done` và dòng audit) lên nhánh
-   dev, nên bạn không phải commit gì ở cây chính. Nếu lệnh in dòng
+   dev, nên bạn không phải commit gì ở cây chính. Mọi commit của phiếu nằm trong
+   cây executor. Một commit mang `Closes: BACKLOG-<nnn>` làm ở cây chính sẽ bỏ
+   qua check 0, test và hai phép kiểm, nên `crew done` gắn nó với
+   `[done:bypass]` và bảng ghi `bypass=<sha>` ở dòng của cây. Gặp tag đó thì
+   đừng sửa lịch sử của nhánh dev: ghi sha ấy vào mục 5 của báo cáo (và mục 0
+   nếu mang chuỗi) để người giao việc biết phiếu đã đi đường tắt. Nếu lệnh in dòng
    `[done:closeout]` thì commit ấy chưa thành, thường vì pre-commit hook của repo
    từ chối. Lệnh nêu đích danh các tệp; hãy commit chúng ở cây chính trước
    `crew done` kế tiếp, vì kiểm 2 sẽ chặn nếu chúng còn nằm đó.

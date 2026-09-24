@@ -466,6 +466,10 @@ nothing can go stale and nothing has to be written down:
 | `finishing` | a commit carries `Closes: BACKLOG-<nnn>`, the tree is clean, and the close-out is not finished | declared complete, not landed yet |
 | `finished` | that commit is reachable from the dev branch **and** the ticket reads `status: done` | nothing is left on this ticket |
 
+"That commit" is one the branch made itself. A closer for the ticket that reached
+the dev branch any other way is printed at the end of the row as
+`bypass=<sha>` and does not move the state (0.42.2, §6).
+
 **Uncommitted work is part of the state, not a column beside it (0.32.0).** Both
 rows above that say "and" were measured on 2026-09-09, in one repo, from one
 cause: the tree was read through its branch alone. With the trailer written and
@@ -639,6 +643,27 @@ commit the repo's own pre-commit hook refuses is reported with the same tag and
 the files, never bypassed, and it does not fail a merge that has already landed.
 The commit carries no `Closes:` trailer, because a second closer for the same
 ticket would force every reader of closers to decide which one counts.
+
+**A closer that skipped its branch is named, not refused (0.42.2).** Measured
+twice on 2026-09-24 with a real executor session (Haiku): it ran `crew new 332`
+and got e1 on `work/b332`, then committed the ticket's work, trailer and all,
+straight onto main in the **main** tree, redid it in e1 and ran `crew done 332`.
+Nothing noticed. Check 2 sees only uncommitted files, `log.tsv` got `SIZE
+declared=1 actual=0`, and from the second the stray commit landed the board read
+e1 as `finishing` while e1 had no commit at all. The signature is a commit
+carrying the ticket's closer that is not on `work/b<nnn>`'s first-parent line. A
+range such as `work/b<nnn>..<dev>` would find it only until `crew done` merges
+the dev branch into the branch; a run that then dies on a red test leaves it
+merged, and the rerun would read clean. On the first-parent line it stays a
+second parent for good, so the board, the title and `crew done` read the same
+answer before and after any merge. The board prints `bypass=<sha>` on the row
+and stops counting that commit toward `finishing`. `crew done` still lands the
+ticket, prints `[done:bypass]` with the sha, logs a `BYPASS` line, and the
+carried summary (§1) repeats the flag so the final report does too. It warns and
+never refuses, because the stray commit already sits on the shared dev branch and
+a refusal would undo nothing while holding back the close-out. Stated ceiling: a
+stray commit **without** the trailer looks like any other commit on the dev
+branch, and nothing here can tell whose it was.
 
 Executors merge their own finished work — no human review gate holds a green
 branch. The gate that was removed was measured first: finished work waited
