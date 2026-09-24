@@ -5,6 +5,24 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
+## [0.42.1] — 2026-09-24
+
+The chain code in `scripts/crew` crashed under gawk, so 0.42.0 went red on GitHub
+while every local run of the same suite was green.
+
+### Fixed — `crew status` and `crew done` where awk is gawk 5.2.1
+
+`CHAIN_AWK` (0.41.0) handed array elements straight to its own functions, for
+example `sorted(succ[k], kids)`. For the last ticket of a chain, `succ[k]` has only
+ever been read, and gawk 5.2.1 — the awk on GitHub's `ubuntu-latest` — dies on
+that with `fatal: internal error: … unexpected parameter type Node_illegal`. The
+board's `chains:` block and the chain line of `crew done` printed that error in
+place of their rows: six checks red on GitHub, 216 of 222 passing. The local runs
+use BSD awk, which accepts the call. All five such calls now pass a copy
+(`succ[k] ""`), and a comment above `CHAIN_AWK` says why.
+
+`v0.42.0` stays where it is. Take 0.42.1 on any machine whose awk is gawk.
+
 ## [0.42.0] — 2026-09-24
 
 From a ticket number you can now tell which planner to go back to: every title

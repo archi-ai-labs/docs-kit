@@ -251,6 +251,10 @@ chain_rows() { # → "<nnn>\t<after nnn or ->\t<status>\t<execution or ->" per B
 # chain_awk board "<nnn>=<place> …" [<nnn>] → the `chains:` rows of crew status, or
 #   only the row of the chain holding <nnn>; a place ending in ~ is a session that
 #   holds that ticket without carrying its chain (chain_holders)
+# A function below is never handed an array element itself, only a copy
+# (`succ[k] ""`): gawk 5.2.1, the awk on GitHub's ubuntu-latest, dies with
+# "unexpected parameter type Node_illegal" when it is handed an element that was
+# only ever read, which is what succ[k] is for the last ticket of a chain.
 CHAIN_AWK='
 function low(list,   a, i, n, b) {
   n = split(list, a, " "); b = ""
@@ -265,7 +269,7 @@ function first(t,   f, seen) {
 }
 function last(t,   l, n, seen) {
   l = t; seen[l] = 1
-  while (succ[l] != "") { n = low(succ[l]); if (n in seen) break; l = n; seen[l] = 1 }
+  while (succ[l] != "") { n = low(succ[l] ""); if (n in seen) break; l = n; seen[l] = 1 }
   return l
 }
 function sorted(list, out,   n, i, j, v) {
@@ -290,7 +294,7 @@ END {
   }
   if (mode == "next") {
     n = ""; o = ""
-    m = sorted(succ[arg], s)
+    m = sorted(succ[arg] "", s)
     for (i = 1; i <= m; i++) if (st[s[i]] != "done") { if (n == "") n = s[i]; else o = o " " s[i] }
     if (n != "") print n "\t" ex[n] "\t" substr(o, 2)
     exit
@@ -313,7 +317,7 @@ END {
       k = stk[top--]
       if (k in vis) continue
       vis[k] = 1; seq = seq " " k
-      c = sorted(succ[k], kids)
+      c = sorted(succ[k] "", kids)
       for (i = c; i >= 1; i--) stk[++top] = kids[i]
     }
     n = split(seq, mem, " "); land = ""; queue = ""; ready = ""; nc = 0; fk = ""
@@ -325,7 +329,7 @@ END {
       if (split(succ[k], tmp, " ") > 1) fk = fk " " k
     }
     if (queue == "" && nc == 0) continue
-    line = "  " roots[r] "→" last(roots[r]) " "
+    line = "  " roots[r] "→" last(roots[r] "") " "
     sep = " "
     if (land != "") { line = line sep "landed" land; sep = " · " }
     for (i = 1; i <= nc; i++) { line = line sep held[i]; sep = " · " }
@@ -335,7 +339,7 @@ END {
     if (only != "") exit
     q = split(fk, fks, " ")
     for (i = 1; i <= q; i++) {
-      c = sorted(succ[fks[i]], kids); fl = ""; nx = ""
+      c = sorted(succ[fks[i]] "", kids); fl = ""; nx = ""
       for (j = 1; j <= c; j++) { fl = fl " " kids[j]; if (nx == "" && st[kids[j]] != "done") nx = kids[j] }
       if (nx != "") print "    fork: " fks[i] " is followed by" fl " — a session carrying the chain goes on from " fks[i] " into " nx "; every other one needs a session of its own"
     }
