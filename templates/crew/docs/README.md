@@ -14,8 +14,9 @@ Issue → (lane test, 3 câu — gates.md) → Backlog item
       → scripts/crew done <nnn>    # merge + 2 phép kiểm + đóng phiếu + thả executor
 ```
 
-Phiếu nằm trong một chuỗi (`after_ref:`) thì `crew done` không thả executor mà
-chuyển nó thẳng sang phiếu kế, nên một phiên mang trọn chuỗi (`tickets.md`).
+Phiếu nằm trong một chuỗi (`after_ref:`) và được mở bằng `crew new <nnn>
+--chain` thì `crew done` không thả executor mà chuyển nó thẳng sang phiếu kế,
+nên một phiên mang trọn chuỗi (`tickets.md`).
 
 Và một vòng ngoài, nhịp tuần:
 

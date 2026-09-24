@@ -6,7 +6,7 @@ Ràng buộc chỉ bắt đầu có nghĩa khi các mũ nằm trên các phiên 
 | Role | Làm | Ràng buộc đáng tiền nhất |
 |---|---|---|
 | `planner` | đo bug tại chỗ, viết phiếu, xếp lane + mức, khai `scope_files`, giao việc, quyết định cỡ pool | **không sửa code** |
-| `executor` | một phiếu – một nhánh – tới `done`; một phiên mang một chuỗi phiếu trong một executor | tự gộp bằng `crew done`, không chờ ai duyệt |
+| `executor` | một phiếu – một nhánh – tới `done`; một phiên mở bằng `crew new --chain` mang một chuỗi phiếu trong một executor | tự gộp bằng `crew done`, không chờ ai duyệt |
 | `tester` | nghiệm thu + test khám phá đóng vai khách | **không vá thứ mình phát hiện** — phát hiện viết thành Issue |
 | `devops` | giữ nhánh production, quan sát bản đang chạy | không nhận phiếu code |
 | `steward` | dọn executor mồ côi, giữ bảng trạng thái, ghi luật | **không giao việc, không nhận báo cáo** |

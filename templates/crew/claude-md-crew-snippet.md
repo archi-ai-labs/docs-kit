@@ -5,7 +5,7 @@ Repo này chạy tầng thi hành crew — luật đầy đủ trong `.claude/cr
 `README.md` trước.
 
 **Phiếu:** Backlog item là đơn vị công việc. Một phiếu – một nhánh; một phiên
-mang một chuỗi `after_ref`. Không có phiếu trong `docs/23_backlog/` thì không
+mang một chuỗi `after_ref` (`--chain`). Không có phiếu trong `docs/23_backlog/` thì không
 có nhánh.
 
 **Executor là cây thường trực** `../<repo>-e<k>`, dựng một lần rồi dùng lại qua
@@ -17,7 +17,7 @@ thái đi `processing` → `finishing` (commit mang trailer **và** cây sạch)
 `finished` (phiếu đã đóng sổ); chạy lại lệnh sau mỗi lần đổi.
 
 **Lệnh:** `scripts/crew new <nnn>` giao phiếu cho một executor rảnh (nhánh
-`work/b<nnn>`), hết cây rảnh thì tự dựng thêm; `scripts/crew done <nnn>` gộp, và
+`work/b<nnn>`), hết thì tự dựng thêm; `scripts/crew done <nnn>` gộp, và
 **không gõ tay sáu lệnh trong ruột nó**; `scripts/crew lock` trước phần chạm
 máy thật; `scripts/crew status` trước khi nhận thêm phiếu.
 

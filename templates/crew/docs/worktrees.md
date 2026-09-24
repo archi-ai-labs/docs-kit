@@ -77,8 +77,9 @@ tệp), `merge --ff-only`, rồi phần đóng phiếu: đọc trailer `Closes: 
 để chạy docs_close, commit đúng những gì nó ghi thành `docs: close-out
 BACKLOG-NNN`, push, trả khoá, rồi thả executor. Push đứng sau commit đóng sổ nên
 remote nhận cả phần gộp lẫn `status: done` trong một lần. Nếu một
-phiếu khai `after_ref:` trỏ tới phiếu vừa gộp thì cây không được thả: lệnh chuyển
-nó thẳng sang nhánh của phiếu đó để chuỗi giữ nguyên cây (`tickets.md`).
+phiếu khai `after_ref:` trỏ tới phiếu vừa gộp và phiên mang chuỗi (`crew new
+--chain`) thì cây không được thả: lệnh chuyển nó thẳng sang nhánh của phiếu đó
+để chuỗi giữ nguyên cây (`tickets.md`).
 
 Vì sao không gõ tay: thủ tục để dạng văn xuôi sẽ được gõ lại theo trí nhớ, và
 hai phép kiểm giữa là thứ rơi trước tiên lúc mệt — trong khi kiểm 1 là "merge

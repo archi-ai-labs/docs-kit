@@ -10,7 +10,8 @@
 # .docs-kit.json (degrades to defaults without it). No Node, no jq.
 #
 # Subcommands:
-#   crew new <nnn>                       ticket → a free executor (grows the pool if none)
+#   crew new <nnn> [--chain]             ticket → a free executor (grows the pool if none);
+#                                        --chain: this session carries the chain from here
 #   crew done <nnn> [--park]             merge, close-out, then the chain's next ticket or park
 #   crew executor add|rm <k>|prune       the persistent worktree pool
 #   crew lock acquire <res> <nnn> [--wait]
@@ -211,6 +212,16 @@ closed_state() { if ticket_done "$1"; then echo finished; else echo finishing; f
 # have moved it into ../<repo>-crew/, which is never committed and is written by
 # the executor, not the planner.
 #
+# WHO CARRIES the chain is the opposite kind of fact, so it IS a flag: it belongs
+# to a session, not to the tickets. Measured 2026-09-24 with three real executor
+# sessions on one chain, before 0.41.2: the session given the ordinary one-ticket
+# prompt for the first ticket stopped after its `crew done` — rightly, its prompt
+# put the next ticket out of scope — while crew done, reading only after_ref, had
+# already handed it the next branch. The tree sat on that branch with nobody in
+# it, and the board read exactly like a live session. So a session takes the
+# chain once, `crew new <nnn> --chain`, which is logged on its NEW line (see
+# carried), and crew done hands a tree on only for a session that did.
+#
 # One predecessor per ticket, so a chain is a line and a fork is a tree. Where a
 # ticket has several successors, "next" is the lowest-numbered one not done yet;
 # the title, the board and `crew done` all use that one rule. Every walk keeps a
@@ -235,7 +246,9 @@ chain_rows() { # → "<nnn>\t<after nnn or ->\t<status>\t<execution or ->" per B
 
 # chain_awk span <nnn>  → "<first>→<last>", or nothing for a ticket in no chain
 # chain_awk next <nnn>  → "<nnn>\t<execution>\t<other open successors>", or nothing
-# chain_awk board "<nnn>=<place> …" → the `chains:` rows of crew status
+# chain_awk board "<nnn>=<place> …" [<nnn>] → the `chains:` rows of crew status, or
+#   only the row of the chain holding <nnn>; a place ending in ~ is a session that
+#   holds that ticket without carrying its chain (chain_holders)
 CHAIN_AWK='
 function low(list,   a, i, n, b) {
   n = split(list, a, " "); b = ""
@@ -258,6 +271,11 @@ function sorted(list, out,   n, i, j, v) {
   for (i = 2; i <= n; i++) { v = out[i]; j = i - 1; while (j > 0 && out[j] + 0 > v + 0) { out[j + 1] = out[j]; j-- } out[j + 1] = v }
   return n
 }
+function openafter(k,   a, i, n) {
+  n = split(succ[k], a, " ")
+  for (i = 1; i <= n; i++) if (st[a[i]] != "done") return 1
+  return 0
+}
 { aft[$1] = $2; st[$1] = $3; ex[$1] = $4 }
 END {
   for (k in aft) if (up(k)) succ[aft[k]] = succ[aft[k]] " " k
@@ -276,11 +294,18 @@ END {
     exit
   }
   m = split(arg, hl, " ")
-  for (i = 1; i <= m; i++) { p = index(hl[i], "="); if (p) hp[substr(hl[i], 1, p - 1)] = substr(hl[i], p + 1) }
+  for (i = 1; i <= m; i++) {
+    p = index(hl[i], "="); if (!p) continue
+    k = substr(hl[i], 1, p - 1); v = substr(hl[i], p + 1)
+    if (v ~ /~$/) { v = substr(v, 1, length(v) - 1); solo[k] = 1 }
+    hp[k] = v
+  }
   rl = ""
   for (k in st) if (succ[k] != "" && !up(k)) rl = rl " " k
   nr = sorted(rl, roots)
+  if (only != "") { if (!(only in st)) exit; only = first(only) }
   for (r = 1; r <= nr; r++) {
+    if (only != "" && roots[r] != only) continue
     top = 0; stk[++top] = roots[r]; seq = ""
     while (top > 0) {
       k = stk[top--]
@@ -293,7 +318,7 @@ END {
     for (i = 1; i <= n; i++) {
       k = mem[i]
       if (st[k] == "done") land = land " " k
-      else if (k in hp) carried[++nc] = hp[k] " on " k
+      else if (k in hp) held[++nc] = hp[k] " on " k ((k in solo) && openafter(k) ? " (this ticket only)" : "")
       else { queue = queue " " k; if (ready == "" && (!up(k) || st[aft[k]] == "done")) ready = k }
       if (split(succ[k], tmp, " ") > 1) fk = fk " " k
     }
@@ -301,30 +326,79 @@ END {
     line = "  " roots[r] "→" last(roots[r]) " "
     sep = " "
     if (land != "") { line = line sep "landed" land; sep = " · " }
-    for (i = 1; i <= nc; i++) { line = line sep carried[i]; sep = " · " }
+    for (i = 1; i <= nc; i++) { line = line sep held[i]; sep = " · " }
     if (queue != "") line = line sep "queued" queue
-    if (nc == 0 && ready != "") line = line "  ← no session carries this chain — next: scripts/crew new " ready
+    if (nc == 0 && ready != "") line = line "  ← no session carries this chain — next: scripts/crew new " ready (openafter(ready) ? " --chain" : "")
     print line
+    if (only != "") exit
     q = split(fk, fks, " ")
     for (i = 1; i <= q; i++) {
       c = sorted(succ[fks[i]], kids); fl = ""; nx = ""
       for (j = 1; j <= c; j++) { fl = fl " " kids[j]; if (nx == "" && st[kids[j]] != "done") nx = kids[j] }
-      if (nx != "") print "    fork: " fks[i] " is followed by" fl " — crew done " fks[i] " continues into " nx "; every other one needs a session of its own"
+      if (nx != "") print "    fork: " fks[i] " is followed by" fl " — a session carrying the chain goes on from " fks[i] " into " nx "; every other one needs a session of its own"
     }
   }
+  if (only != "") exit
   cy = ""
   for (k in st) if (up(k) && !(k in vis)) cy = cy " " k
   c = sorted(cy, cys); cy = ""
   for (i = 1; i <= c; i++) cy = cy " " cys[i]
   if (cy != "") print "  note: after_ref loops back on itself through" cy " — no ticket in it can ever be first"
 }'
-chain_awk() { chain_rows | awk -F'\t' -v mode="$1" -v arg="${2:-}" "$CHAIN_AWK"; }
+chain_awk() { chain_rows | awk -F'\t' -v mode="$1" -v arg="${2:-}" -v only="${3:-}" "$CHAIN_AWK"; }
 
 # chain_seg <nnn> → "<first>→<last> · " for a ticket in a chain, nothing otherwise,
 # so a ticket nobody chained keeps exactly the title it had before chains existed.
 chain_seg() {
   CS="$(chain_awk span "$1")"
   [ -z "$CS" ] || printf '%s · ' "$CS"
+}
+
+# carried <nnn> → true when the tree holding BACKLOG-<nnn> belongs to a session
+# that carries the chain: its `crew new` said --chain, or it reached this ticket
+# by a handoff from one that did. Read from the LAST NEW line for the ticket in
+# log.tsv, so a ticket reopened later is judged by how it was reopened. A missing
+# log reads false, and false is the safe side: crew done parks, and the board's
+# arrow names the ticket that is ready.
+carried() {
+  [ -f "$STATE/log.tsv" ] || return 1
+  awk -F'\t' -v t="BACKLOG-$1" '$2 == "NEW" && $4 == t { c = ($5 ~ / chain$/) } END { exit !c }' "$STATE/log.tsv"
+}
+
+# chain_holders → "<nnn>=<place> …" for every ticket a tree holds, with a ~ after
+# the place when that session does not carry the chain. The board and crew done's
+# progress line read holders from here, so they cannot name two different ones.
+chain_holders() {
+  exec_map | awk -F'\t' '$2 ~ /^work\/b[0-9]+$/ { n = $1; sub(/.*\//, "", n); sub(/.*-/, "", n); b = $2; sub(/^work\/b/, "", b); print b "\t" n }' \
+    | while IFS=$'\t' read -r ch_b ch_n; do
+        if carried "$ch_b"; then printf '%s=%s ' "$ch_b" "$ch_n"; else printf '%s=%s~ ' "$ch_b" "$ch_n"; fi
+      done
+  pair_tickets | awk 'NF { printf "%s=main ", $1 }'
+}
+
+# next_cmd <nnn> → the command that starts BACKLOG-<nnn>, with --chain when a
+# ticket still runs after it: the one line the board, crew new and crew done
+# print, so the planner copies the same thing whichever of them it read.
+next_cmd() {
+  if [ -n "$(chain_awk next "$1")" ]; then echo "scripts/crew new $1 --chain"; else echo "scripts/crew new $1"; fi
+}
+
+# carried_run <nnn> → the tickets this tree carried, oldest first, ending at <nnn>:
+# each handoff's NEW line names the ticket it followed (after=), so the run is
+# walked back from <nnn> until a NEW line that a `crew new` wrote.
+carried_run() {
+  [ -f "$STATE/log.tsv" ] || { echo "BACKLOG-$1"; return 0; }
+  awk -F'\t' -v n="BACKLOG-$1" '
+    $2 == "NEW" { d[$4] = $5 }
+    END {
+      t = n; seq = t; seen[t] = 1
+      while ((t in d) && match(d[t], /after=BACKLOG-[0-9]+/)) {
+        p = substr(d[t], RSTART + 6, RLENGTH - 6)
+        if (p in seen) break
+        seen[p] = 1; seq = p " " seq; t = p
+      }
+      print seq
+    }' "$STATE/log.tsv"
 }
 
 # exec_state <tree> <branch> → processing | finishing | finished. Derived, never
@@ -514,7 +588,14 @@ cmd_executor() {
 # ---------------------------------------------------------------- crew new
 cmd_new() {
   require_on
-  N="$(norm "${1:?usage: crew new <nnn>}")"
+  CHAIN=0; NA=""
+  for a in "$@"; do
+    case "$a" in
+      --chain) CHAIN=1 ;;
+      *)       NA="$a" ;;
+    esac
+  done
+  N="$(norm "${NA:?usage: crew new <nnn> [--chain]}")"
   F="$(ticket_file "$N")"
   # No ticket, no branch: ids are allocated read-then-write on the main tree, and
   # a worktree that allocated its own would collide deterministically (EXECUTION §1).
@@ -537,7 +618,11 @@ cmd_new() {
     AN="$(norm "$AF")"
     if ! has_closer "$MAIN" "$AN" -50 "$DEV" && ! ticket_done "$AN"; then
       AH="$(exec_on "work/b$AN")"
-      [ -n "$AH" ] && note "BACKLOG-$AN is open in $(en "$AH") — the session there carries this chain, and its crew done $AN opens $N in the same tree"
+      if [ -n "$AH" ] && carried "$AN"; then
+        note "BACKLOG-$AN is open in $(en "$AH") — the session there carries this chain, and its crew done $AN opens $N in the same tree"
+      elif [ -n "$AH" ]; then
+        note "BACKLOG-$AN is open in $(en "$AH") for that ticket alone — once it lands, $N needs a session of its own: $(next_cmd "$N")"
+      fi
       die "[new:after] BACKLOG-$N runs after BACKLOG-$AN, which has not landed on $DEV — started now, it would not have the files $AN builds"
     fi
   fi
@@ -605,12 +690,21 @@ cmd_new() {
     run_setup "$WT" "$(en "$WT")"
   fi
 
-  log_line NEW "$(en "$WT")" "BACKLOG-$N" "$WT"
+  # The trailing " chain" is what `carried` reads back; it goes last so the path
+  # before it may hold any character but a tab.
+  if [ "$CHAIN" -eq 1 ]; then log_line NEW "$(en "$WT")" "BACKLOG-$N" "$WT chain"; else log_line NEW "$(en "$WT")" "BACKLOG-$N" "$WT"; fi
   SEG="$(chain_seg "$N")"
+  NXT="$(chain_awk next "$N" | cut -f1)"
   note "executor : $(en "$WT")  $WT  (branch $BR, from $DEV)"
   note "session  : title it $REPO · $(en "$WT") · b$N · ${SEG}processing · crew/executor  (scripts/crew name executor)"
   note "finish   : scripts/crew done $N   (from anywhere in the repo)"
-  [ -n "$SEG" ] && note "chain    : ${SEG% · } — this session carries it; crew done opens the next ticket in this same tree"
+  if [ "$CHAIN" -eq 1 ] && [ -n "$NXT" ]; then
+    note "chain    : ${SEG% · } — this session carries it: crew done $N opens BACKLOG-$NXT in this same tree"
+  elif [ "$CHAIN" -eq 1 ]; then
+    note "chain    : nothing runs after BACKLOG-$N, so --chain changes nothing — crew done parks the tree as usual"
+  elif [ -n "$NXT" ]; then
+    note "chain    : ${SEG% · } — opened without --chain, so this session takes BACKLOG-$N alone: crew done parks the tree, and BACKLOG-$NXT waits for a session given the chain"
+  fi
   return 0
 }
 
@@ -819,6 +913,8 @@ LEFTOVERS
   # session is sitting in. Held across the switch by the same mutex `crew new`
   # claims under, so a concurrent claim of <next> sees one of the two outcomes
   # and never both. The pin stays the checked-out branch: no reservation file.
+  # Only for a session that CARRIES the chain (see carried): one that opened this
+  # ticket alone gets the park a lone ticket gets, and is told what comes next.
   HANDED=""
   if [ "$SAFE" -eq 1 ] && [ "$PARK" -eq 0 ]; then
     NXL="$(chain_awk next "$N")"
@@ -829,6 +925,8 @@ LEFTOVERS
       # A fast-pair link runs in the main tree by definition, so there is nothing
       # to hold this tree for; the chain session carries on from the main tree.
       note "BACKLOG-$NX comes next and is fast-pair — it runs in the main tree, so $(en "$WT") is parked"
+    elif [ -n "$NX" ] && ! carried "$N"; then
+      note "[done:alone] BACKLOG-$NX runs after BACKLOG-$N, but this session opened $N without --chain, so $(en "$WT") is parked — the chain goes on in a session given it: $(next_cmd "$NX")"
     elif [ -n "$NX" ]; then
       claim_lock
       if [ -n "$(exec_on "work/b$NX")" ]; then
@@ -846,8 +944,12 @@ LEFTOVERS
   fi
   if [ -n "$HANDED" ]; then
     run_setup "$WT" "$(en "$WT")"
-    log_line NEW "$(en "$WT")" "BACKLOG-$HANDED" "$WT after=BACKLOG-$N"
+    log_line NEW "$(en "$WT")" "BACKLOG-$HANDED" "$WT after=BACKLOG-$N chain"
     note "$(en "$WT") stays busy: the chain goes on with BACKLOG-$HANDED on work/b$HANDED (from $DEV, which now holds $N)"
+    # Progress in the board's own words, one line, so a person following the
+    # session reads where the chain stands without opening crew status.
+    CROW="$(chain_awk board "$(chain_holders)" "$HANDED" | head -1)"
+    [ -n "$CROW" ] && note "chain    : ${CROW#  }"
   elif [ "$SAFE" -eq 1 ]; then
     if git -C "$WT" switch --detach "$DEV" >/dev/null 2>&1; then
       git -C "$WT" reset --hard >/dev/null 2>&1
@@ -862,6 +964,24 @@ LEFTOVERS
   note "BACKLOG-$N is on $DEV. Reminder: a clean main tree does not mean nobody is reading it."
   if [ -n "$HANDED" ]; then
     note "next     : same session, same tree — retitle with scripts/crew name executor, then work BACKLOG-$HANDED"
+  elif carried "$N"; then
+    # The carrying session's last crew done: the rows its final report is built
+    # from, measured rather than recalled — the sha that closed each ticket on
+    # the dev branch and the declared/actual size crew logged for it.
+    CRUN="$(carried_run "$N")"
+    CR1="${CRUN%% *}"
+    if [ "$CR1" = "BACKLOG-$N" ]; then note "carried  : BACKLOG-$N, for the final report —"
+    else note "carried  : $CR1 → BACKLOG-$N, for the final report —"
+    fi
+    for CT in $CRUN; do
+      CSHA="$(git -C "$MAIN" log -1 --format=%h --grep="^Closes: $CT\$" "$DEV" 2>/dev/null)"
+      CSZ="$(awk -F'\t' -v t="$CT" '$2 == "SIZE" && $3 == "-" && $4 == t { s = $5 } END { print s }' "$STATE/log.tsv" 2>/dev/null)"
+      CTF="$(ticket_file "${CT#BACKLOG-}")"
+      CST="-"; [ -n "$CTF" ] && CST="$(front "$CTF" status)"
+      echo "  $CT  ${CSHA:--}  ${CSZ:--}  status=${CST:--}"
+    done
+    CNX="$(chain_awk next "$N" | cut -f1)"
+    [ -n "$CNX" ] && echo "  not carried yet: BACKLOG-$CNX — $(next_cmd "$CNX")"
   fi
   return 0
 }
@@ -1265,9 +1385,7 @@ cmd_status() {
   # so the block cannot name a different holder than the row for that tree.
   # Printed only while some chain still has a ticket not done; a repo that never
   # chained anything sees no new line at all.
-  CHH="$(exec_map | awk -F'\t' '$2 ~ /^work\/b[0-9]+$/ { n = $1; sub(/.*\//, "", n); sub(/.*-/, "", n); b = $2; sub(/^work\/b/, "", b); printf "%s=%s ", b, n }')"
-  CHH="$CHH$(printf '%s\n' "$MPT" | awk 'NF { printf "%s=main ", $1 }')"
-  CHB="$(chain_awk board "$CHH")"
+  CHB="$(chain_awk board "$(chain_holders)")"
   if [ -n "$CHB" ]; then
     echo ""
     echo "chains:"

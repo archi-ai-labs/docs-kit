@@ -130,10 +130,11 @@ Bạn nhận chuỗi BACKLOG-<đầu> → BACKLOG-<cuối>, theo đúng thứ t�
     …
 
 Hai lệnh đầu, chỉ cho phiếu đầu:
-    scripts/crew new <đầu>
+    scripts/crew new <đầu> --chain
     scripts/crew role executor
 
 Sau mỗi `crew done`, cây tự chuyển sang phiếu kế; đừng chạy `crew new` cho nó.
+Báo cáo cuối: một báo cáo cho cả chuỗi, theo mẫu cho chuỗi trong vai executor.
 Phiếu : docs/23_backlog/<tệp đầu>.md … (mỗi phiếu một dòng)
 <các ô còn lại như trên, cho cả chuỗi>
 ```
@@ -141,6 +142,14 @@ Phiếu : docs/23_backlog/<tệp đầu>.md … (mỗi phiếu một dòng)
 Thứ tự trong prompt chỉ để người đọc dễ theo; thứ tự thật là các dòng
 `after_ref:` trong phiếu, và `crew new` từ chối một phiếu khi phiếu đứng trước nó
 chưa gộp.
+
+`--chain` là thứ duy nhất khiến `crew done` chuyển cây sang phiếu kế, vì vậy nó
+chỉ nằm trong prompt chuỗi. Lý do đo được (2026-09-24, ba phiên executor thật
+trên một chuỗi ba phiếu): phiên nhận prompt phiếu đơn cho phiếu đầu dừng đúng
+như prompt giao, còn `crew done` của 0.41.0 đã chuyển cây sang phiếu kế, nên cây
+nằm trên một nhánh không ai làm. Giao phiếu đầu của một chuỗi bằng prompt phiếu
+đơn giờ an toàn: cây được thả, và mũi tên trên `crew status` ghi sẵn lệnh cho
+phiên kế tiếp.
 
 **Prompt cho `fast-pair`:**
 

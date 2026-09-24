@@ -77,8 +77,11 @@ id: BACKLOG-333
 after_ref: BACKLOG-332   # 333 chỉ bắt đầu khi 332 đã gộp vào nhánh dev
 ```
 
-Một phiên executor mang trọn một chuỗi. Phiếu không ai xâu vào chuỗi là chuỗi
-một phần tử, nên nó vẫn đi một phiên như trước. Title luôn chỉ đúng một phiếu,
+Một phiên executor mang trọn một chuỗi khi nó mở phiếu đầu bằng
+`scripts/crew new 332 --chain`. Thứ tự chuỗi do planner ghi trong phiếu, còn
+việc phiên nào mang chuỗi do prompt quyết định, nên cờ `--chain` chỉ nằm trong
+prompt chuỗi. Phiếu không ai xâu vào chuỗi là chuỗi một phần tử, nên nó vẫn đi
+một phiên như trước. Title luôn chỉ đúng một phiếu,
 là phiếu cây đang giữ, và thêm đoạn `<đầu>→<cuối>` để biết phiếu thuộc chuỗi
 nào:
 
@@ -88,9 +91,11 @@ nào:
 
 | Lệnh | Chuỗi đổi gì |
 |---|---|
-| `crew new 333` | từ chối với `[new:after]` khi 332 chưa gộp vào nhánh dev, và nêu tên executor đang mang 332 nếu có |
-| `crew done 332` | chuyển cây thẳng từ `work/b332` sang `work/b333` mà không park ở giữa; thêm `--park` thì chuỗi dừng tại đây |
-| `crew status` | khối `chains:` cho biết phiếu nào đã gộp, executor nào đang mang chuỗi, phiếu nào đang chờ |
+| `crew new 332 --chain` | phiên này mang chuỗi từ 332 trở đi; cờ được ghi vào dòng `NEW` của `log.tsv` và tự truyền qua mỗi lần chuyển cây |
+| `crew new 333` | từ chối với `[new:after]` khi 332 chưa gộp vào nhánh dev, và nói executor đang giữ 332 có mang chuỗi hay không |
+| `crew done 332` | phiên mang chuỗi: chuyển cây thẳng từ `work/b332` sang `work/b333` mà không park ở giữa, rồi in một dòng tiến độ; thêm `--park` thì chuỗi dừng tại đây. Phiên mở 332 không có `--chain`: cây được thả kèm `[done:alone]` và lệnh `scripts/crew new 333 --chain` cho phiên kế |
+| `crew done` cuối của chuỗi | in khối `carried  :` gồm các phiếu phiên đã mang, sha đóng từng phiếu và cỡ đã ghi, làm nguồn cho báo cáo cuối |
+| `crew status` | khối `chains:` cho biết phiếu nào đã gộp, executor nào giữ phiếu nào (thêm `(this ticket only)` khi phiên đó không mang chuỗi), phiếu nào đang chờ |
 
 **Cây của chuỗi không lúc nào rảnh giữa hai phiếu.** Cây đã park là cây rảnh, và
 `crew new` của một phiên khác sẽ lấy đúng cây rảnh ấy. Vì vậy `crew done` chuyển

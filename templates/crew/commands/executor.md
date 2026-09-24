@@ -1,5 +1,5 @@
 ---
-description: "Vai executor — một phiếu hoặc một chuỗi phiếu, mỗi phiếu một nhánh, làm trọn tới done rồi tự gộp."
+description: "Vai executor — một phiếu hoặc một chuỗi phiếu (crew new --chain), mỗi phiếu một nhánh, làm trọn tới done rồi tự gộp."
 argument-hint: "<số phiếu, ví dụ: 157>"
 disable-model-invocation: true
 ---
@@ -35,6 +35,11 @@ cái mũ do người giao chứ không phải thứ model tự đội. Lấy n�
    `work/b$ARGUMENTS`; làm việc TRONG cây mà lệnh in ra. Không còn cây rảnh thì
    lệnh tự dựng thêm một executor, nên bạn không bao giờ bị chặn ở bước này.
 
+   Prompt giao **cả chuỗi** thì ghi sẵn `scripts/crew new <đầu> --chain`; hãy
+   chạy đúng dòng đó. Prompt chỉ giao một phiếu thì không có `--chain`, và bạn
+   đừng tự thêm, vì cờ này báo cho `crew done` rằng phiên sẽ làm tiếp các phiếu
+   sau.
+
    **Phiếu khai `execution: fast-pair` thì bỏ qua bước 1 này.** Lệnh sẽ từ chối
    và nói lý do: bạn sửa thẳng trên nhánh dev ở cây chính, commit ngay trong
    cùng lượt, không dựng cây và không mở nhánh. Bước 5 cũng bỏ — phiếu fast-pair
@@ -69,12 +74,26 @@ cái mũ do người giao chứ không phải thứ model tự đội. Lấy n�
    **Bạn đang mang một chuỗi** khi `crew done` in ra dòng `stays busy: the chain
    goes on with BACKLOG-<kế>`. Lúc đó lệnh đã chuyển cây của bạn thẳng sang nhánh
    `work/b<kế>`, cắt từ nhánh dev vừa nhận phiếu này, và cây chưa hề rảnh lúc
-   nào. Đừng chạy `crew new <kế>`, vì cây đã giữ phiếu đó rồi. Hãy viết báo cáo
-   cuối (bước 6) cho phiếu vừa xong, chạy `scripts/crew name executor` không kèm
-   số, rồi quay lại bước 2 với phiếu kế. Từ đây mọi bước dùng số của phiếu cây
-   đang giữ chứ không dùng `$ARGUMENTS`. Muốn dừng chuỗi sau phiếu đang làm thì
-   thay lệnh ở bước 5 bằng `scripts/crew done <số phiếu> --park`: cây được thả,
-   và `crew status` chỉ ra phiếu nào đang chờ người mang tiếp.
+   nào. Đừng chạy `crew new <kế>`, vì cây đã giữ phiếu đó rồi. Giữa chuỗi bạn
+   **không** viết báo cáo cuối; thay vào đó viết đúng một dòng tiến độ, chép từ
+   dòng `chain    :` mà lệnh vừa in, kèm sha của phiếu vừa gộp:
+
+   ```
+   Tiến độ 332→334: landed 332 · e1 on 333 · queued 334 — vừa gộp 332 @ 58271d6
+   ```
+
+   Sau đó chạy `scripts/crew name executor` không kèm số, rồi quay lại bước 2 với
+   phiếu kế. Từ đây mọi bước dùng số của phiếu cây đang giữ chứ không dùng
+   `$ARGUMENTS`. Muốn dừng chuỗi sau phiếu đang làm thì thay lệnh ở bước 5 bằng
+   `scripts/crew done <số phiếu> --park`: cây được thả, và `crew status` chỉ ra
+   phiếu nào đang chờ người mang tiếp.
+
+   **`crew done` in `[done:alone]`** nghĩa là phiếu kế trong chuỗi đã sẵn sàng
+   nhưng phiếu này được mở không có `--chain`, nên cây đã được thả. Nếu prompt
+   chỉ giao phiếu này thì bạn dừng ở đây, vì đó đúng là việc được giao. Nếu
+   prompt giao cả chuỗi (tức planner quên `--chain`) thì chạy lệnh
+   `scripts/crew new <kế> --chain` mà dòng đó in ra, từ trong chính cây vừa thả,
+   rồi làm tiếp.
 
    `crew done` tự commit phần đóng sổ (`status: done` và dòng audit) lên nhánh
    dev, nên bạn không phải commit gì ở cây chính. Nếu lệnh in dòng
@@ -90,7 +109,9 @@ cái mũ do người giao chứ không phải thứ model tự đội. Lấy n�
    nhưng phiếu chưa đóng sổ, vì vậy hãy chạy `/docs-kit:docs-sync` rồi thử lại.
 
 6. **Báo cáo cuối** theo mẫu dưới đây, đúng năm mục và đúng thứ tự ấy. Đây là
-   thứ duy nhất người giao việc đọc được mà không phải mở repo.
+   thứ duy nhất người giao việc đọc được mà không phải mở repo. Phiên mang chuỗi
+   viết **một** báo cáo cho cả chuỗi, sau `crew done` cuối cùng (phiếu cuối,
+   `--park`, hoặc lúc dừng vì blocker), theo **mẫu cho chuỗi** ở cuối tệp.
 
 ## Mẫu báo cáo cuối
 
@@ -170,6 +191,48 @@ Không còn gì thì ghi đúng một dòng: `Không còn việc nào.`
 Hai ô cố ý cứng. **PR** ghi thẳng "không có" chứ không bỏ trống, vì ô trống đọc
 như quên điền còn câu ấy nói rõ đây là thiết kế. **Lên prod** luôn xuất hiện kể
 cả khi hiển nhiên, vì đó là chỗ dễ lẫn nhất giữa dev và prod.
+
+## Mẫu báo cáo cuối cho chuỗi
+
+Người giao việc đọc báo cáo này để biết chuỗi đi tới đâu, nên mục 0 đứng trước
+năm mục quen thuộc. Mục 0 chép từ khối `carried  :` mà `crew done` cuối cùng
+in ra, chứ không gõ lại theo trí nhớ. Mỗi dòng của khối ấy là một phiếu phiên đã
+mang, kèm sha đóng phiếu trên nhánh dev, `declared=`/`actual=` và trạng thái.
+Dòng `not carried yet:` (nếu có) là phiếu chuỗi còn lại cùng lệnh để phiên khác
+mang tiếp.
+
+````
+## Chuỗi BACKLOG-<đầu> → BACKLOG-<cuối> — <một câu việc cả chuỗi đã làm>
+
+**0. Chuỗi**
+
+| Phiếu | Việc | Commit | Phạm vi | Trạng thái |
+|---|---|---|---|---|
+| BACKLOG-<đầu> | <một câu> | [`<sha ngắn>`](<base>/commit/<sha>) | khai `<S>` · thật `<N>` | done |
+| BACKLOG-<kế> | <một câu> | [`<sha ngắn>`](<base>/commit/<sha>) | khai `<S>` · thật `<N>` | done |
+| BACKLOG-<cuối> | — | — | — | chưa làm: <lý do dừng> |
+
+Cây: `<e<k>>` đã được thả sau phiếu cuối.
+— hoặc —
+Chuỗi dừng ở BACKLOG-<nnn> vì <lý do>. Phiếu kế cần một phiên mới: `<lệnh ở dòng not carried yet>`.
+
+**1. Việc đã làm** — bảng như mẫu thường, thêm cột `Phiếu` ở đầu.
+
+**2. Luồng đổi thế nào** — một cặp `trước`/`sau` cho cả chuỗi: `trước` là lúc
+chưa có phiếu đầu, `sau` là lúc phiếu cuối đã gộp.
+
+**3. Bằng chứng** — chỉ còn dòng Kiểm thử và Khoá, vì Commit và Phạm vi đã nằm
+ở mục 0.
+
+**4. Git** — ô Nhánh liệt kê mọi `work/b<nnn>` của chuỗi; ô Gộp vào là nhánh
+dev @ sha close-out của phiếu cuối đã gộp. Hai ô PR và Lên prod giữ nguyên.
+
+**5. Việc còn lại** — như mẫu thường, và gồm cả các phiếu chuỗi chưa làm.
+````
+
+Một chuỗi dừng giữa chừng vẫn là một báo cáo hợp lệ. Điều duy nhất không được
+thiếu là câu `Cây:`/`Chuỗi dừng ở`, vì chỉ câu đó cho người đọc biết phiếu kế
+đang có người làm hay đang chờ.
 
 ## Luật riêng của vai
 

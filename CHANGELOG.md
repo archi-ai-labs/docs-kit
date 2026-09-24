@@ -5,6 +5,51 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
+## [0.41.2] — 2026-09-24
+
+A chain is carried by a session that was given it, not by any session that
+happens to open its first ticket, and that session's final report says where
+the chain stands.
+
+### Fixed — a one-ticket session left its tree on a branch nobody worked
+
+Measured with three real executor sessions on one `332→333→334` chain, on
+0.41.0: the two given the planner's chain prompt carried it end to end, but the
+one given the ordinary one-ticket prompt for 332 stopped after `crew done 332`,
+rightly, since its prompt put 333 out of scope. `crew done` had already switched
+e1 to `work/b333` because of the `after_ref` line, so the tree sat on a branch
+with nobody working it, and the board read `e1 on 333 · processing`, word for
+word what a live session looks like. The order of a chain is a fact about the
+tickets, while who carries it is a fact about a session, so the second one is
+now said once, by the session, at its first `crew new`.
+
+| Where | Now |
+|---|---|
+| `crew new <nnn> --chain` | this session carries the chain from `<nnn>` on; logged on the ticket's `NEW` line in `../<repo>-crew/log.tsv`, and each handoff's own `NEW` line carries it on, so the flag is given once. Without it, `crew new` says the session takes the ticket alone and `crew done` will park |
+| `crew done <nnn>` | hands the tree on only for a session carrying the chain; otherwise parks, tagged `[done:alone]`, and prints `scripts/crew new <next> --chain` for whoever carries on. Each handoff prints the chain's progress line in the board's words |
+| the carrying session's last `crew done` | prints `carried  :` and one row per ticket it carried, oldest first: the sha that closed it on the dev branch, `declared=`/`actual=`, doc status, and `not carried yet:` with the command for what is left |
+| `crew new` refusing a chained ticket | says whether the session holding its predecessor carries the chain, instead of promising that it will open this one |
+| `crew status` | a holder not carrying the chain reads `e1 on 101 (this ticket only)`; the arrow for a chain nobody carries ends `--chain` while more than one ticket is left; a fork line says "a session carrying the chain goes on from … into …" |
+| planner's chain prompt | first command is `scripts/crew new <first> --chain`, and it asks for one final report for the whole chain |
+| executor hat | step 1 runs `--chain` only when the prompt says so; mid-chain it writes one progress line instead of a full report; `[done:alone]` means stop, unless the prompt gave the whole chain; a **chain report template**: section 0 is a per-ticket table built from the `carried` block, followed by one sentence saying whether the tree was freed or where the chain stopped and what command the next ticket needs, then the usual five sections |
+
+Upgrading mid-chain: a chain session opened on 0.41.0 has no `chain` mark on its
+`NEW` lines, so its next `crew done` parks with `[done:alone]` and prints the
+`crew new <next> --chain` that resumes it, from the same tree.
+
+Suite 183 → 197 checks. Ten mutations of the new code, each run against the full
+suite, turn at least one check red.
+
+### Fixed — the crew suite could commit into the kit checkout
+
+`crew_test.sh` ran from wherever it was started, normally the kit checkout. The
+close-out helper `cowork` finds the tree holding a work branch and runs
+`cd "$tree" && git add -A && git commit`; during a mutation run no tree held
+`work/b102`, the path came out empty, `cd ""` succeeded without moving, and the
+commit swept the change in progress into two stray commits on the kit's own
+branch. The suite now `cd`s into its scratch directory first, and `cowork`
+refuses an empty path.
+
 ## [0.41.1] — 2026-09-24
 
 `crew done` closed a ticket out and then left the close-out lying in the main

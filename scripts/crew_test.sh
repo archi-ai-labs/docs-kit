@@ -13,6 +13,12 @@ set -u
 KIT="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." && pwd)"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/crewtest.XXXXXX")"
 trap 'rm -rf "$TMP"' EXIT
+# The suite's own cwd is scratch too. `cd ""` succeeds and stays put, so a helper
+# whose target path came out empty runs right here — and measured 2026-09-24, a
+# mutation run left no tree holding work/b102, `cowork` stayed in the kit
+# checkout, and its `git add -A && git commit` swept the change in progress into
+# two stray commits. Under $TMP the same slip meets "not a git repository".
+cd "$TMP" || exit 2
 
 PASS=0
 FAIL=0
@@ -1623,7 +1629,7 @@ fi
   && ok "chain: the refusal leaves no branch behind" \
   || bad "chain: a refused ticket still got a branch"
 
-OUT="$(chcrew new 101)" || bad "chain: crew new 101 failed: $OUT"
+OUT="$(chcrew new 101 --chain)" || bad "chain: crew new 101 failed: $OUT"
 has "$OUT" "101→103" && ok "chain: crew new says which chain the session now carries" \
   || bad "chain: crew new did not name the chain (out: $OUT)"
 # Still refused while 101 is in flight, and now the refusal says WHO carries it,
@@ -1742,7 +1748,7 @@ OUT="$(chcrew status)"
 has "$OUT" "fork: 300 is followed by 301 302" \
   && ok "chain: the board names a fork and which lane crew done continues into" \
   || bad "chain: fork line (got: $OUT)"
-( cd "$CH/repo-e1" && "$CHR/scripts/crew" new 300 >/dev/null 2>&1 )
+( cd "$CH/repo-e1" && "$CHR/scripts/crew" new 300 --chain >/dev/null 2>&1 )
 chwork e1 300
 OUT="$(chcrew done 300)"
 if [ "$(git -C "$CH/repo-e1" symbolic-ref --short HEAD 2>/dev/null)" = "work/b301" ] \
@@ -1821,6 +1827,7 @@ coticket() { # coticket <nnn> [<after nnn>]
 cowork() { # cowork <nnn> — commit the ticket's work, with its closer, in whichever tree holds it
   CT="$(git -C "$COR" worktree list --porcelain | awk -v b="branch refs/heads/work/b$1" '
     /^worktree /{ p = substr($0, 10) } $0 == b { print p; exit }')"
+  [ -n "$CT" ] || { echo "cowork: no tree holds work/b$1" >&2; return 1; }
   ( cd "$CT" && echo "$1" >> "w$1.txt" && git add -A \
       && git -c user.email=t@t -c user.name=t commit -qm "work $1" -m "Closes: BACKLOG-$1" )
 }
@@ -1957,7 +1964,7 @@ fi
 # chain session meets on every ticket after the first.
 coticket 101
 coticket 102 101
-( cd "$COR" && scripts/crew new 101 >/dev/null 2>&1 )
+( cd "$COR" && scripts/crew new 101 --chain >/dev/null 2>&1 )
 cowork 101
 OUT1="$(codone 101)"
 cowork 102
@@ -1968,6 +1975,125 @@ if [ "$RC" -eq 0 ] && has "$OUT1" "stays busy" && ! has "$OUT" "check 2" \
 else
   bad "close-out: chain run (rc=$RC out: $OUT)"
 fi
+
+# ---------------------------------------------------------------- a chain is carried by choice (0.41.2)
+# Measured 2026-09-24 with three real executor sessions on one 332→333→334
+# chain: the two given the chain prompt carried it end to end, but the one given
+# the ordinary one-ticket prompt for 332 stopped after `crew done 332` — rightly,
+# its prompt put 333 out of scope — and left e1 holding work/b333 with nobody on
+# it. The board read `e1 on 333 · processing`, word for word what a live session
+# looks like. crew done had handed the tree on because of an after_ref line,
+# while whether a session carries the chain is decided by the prompt it got. The
+# session now says so once, `crew new <first> --chain`, and without it crew done
+# parks exactly as it does for a lone ticket. Known-bad first.
+OP="$TMP/optin"
+OPR="$OP/repo"
+mkdir -p "$OPR/scripts" "$OPR/docs/92_audit"
+(
+  cd "$OPR"
+  git init -q && git checkout -q -b main
+  git config user.email t@t && git config user.name t
+  printf '# audit log\n' > docs/92_audit/LOG.md
+  printf '{"owns": [], "crew": {"dev_branch": "main", "copy": [], "link": []}}\n' > .docs-kit.json
+  cp "$KIT/templates/crew/crew" scripts/crew && chmod +x scripts/crew
+  git add -A && git commit -qm init >/dev/null
+)
+opticket() { # opticket <nnn> <after nnn|-> — a Backlog item, committed
+  mkdir -p "$OPR/docs/23_backlog"
+  printf -- '---\nid: BACKLOG-%s\ndescription: "x"\nsource_ref: ISSUE-001\nstatus: open\n' "$1" \
+    > "$OPR/docs/23_backlog/t$1.md"
+  [ "$2" = "-" ] || printf 'after_ref: BACKLOG-%s\n' "$2" >> "$OPR/docs/23_backlog/t$1.md"
+  printf -- '---\n' >> "$OPR/docs/23_backlog/t$1.md"
+  ( cd "$OPR" && git add -A && git commit -qm "ticket $1" >/dev/null )
+}
+opcrew() { (cd "$OPR" && CREW_DOCS_CLOSE="$KIT/scripts/docs_close.sh" scripts/crew "$@") 2>&1; }
+opin() { # opin <e<k>> <crew args…> — crew run from inside that executor tree
+  opin_e="$1"; shift
+  (cd "$OP/repo-$opin_e" && CREW_DOCS_CLOSE="$KIT/scripts/docs_close.sh" "$OPR/scripts/crew" "$@") 2>&1
+}
+opwork() { # opwork <e<k>> <nnn> — the ticket's work, committed with its closer
+  ( cd "$OP/repo-$1" && echo "$2" >> routes.txt && git add -A \
+      && git -c user.email=t@t -c user.name=t commit -qm "work $2" -m "Closes: BACKLOG-$2" )
+}
+ophead() { git -C "$OP/repo-$1" symbolic-ref --short HEAD 2>/dev/null; }
+opticket 101 -
+opticket 102 101
+opticket 103 102
+opticket 104 103
+opticket 900 -
+( cd "$OPR" && scripts/crew executor add >/dev/null 2>&1 )
+
+# The one-ticket session of the measurement: 101 opened without --chain.
+OUT="$(opcrew new 101)" || bad "chain-optin: crew new 101 failed: $OUT"
+has "$OUT" "without --chain" \
+  && ok "chain-optin: crew new without --chain says crew done will park, not hand on" \
+  || bad "chain-optin: crew new 101 note (out: $OUT)"
+has "$(opcrew status)" "e1 on 101 (this ticket only)" \
+  && ok "chain-optin: the board marks a chain ticket whose session does not carry the chain" \
+  || bad "chain-optin: board holder mark (got: $(opcrew status))"
+OUT="$(opcrew new 102)" && RC=0 || RC=$?
+if [ "$RC" -ne 0 ] && has "$OUT" "[new:after]" && has "$OUT" "for that ticket alone"; then
+  ok "chain-optin: a refused next ticket is not promised to a session that will not open it"
+else
+  bad "chain-optin: in-flight refusal (rc=$RC out: $OUT)"
+fi
+
+# KNOWN-BAD: before 0.41.2 this handed e1 to work/b102, and nobody was on it.
+opwork e1 101
+OUT="$(opcrew done 101)" && RC=0 || RC=$?
+if [ "$RC" -eq 0 ] && [ -z "$(ophead e1)" ] && has "$OUT" "[done:alone]"; then
+  ok "chain-optin: crew done parks a tree whose session was not given the chain, tagged [done:alone]"
+else
+  bad "chain-optin: uncarried handoff (rc=$RC e1=$(ophead e1) out: $OUT)"
+fi
+has "$OUT" "scripts/crew new 102 --chain" \
+  && ok "chain-optin: the park names the command that carries the rest of the chain" \
+  || bad "chain-optin: no --chain command in the park note (out: $OUT)"
+has "$(opcrew status)" "← no session carries this chain — next: scripts/crew new 102 --chain" \
+  && ok "chain-optin: the board's arrow asks for --chain while more than one ticket is left" \
+  || bad "chain-optin: board arrow (got: $(opcrew status))"
+
+# The chain session: 102 opened with --chain, from inside the parked e1.
+OUT="$(opin e1 new 102 --chain)" || bad "chain-optin: crew new 102 --chain failed: $OUT"
+[ "$(ophead e1)" = "work/b102" ] && has "$OUT" "this session carries it" \
+  && ok "chain-optin: crew new --chain says the session carries the chain" \
+  || bad "chain-optin: crew new --chain (e1=$(ophead e1) out: $OUT)"
+tail -1 "$OP/repo-crew/log.tsv" | grep -q "NEW	e1	BACKLOG-102	.* chain$" \
+  && ok "chain-optin: the choice is logged on the NEW line crew done reads it back from" \
+  || bad "chain-optin: NEW line (got: $(tail -1 "$OP/repo-crew/log.tsv"))"
+opwork e1 102
+OUT="$(opcrew done 102)"
+[ "$(ophead e1)" = "work/b103" ] \
+  && ok "chain-optin: a session given the chain still has its tree handed on" \
+  || bad "chain-optin: carried handoff (e1=$(ophead e1) out: $OUT)"
+has "$OUT" "chain    : 101→104  landed 101 102 · e1 on 103 · queued 104" \
+  && ok "chain-optin: each handoff prints the chain's progress in the board's own words" \
+  || bad "chain-optin: progress line (out: $OUT)"
+# The flag is given once: the handoff's own NEW line carries it forward.
+opwork e1 103
+OUT="$(opcrew done 103)"
+[ "$(ophead e1)" = "work/b104" ] \
+  && ok "chain-optin: carrying passes through a handoff without --chain being given again" \
+  || bad "chain-optin: second handoff (e1=$(ophead e1) out: $OUT)"
+opwork e1 104
+OUT="$(opcrew done 104)"
+S102="$(git -C "$OPR" log -1 --format=%h --grep='^Closes: BACKLOG-102' main)"
+if [ -z "$(ophead e1)" ] && has "$OUT" "carried  : BACKLOG-102 → BACKLOG-104" \
+   && has "$OUT" "BACKLOG-102  $S102" && ! has "$OUT" "BACKLOG-101  "; then
+  ok "chain-optin: the chain's last crew done lists what THIS session carried, with each sha"
+else
+  bad "chain-optin: carried summary (e1=$(ophead e1) out: $OUT)"
+fi
+ORD="$(printf '%s\n' "$OUT" | awk '/^  BACKLOG-[0-9]+  /{ printf "%s ", $1 }')"
+[ "$ORD" = "BACKLOG-102 BACKLOG-103 BACKLOG-104 " ] \
+  && ok "chain-optin: the summary lists the carried tickets in the order they ran" \
+  || bad "chain-optin: summary order '$ORD'"
+
+# --chain on a ticket nothing runs after changes nothing, and says so.
+OUT="$(opcrew new 900 --chain)"
+has "$OUT" "--chain changes nothing" \
+  && ok "chain-optin: --chain on a lone ticket says it changes nothing" \
+  || bad "chain-optin: lone --chain (out: $OUT)"
 
 # ---------------------------------------------------------------- summary
 echo ""

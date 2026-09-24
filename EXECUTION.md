@@ -83,7 +83,8 @@ intake: **no ticket, no branch.**
 **One ticket = one branch; one session per chain, carried to `done`.** A ticket
 nobody chained is a chain of one, so for most work this still reads "one ticket,
 one session". 0.31.0 made the *tree* outlive the ticket, and 0.41.0 lets the
-*session* outlive it too, but only along a chain the planner wrote down. A
+*session* outlive it too, but only along a chain the planner wrote down and
+only for a session that was given it: `crew new <first> --chain` (0.41.2). A
 session is born for a ticket, titled `processing`, and ends `finished`; its
 title always names exactly one ticket, the one its tree holds now. The
 measurement that bought the per-ticket half of this rule:
@@ -109,16 +110,30 @@ number.
 
 The field sits on the ticket that has the dependency, the same direction as
 every other `*_ref`, so the validator's ref check (STANDARD §3) already
-resolves it and nothing new checks it. It is not a flag on `crew new`: that
-would keep the order in `../<repo>-crew/`, which is never committed and is
-written by the executor, not by the planner who decided it. With it in place:
+resolves it and nothing new checks it. The order is not a flag on `crew new`:
+that would keep it in `../<repo>-crew/`, which is never committed and is
+written by the executor, not by the planner who decided it.
+
+**Who carries a chain IS a flag, because it is a fact about a session.**
+Measured 2026-09-24 on 0.41.0, three real executor sessions on one
+`332→333→334` chain: the two given the planner's chain prompt carried it end to
+end, but the one given the ordinary one-ticket prompt for 332 stopped after
+`crew done 332`, rightly, since its prompt put 333 out of scope. `crew done`,
+reading only `after_ref`, had already switched its tree to `work/b333`, so e1
+sat on a branch nobody was working, and the board read `e1 on 333 ·
+processing`, word for word what a live session looks like. Whether a session
+carries the chain is decided by the prompt it got, so the session says so once,
+`crew new <first> --chain`, and `crew` logs it on that ticket's `NEW` line in
+`../<repo>-crew/log.tsv`. Each handoff's own `NEW` line carries it on, so the
+flag is never repeated. Without it `crew done` parks exactly as it does for a
+lone ticket. With both in place:
 
 | Command | What the chain changes |
 |---|---|
-| `crew new <nnn>` | refuses with `[new:after]` until the predecessor has landed on the dev branch (closer on dev, or doc `done`); names the session carrying it when it is in flight |
-| `crew done <nnn>` | when a ticket runs after this one, the tree goes **straight** from `work/b<this>` to `work/b<next>`, cut from the dev branch that now holds this merge; `--park` ends the chain session here instead |
+| `crew new <nnn> [--chain]` | refuses with `[new:after]` until the predecessor has landed on the dev branch (closer on dev, or doc `done`), and says whether the session holding the predecessor carries the chain; `--chain` makes this session carry it from `<nnn>` on |
+| `crew done <nnn>` | for a session carrying the chain, when a ticket runs after this one, the tree goes **straight** from `work/b<this>` to `work/b<next>`, cut from the dev branch that now holds this merge, and prints the chain's progress line; `--park` ends the chain session here instead. A session that opened the ticket without `--chain` gets a park tagged `[done:alone]` that names `scripts/crew new <next> --chain`. The carrying session's last `crew done` prints the tickets it carried, each with the sha that closed it and its logged size, for the final report |
 | `crew name executor` | adds `<first>→<last> ·` after the ticket: `myapp · e1 · b334 · 332→336 · processing · crew/executor` |
-| `crew status` | a `chains:` block: what landed, who carries it, what is queued, and an arrow when no session carries a chain that has a ticket ready |
+| `crew status` | a `chains:` block: what landed, who holds which ticket (`(this ticket only)` when that session does not carry the chain), what is queued, and an arrow when no session carries a chain that has a ticket ready, with `--chain` when more than one ticket is left |
 
 **The chain's executor never reads `idle` between two of its tickets.** A parked
 tree is a free tree (§5: detached and clean is the whole test), and a free tree
@@ -135,10 +150,11 @@ One predecessor per ticket makes a chain a line and a fork a tree. At a fork
 `crew done` continues into the lowest-numbered successor not yet done and
 names the others, each of which needs a session of its own. A `fast-pair`
 successor runs in the main tree by definition, so the tree is parked and the
-session carries on from there. One ceiling, stated: a leftover file that
+session carries on from there, taking the next executor ticket with
+`crew new <nnn> --chain`. One ceiling, stated: a leftover file that
 keeps the tree on the old branch also stops the handoff, so after clearing it
-the session runs `crew new <next>` from inside that tree, which `crew new`
-prefers over any other free one. (0.41.0 stated a second one — each ticket's
+the session runs `crew new <next> --chain` from inside that tree, which
+`crew new` prefers over any other free one. (0.41.0 stated a second one — each ticket's
 close-out left uncommitted in the main tree, so the next `crew done` in the
 chain met check 2 — and 0.41.1 removed it: `crew done` now commits its own
 close-out, §6.)
@@ -532,7 +548,8 @@ it is on anything else, because "in sync" is a different question in each case.
    flip to `docs-sync`. Then push the dev branch and the work branch (skipped with
    a note when no remote exists), so the remote gets the merge and the close-out
    together. Release any locks still held by the ticket. Then, when a ticket names this one in its
-   `after_ref:`, **hand the tree on**: switch it straight to that ticket's branch,
+   `after_ref:` and the session carries the chain (`crew new --chain`, §1),
+   **hand the tree on**: switch it straight to that ticket's branch,
    cut from the dev branch that now holds this merge, so the chain's executor
    never reads free (§1). Otherwise, or with `--park`, **park** the executor —
    detach it back onto the dev branch, which is what makes it free again. Its
