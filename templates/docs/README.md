@@ -66,8 +66,9 @@ giữ lại làm mẫu định dạng. Id thật bắt đầu từ `001`.
 
 Tài liệu không còn đổi được nữa thì chuyển vào `_archive/` ngay trong thư mục của nó
 (Backlog `done` đã có dòng audit, Issue `archived`, chuỗi đã khép). Mọi điều kiện ở
-đây đều là vị từ trên frontmatter nên script quyết định được: chạy
-`docs_close.sh --archive --apply .`, và nó dùng `git mv` để lịch sử đi theo file.
+đây đều là vị từ trên frontmatter nên script quyết định được: gọi
+`/docs-kit:docs-archive` để xem báo cáo theo chain trước khi chuyển. File đi bằng
+`git mv` nên lịch sử đi theo, và link tương đối được sửa cho khớp.
 Việc này **chỉ giảm chi phí đọc, không giảm chuẩn**: validator vẫn kiểm đủ, ref vẫn
 phân giải, `INDEX.md` vẫn liệt kê kèm tiền tố `_archive/`.
 

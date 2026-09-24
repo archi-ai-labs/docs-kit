@@ -926,6 +926,159 @@ jobs:
             || { echo "::error::the archived tree no longer validates."; exit 1; }
           echo "OK — chain complete archives four documents, incomplete archives none"
 
+      # docs_archive.py is a VIEW of docs_close's plan, and the preview is only worth
+      # reading if --apply then does exactly what it said. Three things were wrong
+      # before 0.40.0 and each is pinned here: the preview left out items a Closes:
+      # trailer was about to close (14 shown, 16 moved, on a real executor tree), a
+      # move broke every relative link through the file it moved (44 in one repo),
+      # and nothing could close a chain no predicate covers without a hand `git mv`
+      # that broke them again. --settle is asserted from the refusing side first: a
+      # Decision with an open ticket must be refused, and the refusal must write
+      # nothing, because a settle that moved it would hide unfinished work.
+      - name: A chain report previews exactly what --apply moves
+        run: |
+          work="$(mktemp -d)"; out="$(mktemp -d)"
+          git -C "$work" init -q
+          git -C "$work" config user.email ci@example.com
+          git -C "$work" config user.name ci
+          bash scripts/docs_scaffold.sh "$work" >/dev/null
+          rm -f "$work"/docs/2*/[A-Z]*-000-example.md
+          python3 - "$work" <<'EOF'
+          import pathlib, sys
+          r = pathlib.Path(sys.argv[1]) / "docs"
+          def w(rel, fm, body=""):
+              p = r / rel
+              p.parent.mkdir(parents=True, exist_ok=True)
+              p.write_text("---\n" + fm.strip() + "\n---\n\n# d\n\n## Alternatives considered\n\n1. a — b\n"
+                           + body, encoding="utf-8")
+          I = 'status: %s\nlane: %s\ndescription: "d"\nwhy: "w"'
+          P = 'issue_ref: %s\nproblem: "x"\nproposed: "y"\nimpact: "none"'
+          D = 'proposal_ref: %s\noutcome: %s\nreason: "r"\ndecided_by: "ci"'
+          B = 'description: "d"\nsource_ref: %s\nstatus: %s'
+          # A — full lane, complete. The Backlog item links out to layer 1.
+          w("20_issues/i1.md", "id: ISSUE-001\n" + I % ("promoted", "full"))
+          w("21_proposals/p1.md", "id: PROPOSAL-001\n" + P % "ISSUE-001")
+          w("22_decisions/d1.md", "id: DECISION-001\n" + D % ("PROPOSAL-001", "approved"))
+          w("23_backlog/b1.md", "id: BACKLOG-001\n" + B % ("DECISION-001", "done"),
+            "\n[arch](../02_architecture/architecture.md) · [issue](../20_issues/i1.md#top)"
+            " · [gone](../nope.md)\n")
+          # B — fast lane, closed by a trailer this run records. Before 0.40.0 the preview
+          # left it out and the apply moved it anyway.
+          w("20_issues/i2.md", "id: ISSUE-002\n" + I % ("promoted", "fast"))
+          w("23_backlog/b2.md", "id: BACKLOG-002\n" + B % ("ISSUE-002", "open"))
+          # C — approved Decision no ticket cites; D — rejected; E — promoted, no successor.
+          w("20_issues/i3.md", "id: ISSUE-003\n" + I % ("promoted", "full"))
+          w("21_proposals/p3.md", "id: PROPOSAL-003\n" + P % "ISSUE-003")
+          w("22_decisions/d3.md", "id: DECISION-003\n" + D % ("PROPOSAL-003", "approved"))
+          w("20_issues/i4.md", "id: ISSUE-004\n" + I % ("promoted", "full"))
+          w("21_proposals/p4.md", "id: PROPOSAL-004\n" + P % "ISSUE-004")
+          w("22_decisions/d4.md", "id: DECISION-004\n" + D % ("PROPOSAL-004", "rejected"))
+          w("20_issues/i5.md", "id: ISSUE-005\n" + I % ("promoted", "fast"))
+          # F — one ticket done, its sibling open: the done one moves, the chain stays.
+          w("20_issues/i6.md", "id: ISSUE-006\n" + I % ("promoted", "full"))
+          w("21_proposals/p6.md", "id: PROPOSAL-006\n" + P % "ISSUE-006")
+          w("22_decisions/d6.md", "id: DECISION-006\n" + D % ("PROPOSAL-006", "approved"))
+          w("23_backlog/b6.md", "id: BACKLOG-006\n" + B % ("DECISION-006", "done"))
+          w("23_backlog/b7.md", "id: BACKLOG-007\n" + B % ("DECISION-006", "open"))
+          # G — done with no audit line: never archived, reported as needing a person.
+          w("20_issues/i8.md", "id: ISSUE-008\n" + I % ("promoted", "fast"))
+          w("23_backlog/b8.md", "id: BACKLOG-008\n" + B % ("ISSUE-008", "done"))
+          # Links INTO moved documents: layer 3 is rewritten, layer 1 is only reported.
+          (r / "30_conventions/conventions.md").write_text(
+              "# c\n\n[b1](../23_backlog/b1.md) · [gone](../23_backlog/nope.md)\n", encoding="utf-8")
+          a = r / "02_architecture/architecture.md"
+          a.write_text(a.read_text(encoding="utf-8") + "\n[d1](../22_decisions/d1.md)\n", encoding="utf-8")
+          EOF
+          printf '| 2026-09-05 | done | BACKLOG-001 | - | commit abc1234 |\n| 2026-09-05 | done | BACKLOG-006 | - | tay |\n' \
+            >> "$work/docs/92_audit/LOG.md"
+          git -C "$work" add -A && git -C "$work" commit -qm fixture
+          git -C "$work" commit -q --allow-empty -m "ship b2" -m "Closes: BACKLOG-002"
+
+          rc=0; python3 scripts/docs_archive.py "$work" > "$out/r1.md" || rc=$?
+          [ "$rc" = 1 ] || { echo "::error::a preview with moves pending must exit 1, got $rc."; exit 1; }
+          for want in "ISSUE-001 → PROPOSAL-001 → DECISION-001 → BACKLOG-001 | full" \
+                      "ISSUE-002 → BACKLOG-002 | fast" "DECISION-003 approved nhưng không Backlog" \
+                      "DECISION-004 rejected" "ISSUE-005 promoted nhưng không" \
+                      "BACKLOG-008 đã done nhưng chưa có audit line" "| BACKLOG-006 | BACKLOG-007 còn open |" \
+                      "| BACKLOG-002 | status → done, audit line |" "docs/02_architecture/architecture.md\` | \`../22_decisions/d1.md\`"; do
+            grep -qF "$want" "$out/r1.md" \
+              || { echo "::error::the preview lacks: $want"; cat "$out/r1.md"; exit 1; }
+          done
+          git -C "$work" status --porcelain > "$out/st.txt"
+          [ ! -s "$out/st.txt" ] || { echo "::error::a preview wrote to the tree."; cat "$out/st.txt"; exit 1; }
+          echo "OK — the preview names each chain by its state and writes nothing"
+
+          # A settle the rule does not take refuses the whole run, not just itself. The
+          # Decision is the case that matters: it has an open ticket, and settling it would
+          # be the one way this script could hide unfinished work.
+          rc=0; python3 scripts/docs_archive.py --apply --settle DECISION-006 --settle BACKLOG-007 \
+            --settle DECISION-003 "$work" > "$out/r2.md" || rc=$?
+          [ "$rc" = 2 ] || { echo "::error::settling an open chain must exit 2, got $rc."; exit 1; }
+          for id in DECISION-006 BACKLOG-007; do
+            grep -q "$id | settle takes" "$out/r2.md" \
+              || { echo "::error::$id was not refused with a reason."; cat "$out/r2.md"; exit 1; }
+          done
+          git -C "$work" status --porcelain > "$out/st.txt"
+          [ ! -s "$out/st.txt" ] || { echo "::error::a refused settle still wrote something."; exit 1; }
+          echo "OK — an open ticket cannot be settled, and the refusal writes nothing"
+
+          python3 scripts/docs_archive.py --apply --settle DECISION-003 --why "layer-1 only" \
+            --settle DECISION-004 --settle ISSUE-005 "$work" > "$out/r3.md" \
+            || { echo "::error::--apply failed."; cat "$out/r3.md"; exit 1; }
+          d="$work/docs"
+          for f in 20_issues/_archive/i1.md 21_proposals/_archive/p1.md 22_decisions/_archive/d1.md \
+                   23_backlog/_archive/b1.md 20_issues/_archive/i2.md 23_backlog/_archive/b2.md \
+                   20_issues/_archive/i3.md 22_decisions/_archive/d3.md 21_proposals/_archive/p4.md \
+                   20_issues/_archive/i4.md 20_issues/_archive/i5.md 23_backlog/_archive/b6.md \
+                   23_backlog/b7.md 22_decisions/d6.md 20_issues/i6.md 23_backlog/b8.md 20_issues/i8.md; do
+            [ -f "$d/$f" ] || { echo "::error::expected $f after --apply."; ls -R "$d/2"*; exit 1; }
+          done
+          grep -q '^status: archived' "$d/20_issues/_archive/i5.md" \
+            || { echo "::error::a settled Issue must carry status: archived."; exit 1; }
+          grep -q '| DECISION-003 (PROPOSAL-003, ISSUE-003) | - | layer-1 only$' "$d/92_audit/LOG.md" \
+            || { echo "::error::the settle's audit line is missing or lost its reason."; exit 1; }
+          grep -q 'BACKLOG-002 (ISSUE-002).*commit' "$d/92_audit/LOG.md" \
+            || { echo "::error::the trailer was not recorded before archiving."; exit 1; }
+          echo "OK — complete chains, settled chains and the trailer-closed item all moved"
+
+          # Links: out of a moved file, into it from layer 3, and never into layer 1.
+          grep -qF '](../../02_architecture/architecture.md)' "$d/23_backlog/_archive/b1.md" \
+            || { echo "::error::a link out of a moved file was not shifted."; exit 1; }
+          grep -qF '](../../20_issues/_archive/i1.md#top)' "$d/23_backlog/_archive/b1.md" \
+            || { echo "::error::a link between two moved files lost its target or anchor."; exit 1; }
+          grep -qF '](../23_backlog/_archive/b1.md)' "$d/30_conventions/conventions.md" \
+            || { echo "::error::a layer 3 link into a moved file was not rewritten."; exit 1; }
+          grep -qF '](../23_backlog/nope.md)' "$d/30_conventions/conventions.md" \
+            || { echo "::error::a link that was already broken was touched."; exit 1; }
+          grep -qF '](../nope.md)' "$d/23_backlog/_archive/b1.md" \
+            || { echo "::error::a broken link inside a moved file was rewritten."; exit 1; }
+          grep -qF '](../22_decisions/d1.md)' "$d/02_architecture/architecture.md" \
+            || { echo "::error::a script wrote into layer 1."; exit 1; }
+          grep -qF '| `docs/02_architecture/architecture.md` | `../22_decisions/d1.md` | `../22_decisions/_archive/d1.md` |' "$out/r3.md" \
+            || { echo "::error::the layer 1 link left behind is not reported with its fix."; cat "$out/r3.md"; exit 1; }
+          bash scripts/docs_validate.sh "$d" > "$out/v.txt" || true
+          n="$(grep -c 'NOTE \[link\]' "$out/v.txt" || true)"
+          [ "$n" = 3 ] \
+            || { echo "::error::expected exactly the three links nobody may fix here, got $n."; cat "$out/v.txt"; exit 1; }
+          echo "OK — links follow the move; layer 1 and already-broken links are left and reported"
+
+          git -C "$work" add -A && git -C "$work" commit -qm archive
+          python3 scripts/docs_archive.py --apply "$work" > "$out/r4.md" \
+            || { echo "::error::a second --apply failed."; exit 1; }
+          grep -q 'Không có document nào rời hot set' "$out/r4.md" \
+            || { echo "::error::a second --apply found something to move; it is not idempotent."; exit 1; }
+          [ -z "$(git -C "$work" status --porcelain)" ] \
+            || { echo "::error::a second --apply wrote something."; exit 1; }
+          sed -i.bak 's|(../22_decisions/d1.md)|(../22_decisions/_archive/d1.md)|' "$d/02_architecture/architecture.md"
+          rm -f "$d/02_architecture/architecture.md.bak"
+          bash scripts/docs_render.sh "$work" >/dev/null 2>&1 || true
+          bash scripts/docs_validate.sh "$d" --strict > "$out/v2.txt" 2>&1 || true
+          [ "$(grep -c 'nope.md' "$out/v2.txt")" = 2 ] \
+            || { echo "::error::the two planted broken links should be strict findings."; cat "$out/v2.txt"; exit 1; }
+          [ "$(grep -c 'FAIL\|NOTE \[ref\]' "$out/v2.txt")" = 2 ] \
+            || { echo "::error::the archived tree has findings beyond the planted links."; cat "$out/v2.txt"; exit 1; }
+          echo "OK — idempotent, and the archived tree validates apart from the planted links"
+
       # THE RATCHET. Three surfaces are paid for by a person or by every session in
       # every repo, and all three roughly tripled between 0.14.0 and 0.29.0 while the
       # documents they govern did not: STANDARD 31KB -> 67KB, the digest 4.3KB -> 12KB,

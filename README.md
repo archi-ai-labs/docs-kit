@@ -22,7 +22,7 @@ renderer skips with a message and nothing else breaks. Scripts hold a **bash 3.2
 / BSD awk** floor, so they run on a stock macOS shell.
 
 **Always-on context cost: about 77 tokens** — one skill description, the only
-thing here Claude can reach on its own. The other five load nothing until you
+thing here Claude can reach on its own. The other ten load nothing until you
 type them.
 
 **Menu:** [Install](#-install) · [Usage](#-usage) · [The model](#-the-model) · [Generated views](#-generated-views) · [Enforcement](#-enforcement) · [Uninstall](#-uninstall) · [For maintainers](#-for-maintainers) · [Roadmap](#-roadmap)
@@ -155,6 +155,7 @@ plugin on by default.
 |---|---|---|
 | `/docs-kit:docs-init` | Detect the stack from the repo's manifests, ask what the repo owns, scaffold the folders that profile calls for (12–17) + templates into `docs/`, read the repo's source to fill Architecture, and optionally wire the rules into `CLAUDE.md`. Refuses to touch an existing `docs/`; asks before every write outside the scaffold. | Yes |
 | `/docs-kit:docs-sync` | End-of-session reconcile: backlog statuses, audit entries, retroactive Issues, pending Architecture amendments, architecture-vs-code drift, and archiving what can no longer change. | Yes |
+| `/docs-kit:docs-archive` | Clean up Layer 2 by chain: a fixed-format preview report — which Issue → Proposal → Decision → Backlog chains are finished, which will never close by themselves and why, which are still in flight — then, on your yes, `git mv` into `_archive/` with every relative link rewritten to follow. Settles a held chain only when you name it. | Yes (asks first) |
 | `/docs-kit:docs-check` | Run the three deterministic checks — the validator, a stale-read-model gate (`INDEX.md` and `MAP.tsv`), and API-contract drift against a generated artifact — and explain each failure. Never fixes. | No |
 | `/docs-kit:docs-render` | Generate/refresh the read models of `docs/` — three HTML pages, `INDEX.md` for agents, and `MAP.tsv` for the hooks. Deterministic; never edits the source markdown. | Yes (generated files only) |
 | `/docs-kit:docs-upgrade` | Bring an existing `docs/` up to the current standard, and to its own profile: add folders and seeds it lacks, regenerate the read models, re-run the checks. Also the path when a repo grows — declare a new `owns` token, run this, get the folders it justifies. Adds only — never overwrites, edits, or deletes. | Yes (adds only) |
@@ -407,15 +408,17 @@ docs-kit/
 ├── .github/workflows/validate.yml
 ├── STANDARD.md                  # source of truth for the model
 ├── skills/                      # every command: docs-init (entry point), docs-sync,
-│                                #   docs-check, docs-render, docs-upgrade, brief,
-│                                #   explain, crew-init, crew-status, crew-update
+│                                #   docs-archive, docs-check, docs-render, docs-upgrade,
+│                                #   brief, explain, crew-init, crew-status, crew-update
 ├── references/                  # mechanics shared by more than one skill
 │   └── issue-capture.md         #   creating an Issue — read by brief + docs-sync
 ├── hooks/hooks.json             # 2 deterministic warn-only hooks
 ├── scripts/                     # docs_validate.sh, docs_scaffold.sh, docs_render.{sh,py},
 │                                #   docs_close.{sh,py} (Closes: trailers → status + audit
-│                                #   line; archiving), docs_profile.sh (which folders belong
-│                                #   here — sourced by both scaffold and validator),
+│                                #   line; archiving + link rewrite), docs_archive.py
+│                                #   (chain report + --settle), docs_profile.sh (which
+│                                #   folders belong here — sourced by both scaffold and
+│                                #   validator),
 │                                #   docs_feedback.sh (file a problem with the kit itself),
 │                                #   docs_detect.py (read-only stack report), hook workers
 ├── design/                      # "change-control print" design system + generated samples

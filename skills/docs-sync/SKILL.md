@@ -223,16 +223,18 @@ Every one of those conditions is a predicate over frontmatter, so the script dec
 them — including both derived chains, the Decision/Proposal one and the Issue one,
 read from which documents cite them in `source_ref` and `issue_ref`. It refuses to
 archive a `done` item whose audit line is missing, for the reason below, and it
-refuses to archive a `promoted` Issue that produced no successor at all. Move a file by hand only for something
-the predicates do not cover, and then use `git mv` so history follows:
+refuses to archive a `promoted` Issue that produced no successor at all. Every move
+also rewrites the relative links it would otherwise break; a `LINK` line names one
+in layer 1 or the audit log that it may not write — relay those to the user.
 
-```bash
-git mv docs/23_backlog/BACKLOG-NNN-slug.md docs/23_backlog/_archive/
-```
-
-Use `git mv` so history follows. Nothing else changes: ids are unaffected because
-file names are not reference keys (STANDARD §3), the validator still checks these
-files in full, and they still appear in `INDEX.md` with an `_archive/` prefix.
+**Do not move a file by hand.** A hand `git mv` skips the link rewrite. What the
+predicates do not cover — an approved Decision no ticket cites, a rejected Decision,
+a promoted Issue with no successor — is a person's call, and
+`/docs-kit:docs-archive` is where that call is made (`--settle`), with a report of
+every held chain. Mention it when the script leaves such a chain; do not settle
+from here. Nothing else changes: ids are unaffected because file names are not
+reference keys (STANDARD §3), the validator still checks these files in full, and
+they still appear in `INDEX.md` with an `_archive/` prefix.
 
 **Never archive anything in layer 1.** Layer 1 is state, not history — a component
 that no longer exists is removed by a Decision, not filed away. And never archive a

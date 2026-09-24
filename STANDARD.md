@@ -108,14 +108,32 @@ ticket* is not the same thing as *its tickets vanished* — is open. Until somet
 measures the difference, the conservative rule holds: a Decision with no successor is
 left where it can be read.
 
+**A person can close what the predicate cannot, one chain at a time.** Three shapes
+never become terminal by themselves: an approved Decision no Backlog item cites, a
+`rejected` Decision, and a `promoted` Issue with no successor. The predicate leaves all
+three in the hot set — `rejected` can mean *deferred*, and the one rejected Decision
+measured in a real repo carried a reopen condition. `docs_archive.py --settle <ID>`,
+driven by `/docs-kit:docs-archive`, is the declaration: it moves that chain, sets a
+settled Issue to `status: archived`, and appends one audit line that leads with the
+settled id and says why in its reason column. Any other id is refused, and a refusal
+writes nothing: a settle that could move an open ticket would be the one way the kit
+hides unfinished work. A Proposal follows its Decision — once the Decision is in
+`_archive/`, however it got there, the Proposal it names moves on the next run.
+
 **Archiving lowers read cost. It never lowers the standard a document is held to.**
 The validator walks `_archive/` exactly as it walks the folder above it — ids are
 collected, refs must still resolve, frontmatter is still checked. Skills read it only
 when an id points there.
 
 Moving a file is safe because §3 already guarantees it: file names are not reference
-keys. Use `git mv` so the history follows. Layer 1 is state, not history — it is never
-archived; a component that no longer exists is removed by a Decision, not filed away.
+keys. Use `git mv` so the history follows. **The move carries its relative links with
+it**: every `](path.md)` that resolved before a run — out of a moved file, or into one
+from anywhere — is rewritten to resolve after it, except in layer 1 and `92_audit/`,
+which a script never writes; those are printed with their replacement path. A link
+that was already broken is left for the validator's `[link]` check to name. Before
+0.40.0, seven moves in one repo left 44 broken links. Layer 1 is state, not history —
+it is never archived; a component that no longer exists is removed by a Decision, not
+filed away.
 
 ## 3. IDs and references
 

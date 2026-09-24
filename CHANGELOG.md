@@ -5,6 +5,93 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
+## [0.40.0] — 2026-09-19
+
+Cleaning up Layer 2 is now a thing you ask for by chain, and read before it
+happens. Three defects in the archiving it rests on were found on the way, all
+three by running it against real repos.
+
+### Added — `/docs-kit:docs-archive`, a chain report you approve before anything moves
+
+`docs_close --archive` answers "which files move", one line each. A person
+clearing out `20_issues/`–`23_backlog/` asks about chains — Issue → Proposal →
+Decision → Backlog — and needs the three answers a flat list cannot give: which
+chains are finished end to end, which will never close by themselves and why,
+and what the moves do to the links around them.
+
+`scripts/docs_archive.py` prints that as one markdown report with a fixed shape:
+a before → after table per folder, then `Complete`, `Needs a decision` (one row
+per reason, each with what would release it) and `In flight`, plus
+`Recorded from commits` and `Links` when they have something to say. It is
+**a view of the same plan `docs_close` executes**, not a second predicate. The
+skill relays it verbatim, investigates only the rows it may act on, asks once,
+applies, re-renders and validates.
+
+Run against six local repos before shipping, it found a chain `Needs a decision` in
+four. Three of them are real:
+
+| repo | what the report showed that the flat list could not |
+|---|---|
+| lop-hoc-zalo | a promoted Issue nothing cites, named in the bodies of three other documents — it was folded into another ticket |
+| long-wave-finder | an approved Decision with no Backlog item holding a three-document chain |
+| BO-trading | two Decisions with no ticket, and one `rejected` that means *deferred* and carries a reopen condition |
+
+The fourth is the `-000` example chain docs-init ships, whose Backlog item is `done`
+without an audit line — reported as such, which is the right answer.
+
+### Added — `--settle`, the declaration for the three shapes no predicate closes
+
+An approved Decision no ticket cites, a `rejected` Decision, and a `promoted`
+Issue with no successor all stay hot by rule (STANDARD §2 — the first is issue
+#2's "8 of 9"). Until now the only way out was a hand `git mv`, which skips
+everything below. `docs_archive.py --settle <ID> --why <reason>` moves that one
+chain, sets a settled Issue to `status: archived`, and appends an audit line
+that leads with the settled id. **Anything else is refused and the whole run
+writes nothing** — a settle that could move an open ticket would be the one way
+the kit hides unfinished work. Rejected stays out of the predicate on evidence:
+the one rejected Decision in a real repo meant "deferred until a second process
+is needed", and archiving it on a rule would file a live condition where nobody
+reads.
+
+### Fixed — the preview left out what the apply then moved
+
+Report mode skipped step 2's in-memory update, so an item a `Closes:` trailer was
+about to close was judged at its old status and left out of the `ARCHIVE` list —
+and `--apply`, which does update, moved it. Measured on a clone of a real
+executor tree: **preview 14, apply 16**. `plan()` now decides everything once
+and writes nothing; `execute()` writes exactly that plan, so the two cannot
+disagree. Across six real repos and seven executor trees the flat output changed
+only by those missing lines (all in executor trees) and the new link summary line.
+
+### Fixed — archiving broke the links it moved
+
+Moving a file into `_archive/` adds a directory level, so every relative link out
+of it and into it shifts by one. 0.38.0 made the validator see it (44 broken
+links in one repo); nothing stopped it. Every move now rewrites each `](path.md)`
+that **resolved before the run**, in both directions, so it resolves after.
+Layer 1 and `92_audit/` are never written — layer 1 changes only through a
+Decision, the log only by appending — so a link there is printed with its
+replacement path. A link that was already broken is left for `[link]` to name.
+Measured on a clone of lop-hoc-zalo archiving two documents: `[link]` notes went
+**1 → 6** with 0.39.0 and **1 → 1** now.
+
+### Fixed — a Proposal could be stranded behind its archived Decision
+
+The Decision pass moved a Proposal only together with a Decision that was still
+hot, so a Decision that reached `_archive/` first (by hand, or before its
+Proposal existed) left the Proposal hot forever. It now follows. No real repo was
+in that state; it is the direction `--settle` would otherwise have created.
+
+### CI
+
+New step *A chain report previews exactly what --apply moves*: seven chains
+covering every verdict, a refused settle (a Decision with an open ticket) that
+must write nothing, three settles, links out of, into and between moved files,
+a layer 1 link left alone, idempotence, and `--strict` clean apart from two
+planted broken links. Six mutations — dropping the preview simulation, the link
+write, the layer 1 guard, the settle eligibility test, the resolves-today check,
+and the refusal guard — each turn it red.
+
 ## [0.39.0] — 2026-09-12
 
 One word, because the board could say "the merge is missing" and could not say
