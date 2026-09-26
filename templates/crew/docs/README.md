@@ -16,7 +16,9 @@ Issue → (lane test, 3 câu — gates.md) → Backlog item
 
 Phiếu nằm trong một chuỗi (`after_ref:`) và được mở bằng `crew new <nnn>
 --chain` thì `crew done` không thả executor mà chuyển nó thẳng sang phiếu kế,
-nên một phiên mang trọn chuỗi (`tickets.md`).
+nên một phiên mang trọn chuỗi (`tickets.md`). Phiếu cần phiên riêng sau khi
+phiếu khác gộp, như nhánh phụ ở chỗ rẽ hay phiếu join, thì planner chờ bằng
+`scripts/crew wait <nnn>…` rồi mới mở.
 
 Và một vòng ngoài, nhịp tuần:
 

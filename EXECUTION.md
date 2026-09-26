@@ -137,6 +137,7 @@ lone ticket. With both in place:
 | `crew done <nnn>` | for a session carrying the chain, when a ticket runs after this one, the tree goes **straight** from `work/b<this>` to `work/b<next>`, cut from the dev branch that now holds this merge, and prints the chain's progress line; `--park` ends the chain session here instead. A session that opened the ticket without `--chain` gets a park tagged `[done:alone]` that names `scripts/crew new <next> --chain`. The carrying session's last `crew done` prints the tickets it carried, each with the sha that closed it and its logged size, for the final report |
 | `crew name executor` | adds `<first>→<last> ·` after the subject: `myapp · executor · b334 · d009 · 332→336 · e1 · processing` |
 | `crew status` | a `chains:` block: what landed, who holds which ticket (`(this ticket only)` when that session does not carry the chain), what is queued, and an arrow when no session carries a chain that has a ticket ready, with `--chain` when more than one ticket is left |
+| `crew wait <nnn> [<nnn>…]` (0.43.0) | blocks until every ticket named has landed, by the same `landed` test `crew new` gates on, and no tree still holds its branch; then prints each ticket whose `after_ref` names one of them, with the tree the chain's session took it into or the command that opens it. Polls the local dev branch every 30s, with no timeout |
 
 **The chain's executor never reads `idle` between two of its tickets.** A parked
 tree is a free tree (§5: detached and clean is the whole test), and a free tree
@@ -161,6 +162,37 @@ the session runs `crew new <next> --chain` from inside that tree, which
 close-out left uncommitted in the main tree, so the next `crew done` in the
 chain met check 2 — and 0.41.1 removed it: `crew done` now commits its own
 close-out, §6.)
+
+**Opening what a landed ticket unblocks is `crew wait`.** Reported in GitHub
+issue #5, which calls a chain a "lane" (in this kit a lane is STANDARD §5's
+fast/full choice): a planner ran five chains, three of them forking from one
+net ticket (an end-to-end tour of every screen), and one final ticket after
+those three. The chains after the net ticket got no chip until it merged, and
+the planner watched for that with a hand-written
+`until git fetch …; git log origin/dev --grep='Closes: …'` loop in its own
+session. `crew wait` is that loop as a command. It reads the local dev
+branch, because every session runs on one machine and `crew done`
+fast-forwards the main tree's dev branch before it pushes. Run in the
+background, it tells a planner the moment the fork's other chains can be opened,
+and it prints the command for each.
+
+It waits out one more window than the loop did. The closer reaches the dev
+branch at step 5 of `crew done`, and the tree moves on to the chain's next
+ticket only after the close-out and the push (§6). Exiting at the closer would
+print that next ticket as ready inside the window, and a chip opened for it
+would race the session carrying the chain into it. So `crew wait` also waits
+until no tree holds `work/b<nnn>`; a closer merged by hand into a tree nobody
+releases is waited on the same way, and the command says so once.
+
+**A ticket with more than one predecessor carries no `after_ref`.** The field
+holds one ticket, and pointing it at one of the chains is worse than leaving it
+off: `crew new` would gate on that chain alone, and the session carrying that
+chain would be handed the ticket by its last `crew done` while the other chains
+were still running. The planner leaves the field empty, runs
+`crew wait <last of each chain>…` in the background, and opens the ticket when
+it exits. A join in the field itself is left for a design pass: with three
+predecessors carried by three sessions, which session carries on into the join,
+and where the title's `first→last` walks back to, are both open.
 
 ## 2. Execution levels — where the work happens
 

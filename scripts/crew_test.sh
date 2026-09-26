@@ -2478,6 +2478,168 @@ else
 fi
 rm -rf "$QGR/.claude"
 
+# ---------------------------------------------------------------- crew wait (0.43.0)
+# GitHub issue #5: a planner opened the chips for dependent chains only once a net
+# ticket had merged, and watched for it with a hand-written `until git log
+# --grep` loop. `crew wait` is that loop as a command, on the same test `crew new`
+# gates on, and it also waits out the window between the closer landing and
+# `crew done` handing the tree on, so what it prints as ready is settled.
+GW="$TMP/wait"
+GWR="$GW/repo"
+mkdir -p "$GWR/scripts" "$GWR/docs/92_audit"
+(
+  cd "$GWR"
+  git init -q && git checkout -q -b main
+  git config user.email t@t && git config user.name t
+  printf '# audit log\n' > docs/92_audit/LOG.md
+  printf '{"owns": [], "crew": {"dev_branch": "main", "copy": [], "link": []}}\n' > .docs-kit.json
+  cp "$KIT/templates/crew/crew" scripts/crew && chmod +x scripts/crew
+  git add -A && git commit -qm init >/dev/null
+)
+gwticket() { # gwticket <nnn> <after nnn|-> — a Backlog item, committed
+  mkdir -p "$GWR/docs/23_backlog"
+  printf -- '---\nid: BACKLOG-%s\ndescription: "x"\nsource_ref: ISSUE-001\nstatus: open\n' "$1" \
+    > "$GWR/docs/23_backlog/t$1.md"
+  [ "$2" = "-" ] || printf 'after_ref: BACKLOG-%s\n' "$2" >> "$GWR/docs/23_backlog/t$1.md"
+  printf -- '---\n' >> "$GWR/docs/23_backlog/t$1.md"
+  ( cd "$GWR" && git add -A && git commit -qm "ticket $1" >/dev/null )
+}
+gwcrew() { (cd "$GWR" && CREW_DOCS_CLOSE="$KIT/scripts/docs_close.sh" CREW_WAIT_POLL=1 scripts/crew "$@") 2>&1; }
+gwwork() { # gwwork <nnn> — the ticket's work, committed with its closer in whichever tree holds it
+  for gwwork_d in "$GW"/repo-e*; do
+    [ "$(git -C "$gwwork_d" symbolic-ref --short HEAD 2>/dev/null)" = "work/b$1" ] || continue
+    ( cd "$gwwork_d" && echo "$1" > "work-$1.txt" && git add -A \
+        && git -c user.email=t@t -c user.name=t commit -qm "work $1" -m "Closes: BACKLOG-$1" )
+    return
+  done
+  bad "wait: no tree holds work/b$1"
+}
+gwbg() { # gwbg <out> <crew wait args…> — start a wait in the background; its pid in GWP
+  gwbg_o="$1"; shift
+  ( cd "$GWR" && CREW_WAIT_POLL=1 scripts/crew wait "$@" ) > "$gwbg_o" 2>&1 &
+  GWP=$!
+}
+gwexit() { # gwexit <pid> <seconds> → the wait's exit code, or 124 (and a kill) if it outlived them
+  gwexit_i=0
+  while kill -0 "$1" 2>/dev/null; do
+    gwexit_i=$((gwexit_i + 1))
+    [ "$gwexit_i" -gt $(($2 * 4)) ] && { kill "$1" 2>/dev/null; wait "$1" 2>/dev/null; return 124; }
+    sleep 0.25
+  done
+  wait "$1"
+}
+gwticket 101 -
+gwticket 102 101
+gwticket 103 101
+gwticket 104 -
+( cd "$GWR" && scripts/crew executor add >/dev/null 2>&1 && scripts/crew executor add >/dev/null 2>&1 )
+
+# Known-bad first: a number with no ticket, and no number at all.
+OUT="$(gwcrew wait 999)" && RC=0 || RC=$?
+[ "$RC" -ne 0 ] && has "$OUT" "BACKLOG-999 not found" \
+  && ok "wait: a number with no ticket is refused, not waited on forever" \
+  || bad "wait: unknown ticket (rc=$RC out: $OUT)"
+OUT="$(gwcrew wait)" && RC=0 || RC=$?
+[ "$RC" -ne 0 ] && has "$OUT" "usage: crew wait" \
+  && ok "wait: no number prints the usage" \
+  || bad "wait: no argument (rc=$RC out: $OUT)"
+
+# The refusal that sends a planner or an executor here names the command.
+OUT="$(gwcrew new 102)" && RC=0 || RC=$?
+[ "$RC" -ne 0 ] && has "$OUT" "[new:after]" && has "$OUT" "scripts/crew wait 101" \
+  && ok "wait: crew new refusing a chained ticket names crew wait for its predecessor" \
+  || bad "wait: [new:after] hint (rc=$RC out: $OUT)"
+
+# It blocks while the predecessor is open, and exits once crew done has handed
+# the tree on — naming the successor the chain's session took, and the one that
+# needs a session of its own.
+gwcrew new 101 --chain >/dev/null
+gwbg "$GW/w1" 101
+sleep 2
+kill -0 "$GWP" 2>/dev/null \
+  && ok "wait: blocks while the ticket is still open" \
+  || bad "wait: exited while 101 was open (out: $(cat "$GW/w1"))"
+has "$(cat "$GW/w1")" "waiting for 101 to land on main, checked every 1s · 101 in e1" \
+  && ok "wait: says once what it waits for and where the ticket is" \
+  || bad "wait: opening line (out: $(cat "$GW/w1"))"
+gwwork 101
+gwcrew done 101 >/dev/null
+gwexit "$GWP" 10 && RC=0 || RC=$?
+OUT="$(cat "$GW/w1")"
+S101="$(git -C "$GWR" log -1 --format=%h --grep='^Closes: BACKLOG-101' main)"
+if [ "$RC" -eq 0 ] && has "$OUT" "BACKLOG-101 landed on main ($S101)" \
+   && has "$OUT" "102  in e1, carried on by the chain's session" \
+   && has "$OUT" "103  ready: scripts/crew new 103"; then
+  ok "wait: exits 0 once 101 lands, and names what the chain took and what is left to open"
+else
+  bad "wait: after crew done 101 (rc=$RC out: $OUT)"
+fi
+
+# A ticket already landed returns at once.
+OUT="$(gwcrew wait 101)" && RC=0 || RC=$?
+[ "$RC" -eq 0 ] && has "$OUT" "BACKLOG-101 landed on main" \
+  && ok "wait: a ticket already landed returns at once" \
+  || bad "wait: already landed (rc=$RC out: $OUT)"
+
+# The window between the closer landing and the tree moving on. A closer merged
+# into the dev branch by hand while e1 still holds work/b102 is the same state
+# crew done passes through between step 5 and its handoff, held open here.
+gwwork 102
+gwbg "$GW/w2" 102
+( cd "$GWR" && git merge -q --ff-only work/b102 )
+sleep 3
+if kill -0 "$GWP" 2>/dev/null && has "$(cat "$GW/w2")" "e1 still holds work/b102"; then
+  ok "wait: a landed ticket whose tree still holds its branch is waited on, and said so"
+else
+  bad "wait: exited inside the handoff window (out: $(cat "$GW/w2"))"
+fi
+[ "$(grep -c 'still holds' "$GW/w2")" -eq 1 ] \
+  && ok "wait: the held tree is reported once, not on every poll" \
+  || bad "wait: held line count (out: $(cat "$GW/w2"))"
+git -C "$GW/repo-e1" switch -q --detach main
+gwexit "$GWP" 10 && RC=0 || RC=$?
+[ "$RC" -eq 0 ] && has "$(cat "$GW/w2")" "BACKLOG-102 landed on main" \
+  && ok "wait: exits once the tree lets go of the branch" \
+  || bad "wait: after the park (rc=$RC out: $(cat "$GW/w2"))"
+
+# Several numbers wait for all of them: how a ticket with more than one
+# predecessor is opened, since after_ref holds one.
+gwcrew new 103 >/dev/null
+gwcrew new 104 >/dev/null
+gwbg "$GW/w3" 103 104
+gwwork 103
+gwcrew done 103 >/dev/null
+sleep 2
+if kill -0 "$GWP" 2>/dev/null && has "$(cat "$GW/w3")" "BACKLOG-103 landed on main"; then
+  ok "wait: with two numbers, one landing is reported and the wait goes on"
+else
+  bad "wait: two numbers, first landed (out: $(cat "$GW/w3"))"
+fi
+gwwork 104
+gwcrew done 104 >/dev/null
+gwexit "$GWP" 10 && RC=0 || RC=$?
+[ "$RC" -eq 0 ] && has "$(cat "$GW/w3")" "BACKLOG-104 landed on main" \
+  && ok "wait: with two numbers, exits once the last one lands" \
+  || bad "wait: two numbers, both landed (rc=$RC out: $(cat "$GW/w3"))"
+
+# A ticket nobody has opened holds no tree, so only the landed test keeps the
+# wait going: every ticket above was in a tree, which blocks on its own.
+gwticket 105 -
+gwbg "$GW/w4" 105
+sleep 2
+if kill -0 "$GWP" 2>/dev/null && has "$(cat "$GW/w4")" "105 not opened yet"; then
+  ok "wait: a ticket nobody opened yet is waited on, and said so"
+else
+  bad "wait: ticket not opened (out: $(cat "$GW/w4"))"
+fi
+gwcrew new 105 >/dev/null
+gwwork 105
+gwcrew done 105 >/dev/null
+gwexit "$GWP" 10 && RC=0 || RC=$?
+[ "$RC" -eq 0 ] && has "$(cat "$GW/w4")" "BACKLOG-105 landed on main" \
+  && ok "wait: exits once a ticket opened after the wait began lands" \
+  || bad "wait: late-opened ticket (rc=$RC out: $(cat "$GW/w4"))"
+
 # ---------------------------------------------------------------- summary
 echo ""
 echo "crew_test: $PASS passed, $FAIL failed"

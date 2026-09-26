@@ -5,6 +5,77 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
+## [0.43.0] — 2026-09-26
+
+A planner can now wait for a ticket to land with a crew command, and learn from
+it which tickets that landing lets start, instead of watching the dev branch with
+a loop of its own.
+
+### Added — `crew wait <nnn> [<nnn>…]`
+
+Reported in GitHub issue #5, from a repo with a pool of six executors. A planner
+ran five chains, three of them forking from one net ticket (an end-to-end tour of
+every screen), and one final ticket after those three. The chains after the net
+ticket got no chip until it merged, and the planner watched for that with a
+hand-written loop in its own session:
+
+```
+until git fetch -q origin; git log origin/dev --grep='Closes: BACKLOG-369' | grep -q .; do sleep 60; done
+```
+
+| Where | Now |
+|---|---|
+| `crew wait <nnn> [<nnn>…]` | blocks until every ticket named has landed and no tree still holds its branch, then exits 0. It prints one opening line saying where each ticket is (`in e1`, `in main`, `not opened yet`, `landed`), one line per ticket as it lands with the sha that closed it, and then each ticket whose `after_ref` names one of them: `in e1, carried on by the chain's session`, or `ready: scripts/crew new 103`, or fast-pair in the main tree. Several numbers wait for all of them |
+| `landed` | one function for "is this ticket on the dev branch": its closer there, or its doc reading done. `crew new` gated on the same two tests written inline; it now calls this, and `crew wait` exits on it, so the gate cannot mean two things |
+| `crew new` refusing with `[new:after]` | adds `to be told when it lands: scripts/crew wait <predecessor>`, except when the session holding the predecessor carries the chain, since that session opens the ticket itself |
+| EXECUTION §1, `tickets.md`, the crew README, planner hat | how to open the other tickets at a fork, and a ticket with more than one predecessor, with `crew wait` run in the background |
+
+**It reads the local dev branch, not the remote.** Every crew session runs on one
+machine, and `crew done` fast-forwards the main tree's dev branch before it
+pushes, so a fetch loop only adds the push's latency. It polls every 30s, which
+costs one `git log` and one read of `docs/23_backlog/`, and has no timeout, like
+`crew lock acquire --wait`.
+
+**It also waits for the tree to let go.** The closer reaches the dev branch at
+step 5 of `crew done`, and the tree moves on to the chain's next ticket only
+after the close-out and the push. Exiting at the closer would print that next
+ticket as ready inside the window, and a chip opened for it then races the
+session carrying the chain into it. So a landed ticket whose tree still holds
+`work/b<nnn>` is waited on until `crew done` has handed the tree on or parked it.
+A closer merged by hand into a tree nobody releases is waited on the same way,
+and said so once. The test suite shows the window is real: with this check
+removed, the wait on a real `crew done 101` exited early in three runs out of
+three and printed `102  ready: scripts/crew new 102`, the ticket the chain's
+session was about to take. That check depends on the timing of the poll, so a
+second one holds the window open deterministically.
+
+### Changed — a ticket with more than one predecessor carries no `after_ref`
+
+Found while answering issue #5, which asks for `after:` as a list so a final
+ticket can wait on three chains. `after_ref` holds one ticket, and pointing it at
+one of the chains is worse than leaving it off: `crew new` gates on that chain
+alone, and the session carrying it is handed the final ticket by its last
+`crew done` while the other chains are still running. EXECUTION §1, `tickets.md`
+and the planner hat now say to leave the field empty and open the ticket when
+`crew wait <last of each chain>…` exits. A join in the field itself is left for a
+design pass: which of three carrying sessions goes on into it, and where the
+title's `first→last` walks back to, are both open.
+
+### Tests
+
+Fourteen checks on a fixture with two executors, known-bad first: a number with
+no ticket and no number at all are refused. The blocking checks run a real wait
+in the background with `CREW_WAIT_POLL=1`. One waits through a real `crew done`
+of a chain ticket and expects both the carried successor and the fork's other
+ticket to be named; one holds the handoff window open by merging a closer by hand
+while the tree keeps its branch; one waits on two tickets that land apart; one
+waits on a ticket nobody has opened yet. On 0.42.6's `crew`, all fourteen are red.
+Six mutations each turn their own checks red: no held-tree check, exiting on the
+first ticket instead of the last, no hint on `[new:after]`, the held line printed
+on every poll, no successor block, and no landed test. The last one was invisible
+at first: every waited ticket sat in a tree, so the held-tree check blocked on
+its own, and the not-opened-yet check was added for it. Suite 244 → 258.
+
 ## [0.42.6] — 2026-09-26
 
 A page rendered, an archive report printed or a feedback report filed from a

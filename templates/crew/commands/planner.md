@@ -207,6 +207,23 @@ nằm trên một nhánh không ai làm. Giao phiếu đầu của một chuỗi
 đơn giờ an toàn: cây được thả, và mũi tên trên `crew status` ghi sẵn lệnh cho
 phiên kế tiếp.
 
+**Chỗ rẽ và phiếu join mở bằng `crew wait`.** Tại chỗ rẽ, phiên mang chuỗi chỉ
+đi tiếp vào phiếu có số nhỏ nhất, nên các phiếu còn lại cần phiên riêng, và chúng
+chỉ mở được khi phiếu đứng trước đã gộp. Đừng dựng chip cho chúng sớm, vì
+`crew new` sẽ từ chối và executor dừng lại. Hãy chạy lệnh dưới đây ở chế độ nền
+(`run_in_background`), rồi dựng chip cho từng phiếu theo lệnh nó in ra khi thoát:
+
+```
+scripts/crew wait <phiếu đứng trước>
+```
+
+Phiếu join (chờ nhiều chuỗi cùng xong) thì để trống `after_ref`, vì trỏ vào một
+chuỗi sẽ khiến phiên mang chuỗi đó nhận luôn phiếu join khi các chuỗi kia chưa
+xong. Chạy `scripts/crew wait <phiếu cuối của mỗi chuỗi>…` ở chế độ nền và dựng
+chip khi lệnh thoát. Lệnh đọc nhánh dev ở cây chính nên không cần `git fetch`.
+Tiến trình nền thuộc về phiên planner, nên đóng phiên thì việc chờ cũng dừng. Khi
+quay lại, chỉ cần chạy lại lệnh: phiếu nào đã gộp thì nó báo ngay và thoát.
+
 **Prompt cho `fast-pair`:**
 
 ```

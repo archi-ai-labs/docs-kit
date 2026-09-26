@@ -97,6 +97,7 @@ thuộc chuỗi nào:
 | `crew done 332` | phiên mang chuỗi: chuyển cây thẳng từ `work/b332` sang `work/b333` mà không park ở giữa, rồi in một dòng tiến độ; thêm `--park` thì chuỗi dừng tại đây. Phiên mở 332 không có `--chain`: cây được thả kèm `[done:alone]` và lệnh `scripts/crew new 333 --chain` cho phiên kế |
 | `crew done` cuối của chuỗi | in khối `carried  :` gồm các phiếu phiên đã mang, sha đóng từng phiếu và cỡ đã ghi, làm nguồn cho báo cáo cuối |
 | `crew status` | khối `chains:` cho biết phiếu nào đã gộp, executor nào giữ phiếu nào (thêm `(this ticket only)` khi phiên đó không mang chuỗi), phiếu nào đang chờ |
+| `crew wait 332` | chặn cho tới khi 332 đã gộp vào nhánh dev (cùng phép thử mà `crew new` dùng) và không cây nào còn giữ `work/b332`, rồi in từng phiếu có `after_ref` trỏ về 332: cây mà phiên mang chuỗi đã nhận nó, hoặc lệnh để mở nó. Nhận nhiều số thì chờ đủ tất cả |
 
 **Cây của chuỗi không lúc nào rảnh giữa hai phiếu.** Cây đã park là cây rảnh, và
 `crew new` của một phiên khác sẽ lấy đúng cây rảnh ấy. Vì vậy `crew done` chuyển
@@ -107,6 +108,19 @@ nhánh (fork) là một cây. Tại chỗ rẽ, `crew done` đi tiếp vào phi�
 nhất chưa xong và nêu tên các phiếu còn lại, vì mỗi phiếu ấy cần một phiên
 riêng. Phiếu kế tiếp khai `execution: fast-pair` thì chạy ở cây chính, nên cây
 executor được park.
+
+Các phiếu còn lại ở chỗ rẽ chỉ mở được khi phiếu đứng trước đã gộp. Để biết lúc
+đó, planner chạy `scripts/crew wait <phiếu trước>` ở chế độ nền (background) rồi
+mở phiên cho từng phiếu theo lệnh mà nó in ra. Lệnh này chờ thêm cả khoảng giữa
+lúc closer vào nhánh dev và lúc `crew done` chuyển cây, vì nếu thoát sớm hơn thì
+nó sẽ báo phiếu kế là sẵn sàng trong khi phiên mang chuỗi sắp nhận chính phiếu đó.
+
+**Phiếu có nhiều phiếu đứng trước (join) thì để trống `after_ref`.** Trường này
+chỉ chứa một số. Nếu trỏ nó vào một chuỗi thì `crew new` chỉ chặn theo chuỗi đó,
+còn phiên mang chuỗi ấy sẽ được `crew done` chuyển thẳng sang phiếu join trong
+khi các chuỗi kia vẫn đang chạy. Cách đúng là chạy
+`scripts/crew wait <phiếu cuối của mỗi chuỗi>…` ở chế độ nền, và mở phiếu join khi
+lệnh thoát.
 
 Từ 0.41.1, `crew done` tự commit phần đóng sổ (`status: done` và dòng audit) lên
 nhánh dev trước khi push. Vì vậy chuỗi chạy liền từ phiếu này sang phiếu kế mà
