@@ -5,6 +5,52 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
+## [0.42.5] — 2026-09-26
+
+An executor now has one documented way to preview its own tree in the Browser
+pane, and a `crew done` stopped by a preview config in the main tree says what
+the file is and how to put it back.
+
+### Fixed — previewing a pool tree dirtied the main tree or showed the wrong code
+
+The desktop app's Browser pane reads `.claude/launch.json` only from the
+session's root, which for an executor is the main tree, and nothing in the kit
+said so. Measured on 2026-09-26 over 46 executor sessions in the four crew repos:
+9 previewed a pool tree, and each improvised.
+
+| What they did | Sessions | What happened |
+|---|---|---|
+| added a `cd ../<repo>-e<k> && …` config to the main tree's tracked `launch.json` and kept it while the server ran | 2 | the right tree, and a dirty main tree: one kept it dirty for over three hours, and another executor's `crew done` waited behind it for 1h33 |
+| named a config from their own tree's `launch.json`, or the main tree's | 3 | the pane ran the main tree's server, no error: a name the main tree does not have starts another config from there |
+| opened `file://` in their tree | 5 | failed every time, once with the file present |
+| started a server from their tree and opened it by URL | 2 | worked |
+
+Three behaviours were tried on the same day with the pane itself: a name found
+only in a second folder's `launch.json` started the main tree's config; deleting
+`launch.json` after `preview_start` left the server running, with `preview_logs`
+and `preview_stop` still working; a server started from another folder and opened
+by URL showed that folder, with the main tree untouched.
+
+| Where | Now |
+|---|---|
+| `worktrees.md` | a section "Xem trước một cây executor": the three measured failures, the URL path in four steps (server from your tree on a port from the ticket number, wait for the port, `preview_start url`, stop it yourself), and for a named config, put `launch.json` back right after `preview_start` |
+| executor hat, step 2 | two lines pointing there |
+| `crew done` check 2 | still refuses, then adds `[done:preview]` when `.claude/launch.json` is among the files, with the `git checkout` that puts a tracked one back, or for a new one, remove it or keep it local through `.gitignore`. It asks git about that one path, since a new `.claude/` shows as `?? .claude/` in check 2's list |
+| EXECUTION §6 | says so, and why the file is not exempted |
+
+Considered and dropped: exempting `.claude/launch.json` from check 2. It would
+have unblocked 1 of the 11 real check-2 refusals in the four repos and none of the
+wrong-tree previews, it would be the first file check 2 does not count, and a
+ticket whose own merge touched the file would fail the fast-forward and be
+reported as "dev kept moving".
+
+Four checks. On 0.42.4 the two hint checks are red; exempting the file turns
+three red, a hint on any dirty file turns the "other file" check red, and reading
+the name off check 2's list turns the untracked check red. Suite 240 → 244. The
+fix reaches a repo through `/docs-kit:crew-update`. A repo whose own memory
+teaches the old recipe (put `launch.json` back after `preview_stop`) keeps
+following it until that memory changes.
+
 ## [0.42.4] — 2026-09-26
 
 `crew done` now prints a few lines for the repo's typecheck and tests instead of

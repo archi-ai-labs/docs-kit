@@ -2427,6 +2427,57 @@ else
 fi
 rm -f "$QG/red"
 
+# ---------------------------------------------------------------- a preview config in the main tree (0.42.5)
+# The Browser pane reads .claude/launch.json only from the main tree, so an
+# executor previewing its own tree adds a config there. Measured 2026-09-26: one
+# such edit kept a main tree dirty for over three hours, and another executor's
+# crew done waited behind it for 1h33 with the file listed and nothing more.
+# Check 2 still refuses (it counts every file); the refusal now says what the
+# file is and how to put it back. Ticket 002 is still on e1 from the red run.
+mkdir -p "$QGR/.claude"
+printf '{"version": "0.0.1", "configurations": [{"name": "app", "runtimeExecutable": "npm", "runtimeArgs": ["run", "dev"], "port": 3000}]}\n' \
+  > "$QGR/.claude/launch.json"
+( cd "$QGR" && git add .claude/launch.json && git commit -qm "preview config" )
+printf '{"version": "0.0.1", "configurations": [{"name": "app", "port": 3000}, {"name": "repo-e1-b002", "runtimeExecutable": "sh", "runtimeArgs": ["-c", "cd ../repo-e1 && npm run dev -- -p 3002"], "port": 3002}]}\n' \
+  > "$QGR/.claude/launch.json"
+OUT="$(qdone 2)" && RC=0 || RC=$?
+if [ "$RC" -ne 0 ] && has "$OUT" "check 2: main tree is dirty" && has "$OUT" "[done:preview]" \
+   && has "$OUT" "checkout -- .claude/launch.json"; then
+  ok "preview: a tracked launch.json edit still stops check 2, and the refusal says what it is and how to put it back"
+else
+  bad "preview: tracked launch.json at check 2 (rc=$RC out: $OUT)"
+fi
+git -C "$QGR" checkout -q -- .claude/launch.json
+OUT="$(qdone 2)" && RC=0 || RC=$?
+[ "$RC" -eq 0 ] \
+  && ok "preview: the remedy the refusal prints is enough for the rerun to land" \
+  || bad "preview: crew done after putting launch.json back (rc=$RC out: $OUT)"
+# The other two shapes. A dirty file that is NOT launch.json must not get the
+# tag, or the hint teaches the wrong fix. And a launch.json in a .claude/ git
+# has never seen shows up in plain porcelain as `?? .claude/`, name hidden.
+( cd "$QGR" && git rm -q -r .claude && git commit -qm "drop preview config" )
+qticket 003
+( cd "$QGR" && scripts/crew new 3 >/dev/null 2>&1 )
+qwork 003
+echo "draft" > "$QGR/notes.txt"
+OUT="$(qdone 3)" && RC=0 || RC=$?
+if [ "$RC" -ne 0 ] && has "$OUT" "check 2: main tree is dirty" && ! has "$OUT" "[done:preview]"; then
+  ok "preview: any other dirty file is refused without the preview hint"
+else
+  bad "preview: a non-launch.json dirty file (rc=$RC out: $OUT)"
+fi
+rm -f "$QGR/notes.txt"
+mkdir -p "$QGR/.claude"
+printf '{"version": "0.0.1", "configurations": []}\n' > "$QGR/.claude/launch.json"
+OUT="$(qdone 3)" && RC=0 || RC=$?
+if [ "$RC" -ne 0 ] && has "$OUT" "?? .claude/" && has "$OUT" "[done:preview]" \
+   && has "$OUT" "new and untracked"; then
+  ok "preview: an untracked launch.json is named even when porcelain shows only its folder"
+else
+  bad "preview: untracked launch.json at check 2 (rc=$RC out: $OUT)"
+fi
+rm -rf "$QGR/.claude"
+
 # ---------------------------------------------------------------- summary
 echo ""
 echo "crew_test: $PASS passed, $FAIL failed"

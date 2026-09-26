@@ -64,6 +64,44 @@ Một ranh giới là luật chứ không phải tính năng thiếu: phiếu **
 lồng thì mở ở crew của chính repo đó, vì executor không cô lập được sửa đổi bên
 trong, còn sửa trên bản copy thì không nằm trên nhánh.
 
+## Xem trước một cây executor
+
+Browser pane của app desktop chỉ đọc `.claude/launch.json` ở thư mục gốc của
+phiên, và với executor thì đó là **cây chính** chứ không phải cây của phiếu. Vì
+vậy ba cách làm quen tay đều hỏng, và cả ba đã được đo ngày 2026-09-26 trên bốn
+repo:
+
+| Cách làm | Chuyện xảy ra |
+|---|---|
+| Ghi cấu hình vào `launch.json` trong cây executor rồi gọi `preview_start` theo tên đó | lệnh không báo lỗi mà chạy một cấu hình của cây chính, nên bạn xem mã của nhánh dev thay vì mã của phiếu (2/2 lần) |
+| Thêm cấu hình `cd ../<repo>-e<k> && …` vào `launch.json` của cây chính và để đó tới lúc `preview_stop` | xem đúng cây, nhưng tệp này thường được track nên cây chính bẩn suốt lúc server chạy, và `crew done` của mọi executor khác dừng ở kiểm 2 (một lần chờ hơn 1 giờ 30 phút) |
+| Mở `file://` trỏ vào cây executor | hỏng 5/5 lần, kể cả khi tệp có thật |
+
+Cách chạy đúng là bật server từ chính cây của bạn rồi mở nó bằng URL:
+
+1. Bật server bằng Bash với `run_in_background`, đứng trong cây của bạn, ở một
+   cổng theo số phiếu để khỏi đụng phiên khác, ví dụ `3157` cho `work/b157`.
+   Repo có khoá cho dev server thì lấy khoá trước bằng `scripts/crew lock acquire`.
+2. Chờ tới khi cổng trả lời, ví dụ bằng `curl -s -o /dev/null
+   http://localhost:3157`. Gọi `preview_start` trước lúc server lắng nghe thì
+   pane chỉ mở một trang trắng.
+3. Gọi `preview_start` với `url: http://localhost:3157`, rồi đọc trang như mọi
+   lần. Cây chính không bị đụng tới.
+4. Xong thì tự dừng tiến trình nền bạn đã bật, vì server đó không do pane quản
+   lý.
+
+Khi cần một cấu hình có tên, ví dụ để pane tự chọn cổng (`autoPort`) hay để đọc
+log bằng `preview_logs`, thì thêm nó vào `launch.json` của cây chính, gọi
+`preview_start`, rồi **trả tệp về ngay** bằng `git -C <cây chính> checkout --
+.claude/launch.json`. Server đã chạy vẫn sống, còn `preview_logs` và
+`preview_stop` vẫn dùng được (đã thử ngày 2026-09-26), nên không có lý do giữ tệp
+bẩn tới lúc `preview_stop`. Repo nào đưa `.claude/launch.json` vào `.gitignore`
+thì không cần bước trả tệp, vì kiểm 2 không thấy tệp bị ignore.
+
+Gặp `[done:preview]` ở kiểm 2 nghĩa là một phiên khác đã để lại tệp này trong cây
+chính. Dòng đó in sẵn lệnh trả tệp về, và chạy lệnh ấy không dừng server của
+phiên kia. Phiên ấy chỉ phải thêm lại cấu hình nếu muốn bật lại server theo tên.
+
 ## Gộp — chạy lệnh, không gõ lại
 
 ```

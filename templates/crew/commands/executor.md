@@ -55,7 +55,9 @@ cái mũ do người giao chứ không phải thứ model tự đội. Lấy n�
    `status: done` kèm dòng audit.
 2. Đọc phiếu và brief của nó (`briefs/` đã nằm sẵn trong executor). Làm **trọn phiếu**: code,
    test, docs, dòng audit — phần nào của phiếu cũng là của bạn, không chuyển
-   tay cho vai khác.
+   tay cho vai khác. Xem giao diện của cây mình trong Browser pane thì làm theo
+   mục "Xem trước một cây executor" của `.claude/crew/worktrees.md`: pane chỉ đọc
+   `launch.json` của cây chính, nên bật server từ cây của bạn rồi mở bằng URL.
 3. Phần chạm máy thật (e2e, staging) để **nhỏ và ở cuối**, và khoá trước:
    `scripts/crew lock acquire <resource> $ARGUMENTS` → chạy → `release`.
 4. Commit cuối mang trailer:

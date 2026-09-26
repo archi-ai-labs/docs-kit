@@ -668,6 +668,31 @@ Stated ceiling: an executor branch that commits a rendered `INDEX.md` of its own
 now meets a merge conflict on that generated file at step 1. None of the
 ticket commits measured in four repos did so.
 
+**Check 2 names a preview config, and the hat says how to preview a tree
+(0.42.5).** The desktop app's Browser pane reads `.claude/launch.json` only from
+the session's root, which for an executor is the main tree. Measured on
+2026-09-26 over 46 executor sessions in four repos: 9 previewed a pool tree, and
+none had a documented way to. Two added a `cd ../<repo>-e<k> && …` config to the
+main tree's tracked `launch.json` and kept it there while their server ran; one of
+those held a main tree dirty for over three hours, and another executor's
+`crew done` waited behind it for 1h33 with the file listed and nothing more. Three
+previewed the main tree's code instead of their own: a name that is not in the
+main tree's `launch.json` does not fail, it starts another config from there
+(reproduced the same day with a config in a second folder). Five `file://` opens
+of a pool tree failed, including one whose file existed. So `worktrees.md` now
+gives one path, a server started from the executor's own tree and opened by URL,
+which never touches the main tree, and says that a named config, when needed, is
+put back right after `preview_start`: a server already started from it keeps
+running, and `preview_logs` and `preview_stop` keep working, tried the same day.
+Check 2 still refuses on the file, because it counts every file; it now also
+prints `[done:preview]`, what the file is and the command that puts it back. It
+asks git about that one path rather than reading its own list, because a new
+`.claude/` shows there as `?? .claude/`. Considered and dropped: exempting the
+file from check 2. It would have unblocked 1 of the 11 real check-2 refusals in
+those repos and none of the wrong-tree previews, it would be the first file check
+2 does not count, and a ticket whose own merge touched the file would then fail
+the fast-forward and be reported as "dev kept moving".
+
 **A closer that skipped its branch is named, not refused (0.42.2).** Measured
 twice on 2026-09-24 with a real executor session (Haiku): it ran `crew new 332`
 and got e1 on `work/b332`, then committed the ticket's work, trailer and all,

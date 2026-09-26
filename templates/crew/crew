@@ -929,6 +929,27 @@ CO_PATHS
   fi
 }
 
+# preview_hint — check 2's third usual suspect, named when it is the one. The
+# desktop app's Browser pane reads .claude/launch.json only from the session's
+# root, which for an executor is the MAIN tree, so a session that wants its own
+# tree previewed adds a `cd ../<repo>-e<k> && …` config there, and the main tree
+# stays dirty for as long as that server runs. Measured 2026-09-26: one such edit
+# kept a main tree dirty for over three hours, and another executor's crew done
+# sat behind it in a wait loop for 1h33, the file listed but never explained.
+# Putting the file back is safe for everyone: a server already started from it
+# keeps running, and preview_logs / preview_stop keep working (tried the same
+# day). It is still a refusal: check 2 counts every file, and this only says
+# what the file is. Asked by pathspec, not read off check 2's list: a brand-new
+# .claude/ shows up there as `?? .claude/`, which hides the name.
+preview_hint() {
+  PH="$(git -C "$MAIN" status --porcelain -- .claude/launch.json 2>/dev/null)"
+  case "$PH" in
+    '') return 0 ;;
+    '??'*) note "[done:preview] .claude/launch.json is a Browser-pane preview config, new and untracked: a session added it to preview its own tree. Remove it, or keep it local through .gitignore; a server already started from it keeps running (.claude/crew/worktrees.md)" ;;
+    *) note "[done:preview] .claude/launch.json holds a Browser-pane preview config a session added for its own tree. git -C \"$MAIN\" checkout -- .claude/launch.json puts it back, and a server already started from it keeps running (.claude/crew/worktrees.md)" ;;
+  esac
+}
+
 cmd_done() {
   require_on
   PARK=0; NA=""
@@ -986,6 +1007,7 @@ cmd_done() {
     DIRTY="$(git -C "$MAIN" status --porcelain)"
     if [ -n "$DIRTY" ]; then
       echo "$DIRTY" | sed 's/^/  /' >&2
+      preview_hint >&2
       die "check 2: main tree is dirty (files above) — an open fast-pair edit, or a close-out nobody committed ([done:closeout])? commit or stash it, then rerun"
     fi
     # 5. Fast-forward only; if the dev branch moved underneath us, go around
