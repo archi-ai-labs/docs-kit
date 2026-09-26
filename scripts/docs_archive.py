@@ -33,6 +33,7 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from docs_close import (ANY_ID_RE, execute, fm_str, plan)  # noqa: E402
+from docs_render import project_name  # noqa: E402
 
 KINDS = ("ISSUE", "PROPOSAL", "DECISION", "BACKLOG")
 FOLDER = {"ISSUE": "20_issues", "PROPOSAL": "21_proposals",
@@ -200,7 +201,7 @@ def report(root, p, applied, show_all):
 
     n_moves = len(p.moves)
     n_links = sum(len(c) for _, _, c in p.rewrites)
-    out = ["## docs-archive · %s · %s" % (root.name, "applied" if applied else "preview"), ""]
+    out = ["## docs-archive · %s · %s" % (project_name(root), "applied" if applied else "preview"), ""]
     if applied:
         out.append("Đã chuyển %d document vào `_archive/` bằng `git mv` và sửa %d link. "
                    "Chưa commit." % (n_moves, n_links) if n_moves

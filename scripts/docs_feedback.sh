@@ -214,6 +214,19 @@ KIT_VERSION="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p'
 [ -n "$KIT_VERSION" ] || KIT_VERSION="unknown"
 
 REPO_NAME="$(basename "$ROOT")"
+# From a linked worktree (a crew executor's `<repo>-e<k>`), the folder names the
+# checkout, so the main tree, the first entry of `git worktree list`, names the
+# project. Same rule as project_name() in docs_render.py; change the two together.
+if command -v git >/dev/null 2>&1; then
+  FB_TOP="$(git -C "$ROOT" rev-parse --show-toplevel 2>/dev/null || true)"
+  if [ -n "$FB_TOP" ] && [ "$(cd "$FB_TOP" && pwd -P)" = "$(cd "$ROOT" && pwd -P)" ]; then
+    FB_MAIN="$(git -C "$ROOT" worktree list --porcelain 2>/dev/null | awk '
+      /^worktree / { if (p != "") exit; p = substr($0, 10); next }
+      /^bare$/     { p = ""; exit }
+      END          { print p }')"
+    [ -z "$FB_MAIN" ] || REPO_NAME="$(basename "$FB_MAIN")"
+  fi
+fi
 
 REPO_REV="unknown"
 if command -v git >/dev/null 2>&1 \

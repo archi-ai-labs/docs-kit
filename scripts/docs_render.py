@@ -122,6 +122,34 @@ def git_ref(root):
     return "no git"
 
 
+def project_name(root):
+    """The project's name, which is the main tree's folder name even from a linked worktree.
+
+    A folder name inside a worktree names the checkout, not the project: a crew
+    executor sits in `<repo>-e<k>`, and an archive run in a clean worktree sits
+    wherever it was added. GitHub issue #5 rendered pages titled after the worktree
+    until a junction named after the repo was put in front of it. The main tree is
+    the first entry of `git worktree list`, the same resolution `crew` makes.
+
+    Only a root that IS a worktree's top level is renamed, so a docs root below
+    the top of a larger repo keeps its own folder name, as before. A bare main
+    repository has no folder named after the project, so it keeps the old name too.
+    docs_feedback.sh repeats this rule in bash; change the two together.
+    """
+    try:
+        def run(*args):
+            return subprocess.run(["git", "-C", str(root)] + list(args),
+                                  capture_output=True, text=True, timeout=10)
+        top = run("rev-parse", "--show-toplevel")
+        if top.returncode == 0 and Path(top.stdout.strip()).samefile(root):
+            first = run("worktree", "list", "--porcelain").stdout.split("\n\n")[0].splitlines()
+            if first and first[0].startswith("worktree ") and "bare" not in first[1:]:
+                return Path(first[0][len("worktree "):]).name
+    except Exception:
+        pass
+    return root.name
+
+
 def renderer_version(script_dir):
     try:
         manifest = script_dir.parent / ".claude-plugin" / "plugin.json"
@@ -4311,7 +4339,7 @@ def main():
     script_dir = Path(__file__).resolve().parent
     dt = now()
     ctx = {
-        "project": root.name,
+        "project": project_name(root),
         "ref": git_ref(root),
         "date": dt.strftime("%Y-%m-%d"),
         "stamp": dt.strftime("%Y-%m-%d %H:%M"),

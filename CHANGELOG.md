@@ -5,6 +5,43 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
+## [0.42.6] — 2026-09-26
+
+A page rendered, an archive report printed or a feedback report filed from a
+worktree now carries the project's name, not the name of the checkout it was
+made in.
+
+### Fixed — three scripts named the project after the folder they ran in
+
+Reported in GitHub issue #5, from a repo with a pool of six executors: the planner
+archived its own tickets in a clean worktree so the render would not pick up other
+sessions' uncommitted docs, and every page came out titled after that worktree
+until a junction named after the repo was put in front of it. The same holds for
+any executor, whose tree is `<repo>-e<k>`: rendered on 0.42.4 from `myapp-e2`, the
+pages read `myapp-e2 · docs`. Two more scripts took the name the same way.
+
+| Where | Before, run from `myapp-e2` | Now |
+|---|---|---|
+| `docs_render.py`, every page's title and header | `myapp-e2` | `myapp` |
+| `docs_archive.py`, the report's first line | `## docs-archive · myapp-e2 · preview` | `## docs-archive · myapp · preview` |
+| `docs_feedback.sh`, the `repo:` field of a new report | `repo: "myapp-e2"` | `repo: "myapp"` |
+
+The name is the main tree's folder, read as the first entry of
+`git worktree list`, the resolution `crew` already makes for `REPO`. One function,
+`project_name()` in `docs_render.py`, which `docs_archive.py` imports;
+`docs_feedback.sh` is bash and repeats the rule, with a comment on each side
+saying so. Only a root that is a worktree's top level is renamed. A docs root
+below the top of a larger repo keeps its own folder name, and so does a worktree
+of a bare repository, whose main entry is not named after the project. Everywhere
+outside a linked worktree the output is byte-identical, and the samples change
+only in the version they carry.
+
+One new CI step builds `myapp` with a linked worktree `myapp-e2` and runs the
+three scripts there, plus a docs root one level below a repo's top. Red on 0.42.4
+with "a worktree render is titled after the checkout". Three mutations, each
+restoring the old behaviour in one place or dropping the top-level guard, each
+turn exactly their own assertion red.
+
 ## [0.42.5] — 2026-09-26
 
 An executor now has one documented way to preview its own tree in the Browser

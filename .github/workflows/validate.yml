@@ -396,6 +396,41 @@ jobs:
             || { echo "::error::API section missing or misnumbered when 04_api/ exists"; exit 1; }
           echo "OK — the read model follows the profile"
 
+      # A crew executor sits in `<repo>-e<k>`, and GitHub issue #5 archived from a
+      # clean worktree: every page, report and feedback file made there was named
+      # after the checkout until a junction named after the repo was put in front.
+      # The name now comes from the main tree, so the three scripts that print one
+      # are run from a linked worktree here. A docs root below the top of a larger
+      # repo is not a checkout and keeps its own folder name.
+      - name: A worktree renders, archives and files feedback under the project's name
+        run: |
+          work="$(mktemp -d)"; app="$work/myapp"; mkdir -p "$app"
+          git -C "$app" init -q
+          bash scripts/docs_scaffold.sh "$app" >/dev/null
+          git -C "$app" add -A
+          git -C "$app" -c user.email=t@t -c user.name=t commit -qm init
+          git -C "$app" worktree add -q --detach "$work/myapp-e2" HEAD
+          wt="$work/myapp-e2"
+
+          python3 scripts/docs_render.py "$wt" >/dev/null
+          grep -q '<title>myapp · docs</title>' "$wt/docs/index.html" \
+            || { echo "::error::a worktree render is titled after the checkout"; grep -o '<title>[^<]*' "$wt/docs/index.html"; exit 1; }
+          # Exit 1 is a preview with moves pending, which a fresh scaffold may be.
+          rc=0; python3 scripts/docs_archive.py "$wt" > "$work/archive.txt" || rc=$?
+          [ "$rc" -le 1 ] || { echo "::error::docs_archive.py failed in a worktree (rc=$rc)"; exit 1; }
+          grep -q '^## docs-archive · myapp · preview' "$work/archive.txt" \
+            || { echo "::error::a worktree archive report names the checkout"; head -1 "$work/archive.txt"; exit 1; }
+          bash scripts/docs_feedback.sh new probe "$wt" >/dev/null
+          grep -q '^repo: "myapp"' "$wt"/docs/99_feedback/FEEDBACK-001-probe.md \
+            || { echo "::error::a worktree feedback report names the checkout"; grep '^repo:' "$wt"/docs/99_feedback/*.md; exit 1; }
+
+          mono="$work/mono"; mkdir -p "$mono/sub"; git -C "$mono" init -q
+          bash scripts/docs_scaffold.sh "$mono/sub" >/dev/null
+          python3 scripts/docs_render.py "$mono/sub" >/dev/null
+          grep -q '<title>sub · docs</title>' "$mono/sub/docs/index.html" \
+            || { echo "::error::a docs root below the top level lost its own name"; exit 1; }
+          echo "OK — a worktree is named after its project, and a sub-root after itself"
+
       # docs-init reads this report to fill tech_stack, so it has to state facts
       # the manifest really declares — and stay quiet, not guess, when there is
       # no manifest at all.
