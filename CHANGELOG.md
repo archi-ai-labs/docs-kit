@@ -5,6 +5,76 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
+## [0.42.4] — 2026-09-26
+
+`crew done` now prints a few lines for the repo's typecheck and tests instead of
+their whole output, and its close-out commit carries the regenerated
+`docs/INDEX.md` and `docs/MAP.tsv`, so the index agents read no longer calls a
+landed ticket open.
+
+### Fixed — the close-out left the index behind
+
+Measured on 2026-09-26 from real executor sessions in four repos. `crew done` ran
+`docs_close --apply`, committed the ticket's status and audit line, and printed
+"Re-run docs_render.sh — docs/INDEX.md and docs/MAP.tsv are now stale". Of the 50
+sessions that saw that line, 8 ended without a render, all of them executors, so
+the index kept reading `open` for a ticket already on the dev branch. One executor
+spent five tool calls working out whether a render in the shared main tree was its
+job, and a render there was no answer anyway: four of the five repos track both
+files, so it left changes that check 2 refuses the next `crew done` on. One repo
+has 14 hand-made "đóng sổ" commits doing this step by hand.
+
+| Where | Now |
+|---|---|
+| `docs_close.py --apply --refresh` | after writing anything, rewrites whichever of `docs/INDEX.md` and `docs/MAP.tsv` exists, through the renderer's own builders (`refresh_text_models`). It never creates either, and never touches the HTML pages, which embed a stamp and a git ref and would churn on every close-out. The bare `--apply` is unchanged |
+| `crew done` close-out | runs `--apply --refresh`, and the commit's bound grows from the Backlog doc and `LOG.md` to include `INDEX.md` and `MAP.tsv`, still limited to the paths that became dirty while docs_close ran |
+| `docs_render.py` | `text_models()` is the one list of the two text models, and the full render writes from it; the samples are byte-identical apart from the version |
+| STANDARD §6.1 and §10, EXECUTION §4 and §6, `worktrees.md` | say so; `worktrees.md` also tells an executor that nobody renders in the main tree after `crew done` |
+
+**Why `--refresh` is opt-in.** `scripts/crew` is stamped into each repo, while
+`docs_close` runs from the plugin, and the two drift apart: one of the four crew
+repos still runs a `crew` older than 0.39.0. A `crew` stamped before 0.42.4 runs
+the bare `--apply` and commits only the Backlog doc and `LOG.md`, so a refresh by
+default would leave it a dirty `INDEX.md` that check 2 refuses the next merge on,
+which is the failure 0.41.1 removed. Opt-in keeps both mixes safe. An old `crew`
+with this `docs_close` behaves exactly as before, which the CI step asserts on the
+bare `--apply`. This `crew` with an older `docs_close` has the flag ignored, as
+every unknown flag is. Both mixes were run on the crew fixture and left the main
+tree clean. The fix takes effect in a repo once both halves are current: update
+the plugin, then run `/docs-kit:crew-update`.
+
+### Fixed — the gates streamed the repo's whole output
+
+One green `crew done` in agentic-ai printed 10,539 characters of passing tests
+into the executor's context. In the two measured runs that failed, the line that
+decided them (`check 2`) sat under all of that. Executors had learned to cut it
+themselves: **30 of 45 `crew done` calls, in 15 of 23 sessions, were piped
+through `tail` or `grep`**, as short as `tail -5` or `grep -E "crew:|CLOSE"`,
+filters that also drop crew's own lines, such as the file list under
+`[done:closeout]`.
+
+| Where | Now |
+|---|---|
+| typecheck and tests in `crew done` | the output goes to `../<repo>-crew/logs/b<nnn>-typecheck.log` and `…-test.log`. The command prints the path, then on a pass the last 8 non-blank lines (where node, jest, vitest and pytest print their counts), and on a failure the last 40 on stderr before the same `typecheck failed in` / `tests failed in` line, now naming the log |
+| `setup_cmd` | logged the same way as `setup-<executor>.log`, one line on a pass |
+| executor hat, `worktrees.md` | the report's test counts come from those summary lines; do not filter `crew done` |
+
+Stated ceilings: a runner that prints its counts before a long tail of other
+output will not show them in the last 8 lines, though the log has everything. An
+executor branch that commits a rendered `INDEX.md` of its own now meets a merge
+conflict on that generated file at step 1 of the next `crew done`; none of the
+ticket commits in the four repos did.
+
+Considered and dropped from the same audit: printing the session title from
+`crew new` and `crew done`. The six stale-title warnings it was meant to answer
+all came from one repo whose stamped `scripts/crew` predates 0.39.0 and so never
+computes `finished`; `crew-update` fixes that, not a new output.
+
+Six checks, five of them red on 0.42.3; the sixth ("nothing is left in the main
+tree") goes red when the close-out bound leaves `INDEX.md` out. Three mutations of
+the crew code and two of docs_close (creating a missing model, refreshing without
+the flag) each turn a check red. Suite 234 → 240. One new CI step, red on 0.42.3 with "docs/INDEX.md is stale".
+
 ## [0.42.3] — 2026-09-25
 
 An explanation now closes with one to three check questions, one per core

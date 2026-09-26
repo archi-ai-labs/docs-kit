@@ -81,6 +81,13 @@ phiếu khai `after_ref:` trỏ tới phiếu vừa gộp và phiên mang chuỗ
 --chain`) thì cây không được thả: lệnh chuyển nó thẳng sang nhánh của phiếu đó
 để chuỗi giữ nguyên cây (`tickets.md`).
 
+Output của typecheck và test nằm trong `../<repo>-crew/logs/`. Lệnh in đường dẫn
+tệp log, in 8 dòng cuối khi qua (chỗ runner in số test) và 40 dòng cuối khi hỏng,
+nên đừng lọc `crew done` bằng `tail` hay `grep`, vì bộ lọc bỏ luôn các dòng
+`crew:` cần đọc. Phần docs_close ghi gồm trạng thái phiếu, dòng audit, và
+`INDEX.md` cùng `MAP.tsv` nếu repo giữ hai tệp này, nên sau `crew done` không ai
+phải chạy docs_render ở cây chính.
+
 Kiểm 2 chỉ thấy tệp **chưa** commit ở cây chính. Một phiên executor lỡ commit
 phiếu của mình thẳng lên nhánh dev ở cây chính thì không để lại gì chưa commit,
 nên từ 0.42.2 lệnh tìm dấu vết khác: commit mang `Closes: BACKLOG-NNN` mà không

@@ -19,13 +19,21 @@ own history and inferring:
 `plan()` decides all of it and writes nothing; `execute()` writes exactly that
 plan. docs_archive.py prints the same plan as a chain-by-chain report.
 
+`--refresh` (with `--apply`) also rewrites docs/INDEX.md and docs/MAP.tsv, whichever
+of them the repo keeps, once anything was written. It is opt-in because the caller
+has to commit what it refreshes: `crew done` passes it and puts both files in its
+close-out commit. A `scripts/crew` stamped before 0.42.4 calls `--apply` alone and
+commits only the Backlog doc and LOG.md, so refreshing by default would leave it a
+dirty index for check 2 to refuse the next merge on. The other way round is safe
+too: a docs_close older than the flag ignores it, as it ignores every unknown flag.
+
 WHAT THIS DELIBERATELY DOES NOT DO
     It never writes into layer 1, never creates an Issue, never invents an audit
     line for work no commit claims. Those are judgements, and they stay in the
     skill. This script only acts on statements the repo already contains — a
     link in layer 1 that pointed at a moved document is printed, not rewritten.
 
-Usage:  docs_close.py [--apply] [--archive] [repo-root]
+Usage:  docs_close.py [--apply [--refresh]] [--archive] [repo-root]
         (default: report only, current directory)
 
 Exit:   0 = nothing to do, or applied cleanly
@@ -43,7 +51,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # One frontmatter parser for the whole kit. Re-implementing the YAML subset here
 # would drift from the renderer's, and the inline-comment handling in particular
 # has already caused one phantom-component bug.
-from docs_render import parse_frontmatter  # noqa: E402
+from docs_render import parse_frontmatter, refresh_text_models  # noqa: E402
 
 TRAILER_RE = re.compile(r"^\s*closes:\s*(.+)$", re.I | re.M)
 ID_RE = re.compile(r"\b(BACKLOG-[0-9]{3,})\b")
@@ -686,6 +694,7 @@ def main():
     argv = [a for a in sys.argv[1:] if not a.startswith("-")]
     apply_ = "--apply" in flags
     do_archive = "--archive" in flags
+    refresh = "--refresh" in flags
     root = Path(argv[0] if argv else ".").resolve()
     docs_root = root / "docs"
     if not docs_root.is_dir():
@@ -725,8 +734,23 @@ def main():
         if n:
             print("docs-close: rewrote %d relative link(s) in %d file(s) so they still "
                   "resolve after the move." % (n, len(p.rewrites)))
-        print("docs-close: applied %d change(s). Re-run docs_render.sh — "
-              "docs/INDEX.md and docs/MAP.tsv are now stale." % actions)
+        if not refresh:
+            print("docs-close: applied %d change(s). Re-run docs_render.sh — "
+                  "docs/INDEX.md and docs/MAP.tsv are now stale." % actions)
+            return 0
+        # Refreshed here rather than left to that reminder: see refresh_text_models
+        # for the sessions that never acted on one.
+        try:
+            fresh = refresh_text_models(docs_root) if actions else []
+        except Exception as exc:
+            print("docs-close: applied %d change(s), but docs/INDEX.md and docs/MAP.tsv "
+                  "could not be regenerated (%s) — run docs_render.sh." % (actions, exc))
+            return 0
+        if fresh:
+            print("docs-close: applied %d change(s); regenerated %s to match."
+                  % (actions, " and ".join("docs/" + f for f in fresh)))
+        else:
+            print("docs-close: applied %d change(s)." % actions)
         return 0
     if n:
         print("docs-close: the moves above also rewrite %d relative link(s) in %d file(s)."

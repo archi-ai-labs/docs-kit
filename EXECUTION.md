@@ -401,6 +401,7 @@ Contents:
 ├── assign.lock/             # mkdir mutex, held only while an executor is claimed
 ├── keys/<repo>-e<k>         # cksum of the resetup_when files at last setup
 ├── locks/<resource>.lock    # owner id + ISO timestamp, one file per held lock
+├── logs/                    # whole output of the repo's own commands, one file per run (§6)
 ├── log.tsv                  # append-only: ts · event · resource · ticket · seconds
 └── gate.log                 # explain-gate fail-open trail (§8)
 ```
@@ -590,7 +591,10 @@ crew done 157
 1. In the executor holding `work/b157`: `git merge <dev-branch>` — conflicts
    are resolved there, never on the main tree.
 2. Typecheck + test commands from config — testing exactly what is about to
-   land, post-merge.
+   land, post-merge. Their whole output goes to
+   `../<repo>-crew/logs/b<nnn>-typecheck.log` and `…-test.log`; the command
+   prints the path, and on a pass the runner's last 8 lines (its counts), on a
+   failure the last 40. `setup_cmd` is logged the same way.
 3. **Check 1:** the main tree currently has the dev branch checked out
    (`git -C <main> symbolic-ref`). A merge lands on whatever branch the main
    tree holds, not on the branch you assume.
@@ -635,14 +639,34 @@ even a close-out committed by hand reached the remote one ticket late, riding th
 next ticket's push, and the last one of a run not at all. What is committed is measured and
 bounded. It is measured as the paths that became dirty while `docs_close` ran,
 because the tree is shared and a fast-pair session can start an edit after
-check 2. It is bounded to a Backlog doc and `92_audit/LOG.md`, the only files
-`docs_close --apply` can write, so nothing else is ever swept in under the
-close-out's name. A file that was already dirty when the close-out started holds
+check 2. It is bounded to a Backlog doc, `92_audit/LOG.md`, and `INDEX.md` and
+`MAP.tsv` (0.42.4, below), the only files `docs_close --apply --refresh` can write, so
+nothing else is ever swept in under the close-out's name. A file that was already dirty when the close-out started holds
 someone else's edit, so it stays out and is named with `[done:closeout]`. A
 commit the repo's own pre-commit hook refuses is reported with the same tag and
 the files, never bypassed, and it does not fail a merge that has already landed.
 The commit carries no `Closes:` trailer, because a second closer for the same
 ticket would force every reader of closers to decide which one counts.
+
+**The close-out carries the index, and the gates speak in a few lines
+(0.42.4).** Both measured on 2026-09-26 in real executor sessions. First, the
+close-out committed the status and the audit line but left `docs/INDEX.md` and
+`docs/MAP.tsv` describing the tree before them, with a "Re-run docs_render.sh"
+reminder. 8 of 50 such reminders ended the session unrendered, one executor
+spent five tool calls deciding whether a render in the shared tree was its job,
+and a render there would have left files that check 2 refuses the next merge on.
+`crew done` now runs `docs_close --apply --refresh`, which refreshes whichever of
+the two the repo keeps, and the close-out commit includes them. The flag is
+opt-in because the caller must commit what it refreshes: a `scripts/crew`
+stamped before 0.42.4 runs the bare `--apply`, commits only the Backlog doc and
+`LOG.md`, and would be left an index that check 2 refuses on. The HTML pages stay out: they embed a stamp and
+a git ref, so they would churn on every close-out; a full render refreshes them.
+Second, the gates streamed the repo's own output: one green run put 10,539
+characters of passing tests above the line that decided it, and executors had
+begun piping `crew done` through `tail -40`, which also drops crew's own notes.
+Stated ceiling: an executor branch that commits a rendered `INDEX.md` of its own
+now meets a merge conflict on that generated file at step 1. None of the
+ticket commits measured in four repos did so.
 
 **A closer that skipped its branch is named, not refused (0.42.2).** Measured
 twice on 2026-09-24 with a real executor session (Haiku): it ran `crew new 332`

@@ -644,6 +644,33 @@ setup_key() {
   done 2>/dev/null | cksum | awk '{print $1 "-" $2}'
 }
 
+# repo_cmd <log name> <label> <dir> <command> <lines shown on a pass>
+# A repo's own command — typecheck, tests, setup — writes its whole output to
+# $STATE/logs/<log name>.log, and the terminal gets only what a session acts on:
+# on a pass, the last lines (a test runner's counts), on a failure the last 40,
+# on stderr, and the path either way, so the rest is one read away. Measured
+# 2026-09-26: one green `crew done` printed 10,539 characters of passing tests
+# into the executor's context, above the one line that decided the run, and
+# executors had begun piping `crew done` through `tail -40` or `grep -v ✔`
+# themselves — filters that drop crew's own notes along with the noise.
+repo_cmd() {
+  RC_LOG="$STATE/logs/$1.log"
+  if ! mkdir -p "$STATE/logs" 2>/dev/null; then
+    ( cd "$3" && eval "$4" )   # nowhere to log: stream it, as before 0.42.4
+    return $?
+  fi
+  note "$2 — output in $RC_LOG"
+  ( cd "$3" && eval "$4" ) >"$RC_LOG" 2>&1
+  RC_RC=$?
+  if [ "$RC_RC" -eq 0 ]; then
+    note "$2 passed"
+    [ "$5" -gt 0 ] && grep -v '^[[:space:]]*$' "$RC_LOG" | tail -n "$5" | sed 's/^/  /'
+    return 0
+  fi
+  grep -v '^[[:space:]]*$' "$RC_LOG" | tail -n 40 | sed 's/^/  /' >&2
+  return "$RC_RC"
+}
+
 run_setup() { # run_setup <worktree> <label>
   SETUP="$(cfg setup_cmd "")"
   [ -n "$SETUP" ] || return 0
@@ -653,7 +680,8 @@ run_setup() { # run_setup <worktree> <label>
     note "deps unchanged since $2 was set up — setup_cmd skipped"
     return 0
   fi
-  ( cd "$1" && eval "$SETUP" ) || note "setup_cmd failed — the tree may not test cleanly"
+  repo_cmd "setup-$(basename "$1")" setup_cmd "$1" "$SETUP" 0 \
+    || note "setup_cmd failed — the tree may not test cleanly; its last lines are above, all of it in $RC_LOG"
   mkdir -p "$STATE/keys" && printf '%s\n' "$KEY" > "$KF"
 }
 
@@ -846,8 +874,12 @@ cmd_new() {
 #
 # "What docs_close wrote" is measured AND bounded. Measured: the paths that became
 # dirty while it ran, because the main tree is shared and a fast-pair session can
-# start an edit after check 2. Bounded: `docs_close --apply` (no --archive) can
-# only write a Backlog doc's status and `92_audit/LOG.md`, so nothing outside
+# start an edit after check 2. Bounded: `docs_close --apply --refresh` (no
+# --archive) can only write a Backlog doc's status, `92_audit/LOG.md`, and since
+# 0.42.4 the `INDEX.md` and `MAP.tsv` it regenerates when the repo keeps them —
+# left out, the index went stale on the dev branch, and rendering it in the shared
+# tree would have left files check 2 refuses the next merge on. `--refresh` is
+# this command's to pass because this command commits the result. Nothing outside
 # those is ever a close-out, even if it changed in the same second. A path that
 # was already dirty when the close-out started holds somebody else's edit, so it
 # is left out and named, never committed under the close-out's name. A refused
@@ -860,7 +892,7 @@ main_changed() { # → paths in the main tree that differ from HEAD or are untra
     git -C "$MAIN" -c core.quotepath=off ls-files --others --exclude-standard 2>/dev/null
   } | sort -u
 }
-closeout_scope() { grep -E '^docs/(23_backlog/.*\.md|92_audit/LOG\.md)$' || true; }
+closeout_scope() { grep -E '^docs/(23_backlog/.*\.md|92_audit/LOG\.md|INDEX\.md|MAP\.tsv)$' || true; }
 closeout_commit() { # closeout_commit <nnn> <paths dirty before docs_close ran>
   # Read both arguments NOW: `set --` below reuses the positional parameters to
   # hold the paths, and a later "$1" would be the first path, not the ticket.
@@ -932,12 +964,16 @@ cmd_done() {
     # 1. Conflicts are resolved in the ticket's own tree, never on the main tree.
     git -C "$WT" merge --no-edit "$DEV" >/dev/null 2>&1 \
       || die "merge of $DEV into work/b$N has conflicts — resolve in $WT, then rerun"
-    # 2. Test exactly what is about to land: the post-merge tree.
+    # 2. Test exactly what is about to land: the post-merge tree. The output
+    #    goes to a log (repo_cmd); a pass shows the runner's last 8 lines,
+    #    which is where node, jest, vitest and pytest print their counts.
     if [ -n "$TYPECHECK" ]; then
-      ( cd "$WT" && eval "$TYPECHECK" ) || die "typecheck failed in $WT"
+      repo_cmd "b$N-typecheck" typecheck "$WT" "$TYPECHECK" 0 \
+        || die "typecheck failed in $WT — last lines above, all of it in $RC_LOG"
     fi
     if [ -n "$TEST" ]; then
-      ( cd "$WT" && eval "$TEST" ) || die "tests failed in $WT — fix there, rerun crew done $N"
+      repo_cmd "b$N-test" tests "$WT" "$TEST" 8 \
+        || die "tests failed in $WT — fix there, rerun crew done $N; last lines above, all of it in $RC_LOG"
     fi
     ACTUAL="$(git -C "$WT" diff --name-only "$DEV" | wc -l | tr -d ' ')"
     # 3. Check 1 — a merge lands on whatever branch the main tree HOLDS,
@@ -986,7 +1022,7 @@ cmd_done() {
     fi
     if [ -n "$DC" ]; then
       CO_BEFORE="$(main_changed)"
-      bash "$DC" --apply "$MAIN" || note "docs_close reported a problem — check its output"
+      bash "$DC" --apply --refresh "$MAIN" || note "docs_close reported a problem — check its output"
       closeout_commit "$N" "$CO_BEFORE"
     else
       note "trailer found but docs_close is not reachable — /docs-kit:docs-sync will flip the status"

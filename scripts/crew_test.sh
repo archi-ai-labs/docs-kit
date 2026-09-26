@@ -2335,6 +2335,98 @@ else
   bad "explain: the folded answer gives the right option only"
 fi
 
+# ---------------------------------------------------------------- quiet gates, fresh index (0.42.4)
+# Two things a crew done left behind, both measured 2026-09-26 on real executor
+# sessions. Its gates streamed the repo's own output: one green run put 10,539
+# characters of passing tests above the line that decided it, and executors took
+# to piping crew done through `tail -40`, which drops crew's own notes too. And
+# its close-out committed the ticket's status and audit line but left
+# docs/INDEX.md and docs/MAP.tsv describing the tree before them: 8 of 50
+# "Re-run docs_render.sh" reminders ended the session unrendered, and a render in
+# the shared main tree would have left files that check 2 refuses the next merge on.
+QG="$TMP/quiet"
+QGR="$QG/repo"
+mkdir -p "$QGR/scripts" "$QGR/docs/92_audit" "$QGR/docs/23_backlog"
+# A runner shaped like node --test: a line per case, then its counts. Red when
+# $QG/red exists, with the failing case near the end, where runners put it.
+cat > "$QG/run-tests.sh" <<QEOF
+i=1; while [ \$i -le 300 ]; do echo "✔ case \$i passes"; i=\$((i + 1)); done
+if [ -f "$QG/red" ]; then echo "✖ case 301 failed: expected 1, got 2"; echo "ℹ tests 301"; echo "ℹ fail 1"; exit 1; fi
+echo "ℹ tests 300"; echo "ℹ pass 300"; echo "ℹ fail 0"
+QEOF
+(
+  cd "$QGR"
+  git init -q && git checkout -q -b main
+  git config user.email t@t && git config user.name t
+  printf '# audit log\n' > docs/92_audit/LOG.md
+  printf '{"owns": [], "crew": {"dev_branch": "main", "copy": [], "link": [], "test_cmd": "bash %s/run-tests.sh", "typecheck_cmd": "echo typecheck-noise", "setup_cmd": "i=0; while [ $i -lt 200 ]; do echo setup-noise-$i; i=$((i + 1)); done"}}\n' "$QG" > .docs-kit.json
+  cp "$KIT/templates/crew/crew" scripts/crew && chmod +x scripts/crew
+  git add -A && git commit -qm init >/dev/null
+)
+qticket() { # qticket <nnn> — a Backlog doc, then a render, both committed
+  printf -- '---\nid: BACKLOG-%s\ndescription: "x"\nsource_ref: ISSUE-001\nstatus: open\n---\n' "$1" \
+    > "$QGR/docs/23_backlog/t$1.md"
+  ( cd "$QGR" && python3 "$KIT/scripts/docs_render.py" . >/dev/null 2>&1 \
+      && git add -A && git commit -qm "ticket $1" >/dev/null )
+}
+qwork() { # qwork <nnn> — the ticket's work, with its closer, in the tree holding it
+  QT="$(git -C "$QGR" worktree list --porcelain | awk -v b="branch refs/heads/work/b$1" '
+    /^worktree /{ p = substr($0, 10) } $0 == b { print p; exit }')"
+  [ -n "$QT" ] || { echo "qwork: no tree holds work/b$1" >&2; return 1; }
+  ( cd "$QT" && echo "$1" >> "w$1.txt" && git add -A \
+      && git -c user.email=t@t -c user.name=t commit -qm "work $1" -m "Closes: BACKLOG-$1" )
+}
+qdone() { (cd "$QGR" && CREW_DOCS_CLOSE="$KIT/scripts/docs_close.sh" scripts/crew done "$@") 2>&1; }
+qticket 001
+qticket 002
+OUT="$( (cd "$QGR" && scripts/crew executor add) 2>&1 )"
+QLOG="$QG/repo-crew/logs"
+if ! has "$OUT" "setup-noise-0" && has "$OUT" "setup_cmd passed" \
+   && grep -q "setup-noise-199" "$QLOG/setup-repo-e1.log" 2>/dev/null; then
+  ok "quiet: setup_cmd's output goes to its log, and the terminal gets one line for it"
+else
+  bad "quiet: setup_cmd output (out: $OUT)"
+fi
+( cd "$QGR" && scripts/crew new 1 >/dev/null 2>&1 )
+qwork 001
+OUT="$(qdone 1)" && RC=0 || RC=$?
+if [ "$RC" -eq 0 ] && ! has "$OUT" "case 1 passes" && ! has "$OUT" "typecheck-noise" \
+   && has "$OUT" "ℹ pass 300" && has "$OUT" "b001-test.log"; then
+  ok "quiet: a green crew done shows the runner's counts and the log path, not every passing case"
+else
+  bad "quiet: green crew done output (rc=$RC out: $OUT)"
+fi
+[ "$(grep -c 'passes$' "$QLOG/b001-test.log" 2>/dev/null)" = "300" ] \
+  && ok "quiet: the log keeps the whole run" \
+  || bad "quiet: the test log is missing or cut short"
+# The index half. --check is the gate STANDARD §10 names for "does the index
+# match the markdown"; on 0.42.3 it said stale here, because the close-out
+# flipped t001.md to done and nothing rewrote INDEX.md.
+OUT="$(python3 "$KIT/scripts/docs_render.py" --check "$QGR" 2>&1)" && RC=0 || RC=$?
+FILES="$(git -C "$QGR" show --name-only --format= main | sort | tr '\n' ' ')"
+if [ "$RC" -eq 0 ] && [ "$FILES" = "docs/23_backlog/t001.md docs/92_audit/LOG.md docs/INDEX.md " ]; then
+  ok "fresh index: the close-out commit carries the regenerated INDEX.md, and --check agrees with it"
+else
+  bad "fresh index: after crew done (check rc=$RC: $OUT · close-out files: $FILES)"
+fi
+[ -z "$(git -C "$QGR" status --porcelain)" ] \
+  && ok "fresh index: nothing is left in the main tree for check 2 to refuse" \
+  || bad "fresh index: main tree left dirty: $(git -C "$QGR" status --porcelain | tr '\n' ' ')"
+# KNOWN-BAD for the gates: a red run must still show what failed and where the
+# rest is, without the three hundred lines that passed.
+( cd "$QGR" && scripts/crew new 2 >/dev/null 2>&1 )
+qwork 002
+: > "$QG/red"
+OUT="$(qdone 2)" && RC=0 || RC=$?
+if [ "$RC" -ne 0 ] && has "$OUT" "tests failed in" && has "$OUT" "✖ case 301 failed" \
+   && has "$OUT" "b002-test.log" && ! has "$OUT" "case 1 passes" \
+   && [ "$(printf '%s\n' "$OUT" | wc -l | tr -d ' ')" -lt 60 ]; then
+  ok "quiet: a red crew done shows the failing lines and the log path, and stops"
+else
+  bad "quiet: red crew done output (rc=$RC out: $OUT)"
+fi
+rm -f "$QG/red"
+
 # ---------------------------------------------------------------- summary
 echo ""
 echo "crew_test: $PASS passed, $FAIL failed"

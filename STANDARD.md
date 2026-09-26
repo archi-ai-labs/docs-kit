@@ -514,7 +514,9 @@ Closes: BACKLOG-NNN
 ```
 
 `scripts/docs_close.sh --apply` then sets `status: done` and appends the audit line,
-citing the commit sha as the reason column.
+citing the commit sha as the reason column. With `--refresh`, which `crew done`
+passes, it also refreshes `docs/INDEX.md` and `docs/MAP.tsv`, whichever the repo
+keeps, so the index agents read (§10) says `done` too; the caller commits them.
 
 This is not merely automation of a manual step; it changes what the audit trail
 says. A line written from a session's own recollection cites the session, and the
@@ -934,7 +936,9 @@ Rules:
 - **Read model only.** The renderer never edits markdown; the markdown stays
   the source of truth. Generated pages carry a `GENERATED` header comment —
   `INDEX.md` included — never hand-edit them; regenerate with
-  `/docs-kit:docs-render` (docs-init creates them, docs-sync refreshes them).
+  `/docs-kit:docs-render` (docs-init creates them, docs-sync refreshes them, and
+  `docs_close --apply --refresh` refreshes the two text models it has just made
+  stale, but never creates one and never touches the pages).
   A derived read model is also why the store stays markdown in git: the index can
   be regenerated in any shape a query needs, while git keeps the diff, the blame,
   and the ability to commit a doc change in the same commit as the code change.

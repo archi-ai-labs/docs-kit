@@ -4189,6 +4189,46 @@ def build_map_tsv(data):
     return "\n".join(out).rstrip("\n") + "\n"
 
 
+def text_models(data):
+    """The two read models an agent or a hook reads, as (file name, content).
+
+    One list, used by a full render and by refresh_text_models, so the two can
+    never disagree about which files these are or what goes in them.
+    """
+    return (("INDEX.md", build_index_md(data)), ("MAP.tsv", build_map_tsv(data)))
+
+
+def refresh_text_models(docs):
+    """Rewrite whichever of docs/INDEX.md and docs/MAP.tsv already exist, from the
+    markdown as it stands now. Returns the names whose bytes changed.
+
+    For a script that has just written markdown: docs_close --apply --refresh, which
+    a `crew done` close-out runs on the shared main tree. Before 0.42.4 that run
+    printed "Re-run docs_render.sh" and stopped. Measured 2026-09-26 on real
+    executor sessions: 8 of 50 such reminders ended the session unrendered, one
+    executor spent five tool calls working out whether rendering in the shared
+    tree was its job at all, and a render there would have left files check 2
+    refuses the next merge on. So the writer refreshes the index itself.
+
+    Only the text models, never the HTML pages: those embed a generated-at stamp
+    and a git ref, so they differ on every run and would drag three files of churn
+    into every close-out. And a model that does not exist is never created —
+    whether a repo keeps these files, and tracks them, is decided by docs-init and
+    docs-render; one appearing out of a close-out would be an untracked file that
+    check 2 then trips over.
+    """
+    changed = []
+    for name, content in text_models(load_docs(docs)):
+        target = docs / name
+        if not target.is_file():
+            continue
+        if target.read_text(encoding="utf-8", errors="replace") == content:
+            continue
+        target.write_text(content, encoding="utf-8")
+        changed.append(name)
+    return changed
+
+
 def main():
     flags = set(a for a in sys.argv[1:] if a.startswith("-"))
     argv = [a for a in sys.argv[1:] if not a.startswith("-")]
@@ -4299,9 +4339,7 @@ def main():
     index_html = build_index(ctx, docs, data, audit, latest_rev, check_result)
 
     for name, content in (("index.html", index_html), ("current.html", current_html),
-                          ("changes.html", changes_html),
-                          ("INDEX.md", build_index_md(data)),
-                          ("MAP.tsv", build_map_tsv(data))):
+                          ("changes.html", changes_html)) + text_models(data):
         (docs / name).write_text(content, encoding="utf-8")
         print("WROTE docs/%s" % name)
     print("RENDER OK — open docs/index.html")

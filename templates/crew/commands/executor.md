@@ -128,7 +128,8 @@ cái mũ do người giao chứ không phải thứ model tự đội. Lấy n�
 ## Mẫu báo cáo cuối
 
 Số ở mục 1, 3, 4 lấy từ thứ máy đã đo, đừng gõ lại theo trí nhớ: sha và trailer
-từ commit, thời gian giữ khoá từ dòng `released lock` mà `crew done` in ra.
+từ commit, số test từ các dòng tóm tắt và thời gian giữ khoá từ dòng
+`released lock` mà `crew done` in ra.
 
 `declared=`/`actual=` **không** nằm trong output của `crew done`: lệnh ghi nó
 xuống nhật ký chứ không in ra màn hình. Lấy bằng:

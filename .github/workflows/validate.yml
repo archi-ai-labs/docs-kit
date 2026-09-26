@@ -852,6 +852,68 @@ jobs:
             || { echo "::error::the tree docs_close wrote does not validate."; exit 1; }
           echo "OK — mention ignored; hand-written, table-shaped and prose cases all correct"
 
+      # 0.42.4: `--apply --refresh` also rewrites docs/INDEX.md and docs/MAP.tsv,
+      # whichever of them the repo keeps. The bare --apply printed "Re-run
+      # docs_render.sh" and stopped; on real sessions 8 of 50 such reminders were
+      # never acted on, so the index agents read instead of the folders kept calling
+      # a finished ticket open. Opt-in, because the caller must commit what it
+      # refreshes: a scripts/crew stamped before 0.42.4 runs the bare --apply and
+      # commits only the Backlog doc and LOG.md. The HTML pages stay out: they embed
+      # a stamp, so rewriting them would put three files of churn into every close-out.
+      - name: A close-out leaves the index current and creates no read model
+        run: |
+          work="$(mktemp -d)"
+          git -C "$work" init -q
+          git -C "$work" config user.email ci@example.com
+          git -C "$work" config user.name ci
+          bash scripts/docs_scaffold.sh "$work" >/dev/null
+          mk() {  # mk <id>
+            sed -e "s/^id: BACKLOG-000/id: BACKLOG-$1/" -e 's/^status: .*/status: open/' \
+              "$work/docs/23_backlog/BACKLOG-000-example.md" \
+              > "$work/docs/23_backlog/BACKLOG-$1-x.md"
+          }
+          mk 001
+          mk 002
+          DOCS_KIT_NOW=2026-09-26T09:00:00 python3 scripts/docs_render.py "$work" >/dev/null
+          git -C "$work" add -A && git -C "$work" commit -qm scaffold
+          html="$(cd "$work/docs" && cksum index.html current.html changes.html)"
+          index="$(cksum < "$work/docs/INDEX.md")"
+          git -C "$work" commit -q --allow-empty -m "first" -m "Closes: BACKLOG-001"
+          # The bare --apply is what an older scripts/crew runs, so it must write
+          # nothing that caller will not commit.
+          out="$(bash scripts/docs_close.sh --apply "$work")"
+          [ "$index" = "$(cksum < "$work/docs/INDEX.md")" ] \
+            || { echo "::error::a bare --apply rewrote INDEX.md, which an older crew done leaves dirty."; exit 1; }
+          case "$out" in
+            *"Re-run docs_render.sh"*) ;;
+            *) echo "::error::a bare --apply lost its render reminder — got: $out"; exit 1 ;;
+          esac
+          git -C "$work" commit -q --allow-empty -m "second" -m "Closes: BACKLOG-002"
+          out="$(bash scripts/docs_close.sh --apply --refresh "$work")"
+          bash scripts/docs_render.sh --check "$work" > "$work/check.txt" 2>&1 \
+            || { echo "::error::the index is stale after --refresh: $(cat "$work/check.txt")"; exit 1; }
+          grep -q '^BACKLOG-002 | done' "$work/docs/INDEX.md" \
+            || { echo "::error::INDEX.md does not show the closed item as done."; exit 1; }
+          case "$out" in
+            *"regenerated docs/INDEX.md"*) ;;
+            *) echo "::error::--refresh did not say it regenerated the index — got: $out"; exit 1 ;;
+          esac
+          [ "$html" = "$(cd "$work/docs" && cksum index.html current.html changes.html)" ] \
+            || { echo "::error::a close-out rewrote the HTML pages."; exit 1; }
+          # A repo that keeps no read model gets none out of a close-out: an
+          # untracked file appearing there is one check 2 would then refuse on.
+          rm "$work/docs/INDEX.md" "$work/docs/MAP.tsv"
+          mk 003
+          git -C "$work" add -A && git -C "$work" commit -qm three
+          git -C "$work" commit -q --allow-empty -m "third" -m "Closes: BACKLOG-003"
+          bash scripts/docs_close.sh --apply --refresh "$work" >/dev/null
+          grep -q '^status: done' "$work/docs/23_backlog/BACKLOG-003-x.md" \
+            || { echo "::error::status was not flipped."; exit 1; }
+          if [ -e "$work/docs/INDEX.md" ] || [ -e "$work/docs/MAP.tsv" ]; then
+            echo "::error::a close-out created a read model the repo does not keep."; exit 1
+          fi
+          echo "OK — bare --apply writes no index; --refresh keeps it current, HTML untouched, nothing created"
+
       # The Stop hook's whole job changed in 0.25.0: it asks MAP.tsv which document
       # claims an edited file instead of matching path-shape globs. The two cases
       # that made the old one unusable are asserted first — a repo that only has a
