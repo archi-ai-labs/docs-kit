@@ -199,9 +199,11 @@ mkdir -p "$WR"
   echo hello > README.md
   # A checkout is not a working environment: gitignored payload (nested
   # harness repo, env file, shared cache) that crew new must put back.
-  printf '.env\nharness/\nshared-cache/\n' > .gitignore
-  mkdir -p harness shared-cache
+  printf '.env\nharness/\nshared-cache/\nbriefs/\n' > .gitignore
+  mkdir -p harness shared-cache briefs
   echo h > harness/h.txt
+  # A briefs/ written by /docs-kit:brief before 0.44.0: crew must NOT carry it.
+  echo b > briefs/brief-old.md
   echo c > shared-cache/c.txt
   echo SECRET > .env
   mkdir -p docs/23_backlog docs/92_audit scripts
@@ -264,6 +266,11 @@ else
 fi
 [ -L "$E1/shared-cache" ] && ok "cli: read-only share is a symlink" \
   || bad "cli: link list not provisioned"
+# 0.44.0: the brief lives in the ticket and reaches the tree through git. A copy
+# of briefs/ is taken once per tree and then goes stale, so it is not taken.
+[ ! -e "$E1/briefs" ] && ok "cli: briefs/ stays in the main tree, the ticket carries the brief" \
+  || bad "cli: crew copied briefs/ into the executor"
+
 [ "$(cat "$E1/harness/.setup-done" 2>/dev/null)" = "x" ] \
   && ok "cli: setup_cmd ran once when the executor was built" \
   || bad "cli: setup_cmd did not run at add"

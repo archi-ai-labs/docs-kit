@@ -27,26 +27,35 @@ what was described, including the parts that were never thought through.
 
 Work in phases. **Never skip Phase 1.** Phase 0 and Phase 1.5 run only in a repo
 that uses the docs-kit three-layer model; everywhere else this is the same
-two-phase skill it has always been, and it writes no file but the brief.
+two-phase skill it has always been, and it writes no file but the brief. In a
+docs-kit repo the brief is not a file of its own: it is the `## Brief` section of
+the Backlog item the work becomes, so it is committed, reaches every executor
+tree through git, and closes with the ticket.
 
 ## Phase 0 — Detect the repo
 
-One check, no guessing:
+Two checks, no guessing:
 
 ```bash
 test -d docs/20_issues && echo docs-kit || echo plain
+test -x scripts/crew && scripts/crew role planner >/dev/null 2>&1 && echo crew
 ```
 
 - **`plain`** — this repo does not use the three-layer model. Run Phase 1 and
   Phase 2 exactly as written, skip Phase 1.5, and ignore every mention of
   Issues below.
 - **`docs-kit`** — Phase 1 gains one question, Phase 1.5 runs, and Phase 2
-  cites ids instead of restating decisions.
+  writes the brief into the Backlog item instead of a file.
+- **`docs-kit` and `crew`** — as above, and the work is cut and handed over the
+  way the planner does it. Read `scripts/crew role planner` now: it is the one
+  source for the ticket fields (`scope_files`, `execution`, `after_ref`), the
+  split rule and the chip templates, and this skill restates none of them.
 
-**Why the detection is one directory test and not a heuristic:** this skill has
+**Why the detection is two file tests and not a heuristic:** this skill has
 to stay usable in any repo. Something that guesses ("this tree looks
 documented") would start writing Issues into projects that never opted in.
-`docs/20_issues/` exists only because someone ran docs-init.
+`docs/20_issues/` exists only because someone ran docs-init, and a planner role
+file only because someone ran crew-init.
 
 ## Phase 1 — Decision freeze check (gate)
 
@@ -193,8 +202,22 @@ and why the forward path appends no audit line, are in
 
 | Lane | What happens |
 |---|---|
-| FAST | Create the Backlog item (`source_ref` = the Issue), flip the Issue to `promoted`, continue to Phase 2. |
+| FAST | Create the Backlog item (`source_ref` = the Issue), flip the Issue to `promoted`, continue to Phase 2. With crew, cut it the planner's way: split when `S > 6`, `C ≥ 3` or the work spans more than one technical layer, write `scope_files` and `execution`, and put `after_ref` on an item that edits what an earlier one builds. |
 | FULL | Leave the Issue at `open`. **Stop and ask** — see below. |
+
+### Direction work is not a ticket (crew)
+
+A survey, a roadmap, a market study — work whose result is prose rather than code
+— would become a ticket with `scope_files: 0`, and the planner's rules call that
+shape wrong (`planner.md`, "Việc KHÔNG thành phiếu"): it holds a slot in the
+pool, the executor may not close it, and its output lands in the gitignored
+`briefs/` of a tree it never leaves. In a crew repo, create no Backlog item and
+leave the Issue at `open`. Hand the work to the navigator instead: one task chip
+whose prompt carries the Issue's path, `scripts/crew role navigator`, and the
+report's path, `docs/92_audit/reports/<YYYY-MM-DD>-<slug>.md`. If
+`scripts/crew role navigator` fails, the repo runs without that hat: say so and
+ask the user where the result goes, with AskUserQuestion, ending the turn if the
+tool is unavailable.
 
 ### Full lane — ask, never decide
 
@@ -208,7 +231,10 @@ AskUserQuestion with two real options —
   "Alternatives considered" section (STANDARD §4).
 - **Hand the work over anyway** — write the brief, and stamp a block into its
   HARD CONSTRAINTS section saying no Decision covers this work and Architecture
-  must not be amended without one.
+  must not be amended without one. This is the one case in which a docs-kit repo
+  still gets a file in `briefs/`: no Backlog item can hold the brief until a
+  Decision exists. In a crew repo, also say that crew cannot run it, because
+  `crew new` refuses a branch without a ticket.
 
 **Why this asks instead of blocking:** docs-kit's hooks are warn-only on
 purpose (STANDARD §8) — a false positive that blocks teaches people to rip the
@@ -220,6 +246,22 @@ If AskUserQuestion is unavailable, ask the same two options in plain text and
 **end the turn**.
 
 ## Phase 2 — Write the brief
+
+### Where it goes
+
+| Repo | The brief is | Handed over as |
+|---|---|---|
+| `plain` | `briefs/brief-<slug>.md`, the six sections below | its absolute path |
+| `docs-kit` | the `## Brief` section of each Backlog item Phase 1.5 wrote | the item's path, plus one line to paste: `Bạn nhận BACKLOG-NNN — làm theo mục ## Brief của docs/23_backlog/<file>.md` |
+| `docs-kit` and `crew` | the same section | one task chip per chain, title and prompt filled from the planner's templates; forks and joins wait on `scripts/crew wait` exactly as the planner does |
+| full lane, handed over anyway | `briefs/brief-<slug>.md` with the no-Decision stamp | its absolute path |
+
+**Why the brief moved into the ticket (0.44.0).** One decision used to exist four
+times — Issue, Backlog item, brief file, chip prompt — and the brief file was the
+copy an executor could not rely on: `crew new` copied `briefs/` once per tree,
+and trees persist, so each kept the briefs of the day it was built. A section in
+the ticket is committed, so every tree has the current one. The measurements are
+in CHANGELOG 0.44.0.
 
 Use this 6-section skeleton. Sections may be renamed but none may be
 silently dropped:
@@ -245,11 +287,23 @@ writes must say **ask with AskUserQuestion, and end the turn if the tool is
 unavailable** — otherwise the receiving agent asks in prose and the user
 misses it there too.
 
-In a `docs-kit` repo, section 2 **cites rather than restates**: name the
-`BACKLOG-NNN` this work came from, the `ISSUE-NNN` behind it, and any
-`DECISION-NNN` that constrains it. The docs are the source of truth; a brief
-that paraphrases them creates a second copy that will be wrong within a month.
-Restate only what the receiving agent cannot look up.
+In a `docs-kit` repo the six sections become the ticket's `## Brief`, and the
+first two are citations rather than text:
+
+| Skeleton | In the ticket |
+|---|---|
+| 1 CONTEXT, 2 SOURCE OF TRUTH | not written: `source_ref` and the ids the section names already point there. Restate only what the receiving agent cannot look up |
+| 3 CONCRETE ASKS | `### Phạm vi` — what to build, and the neighbouring work it must NOT touch |
+| 4 HARD CONSTRAINTS | `### Ràng buộc` — PHẢI / CẤM lines |
+| 5 EDGE HANDLING | `### Khi gặp` |
+| 6 EXPECTED OUTPUT | `### Xong khi` |
+
+The docs are the source of truth; a brief that paraphrases them creates a second
+copy that will be wrong within a month. The planner writes the same section into
+the tickets it cuts, so an executor never has to know which of the two wrote its
+ticket. **Never also write a `briefs/` file for a ticket that holds its brief, and
+never copy the section into a chip's prompt**: the prompt is read once and lost,
+and `briefs/` does not reach the tree.
 
 ### Three techniques that make the difference
 
@@ -272,10 +326,10 @@ explanations → short prose. Never invert this.
 
 ### Section 6 always states what makes it fail — a writing rule, not a question
 
-`how to verify it` was too weak on its own. Every brief's section 6 must name **what makes
-the result fail**, and must **fail closed**: a criterion nobody could confirm is a failure,
-never a pass. Where the repo has a real check, name the actual command rather than "the
-tests".
+`how to verify it` was too weak on its own. Every brief's section 6 (`### Xong khi` in a
+ticket) must name **what makes the result fail**, and must **fail closed**: a criterion
+nobody could confirm is a failure, never a pass. Where the repo has a real check, name the
+actual command rather than "the tests".
 
 **This costs no dialog and applies to every brief, split or not.** Acceptance criteria are a
 property of the work; *who* runs the check is a property of how the work is staffed, and
@@ -283,6 +337,11 @@ that is settled only when the work is split (below). Do not promote this into a 
 a brief whose criteria you had to ask for is a brief drafted too early.
 
 ### When the deliverables can be split — the parallelisation block
+
+**Plain repos only.** In a docs-kit repo the work splits into Backlog items
+instead (Phase 1.5), and with crew each chain gets its own executor tree and
+session — the isolation this block has to do without, because `briefs/` is
+gitignored. There, skip to the final pass.
 
 Some briefs describe work several agents could do at once. **Deciding how it splits is
 itself a decision**, which is why it is settled here and not in Phase 1: the partition
@@ -467,6 +526,10 @@ Re-read the finished brief pretending you have zero conversation context:
 
 ### Delivering it — where the file goes, and what happens to it after
 
+In a docs-kit repo the brief is delivered once it is in the ticket: print the
+item's full path, and with crew the chips you built. Everything below is about
+the `briefs/` file, which only a plain repo and the full-lane hand-over write.
+
 Write the brief to **`<repo-root>/briefs/`**, creating that directory if it is
 not there. Name it `brief-<slug>.md`, lowercase ASCII with hyphens — the same
 rule STANDARD §11 puts on document file names, for the same reason. When a brief
@@ -525,5 +588,11 @@ visible and fixable.
 - Omitting the WHY on deliberately unusual choices
 - Prompts that give the agent no stop-and-ask escape hatch for edge cases
 - Writing anything into `docs/` without the user having said yes to it
+- Writing a `briefs/` file in a docs-kit repo for work that has a Backlog item to
+  hold it — the file is a second copy, and no executor tree receives it
+- Copying scope, constraints or done-criteria into a chip's prompt — the prompt
+  is read once and lost; the ticket is what the executor re-reads
+- Cutting a ticket for direction work in a crew repo — a report is the
+  navigator's, and a `scope_files: 0` ticket is one nobody can close
 - Handing over full-lane work without surfacing that no Decision covers it —
   and equally, refusing to write the brief at all instead of asking

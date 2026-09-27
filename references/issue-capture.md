@@ -80,6 +80,17 @@ which caller you are:
 | `brief` — work has not started | `open` | none |
 | `docs-sync` — work already finished | `done` | one, appended |
 
+**What `brief` writes into the item, and nowhere else.** The brief of the work is
+the item's `## Brief` section — `### Phạm vi`, `### Ràng buộc`, `### Khi gặp`,
+`### Xong khi` — not a file in `briefs/`. The item is tracked, so every executor
+tree gets it through git, and it closes and archives with its chain. Context is
+cited by id (`source_ref` and the ids the section names), never restated. In a
+repo with crew switched on, the item also carries `scope_files:`, `execution:` and,
+when it edits what an earlier item builds, `after_ref:` on the later one, and the
+work is split by the planner's rule (`S > 6`, `C ≥ 3`, or more than one technical
+layer) — the same shape the planner cuts, so an executor never has to know which
+of the two wrote its ticket.
+
 **Why the forward path writes no audit line:** `92_audit/` records events that
 happened. Work that is about to start has not happened. `docs-sync` appends the
 line when the item flips to `done` — writing one here would log the same work

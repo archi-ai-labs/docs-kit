@@ -30,6 +30,14 @@ cùng đối số và cờ `--group`. Planner chủ đề có thêm quyền tạ
    - `after_ref:` — chỉ khi phiếu sửa thứ mà một phiếu khác sẽ dựng ra, ghi số
      phiếu đứng trước vào **phiếu sau**. Thứ tự chuỗi nằm trong phiếu chứ không
      nằm trong tin nhắn giữa hai phiên (`.claude/crew/tickets.md`).
+
+   Thân phiếu mang mục `## Brief` với bốn mục con: `### Phạm vi` (làm gì, và
+   việc gần kề KHÔNG được đụng), `### Ràng buộc` (PHẢI / CẤM, tách khỏi phần
+   mô tả), `### Khi gặp` (tình huống → ghi blocker vào phiếu và dừng),
+   `### Xong khi` (lệnh kiểm thật; không xác nhận được thì tính là trượt).
+   Bối cảnh thì trích id chứ không chép lại. `/docs-kit:brief` viết đúng khuôn
+   này, nên executor luôn tìm phạm vi ở cùng một chỗ. Brief nằm trong phiếu vì
+   phiếu tới mọi cây qua git, còn `briefs/` đã gitignore thì không.
 3. **Chẻ phiếu** nếu `S > 6`, `C ≥ 3`, hoặc phiếu chạm nhiều hơn một tầng kỹ
    thuật — phiếu ôm trọn một YÊU CẦU thì tốt hơn hai phiếu mỗi bên một nửa
    theo tầng.
@@ -159,14 +167,16 @@ Hai lệnh đầu, đúng thứ tự này:
     scripts/crew new <nnn>       # chọn cây, mở nhánh — làm việc TRONG cây nó in ra
     scripts/crew role executor   # luật vai
 
-Phiếu : docs/23_backlog/<tệp>.md
-Brief : briefs/<tệp>.md
+Phiếu : docs/23_backlog/<tệp>.md — làm theo mục ## Brief của phiếu
 Đọc thêm: <đường dẫn, không dán nội dung>
-
-Trong phạm vi : <một câu, khớp scope_files đã khai>
-Ngoài phạm vi : <việc gần kề mà executor KHÔNG được đụng>
-Xong khi      : <điều kiện đo được>
 ```
+
+Phạm vi, ràng buộc và điều kiện xong không nằm trong prompt. Trước 0.44.0 mẫu này
+có ba dòng phạm vi và một dòng `Brief : briefs/<tệp>.md`, nên cùng một quyết
+định có bốn bản: Issue, phiếu, file brief và prompt. Prompt chỉ được đọc một lần
+rồi mất, còn file brief chỉ tới cây một lần lúc cây được dựng, vì vậy hai bản ấy
+là hai bản cũ đi trước. Đo trên bốn repo crew: 60 trong 62 phiếu chạy không có
+file brief nào.
 
 `crew new` nằm trong prompt dù bước 1 của tệp vai đã có nó, và đây là ngoại lệ
 duy nhất của luật "đừng chép lại". Lý do đo được: `crew name executor` tính chỗ
@@ -192,7 +202,7 @@ Hai lệnh đầu, chỉ cho phiếu đầu:
 Sau mỗi `crew done`, cây tự chuyển sang phiếu kế; đừng chạy `crew new` cho nó.
 Báo cáo cuối: một báo cáo cho cả chuỗi, theo mẫu cho chuỗi trong vai executor.
 Phiếu : docs/23_backlog/<tệp đầu>.md … (mỗi phiếu một dòng)
-<các ô còn lại như trên, cho cả chuỗi>
+        mỗi phiếu làm theo mục ## Brief của chính nó
 ```
 
 Thứ tự trong prompt chỉ để người đọc dễ theo; thứ tự thật là các dòng
@@ -234,7 +244,7 @@ chính và commit ngay trong cùng lượt. Bước 5 cũng bỏ.
 
     scripts/crew role executor
 
-<các ô còn lại như trên>
+Phiếu : docs/23_backlog/<tệp>.md — làm theo mục ## Brief của phiếu
 ```
 
 **Hai lỗi mẫu này chặn thêm**, đều đã là luật rời rạc trong tệp này:

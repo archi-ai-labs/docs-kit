@@ -161,6 +161,8 @@ claim_unlock() {
 # and some of it cannot be gitignored at all — a `dir/` rule does not match a
 # symlink — so counting it would make a freshly built executor look like it had
 # already started work, and `preparing` would be unreachable in such a repo.
+# `briefs` stays in the list although crew stopped copying it in 0.44.0: trees
+# built before that still hold the copy, and it is not the ticket's work.
 own_files() {
   git -C "$1" status --porcelain 2>/dev/null | awk '{print $NF}' | while IFS= read -r q; do
     [ -n "$q" ] || continue
@@ -633,11 +635,11 @@ provision() { # provision <worktree> <label>
       note "linked $d (shared read-only — never link something a ticket edits)"
     fi
   done
-  # briefs/ is gitignored on purpose, so a fresh checkout arrives without it.
-  if [ -d "$MAIN/briefs" ] && [ ! -e "$WT/briefs" ]; then
-    cp -R "$MAIN/briefs" "$WT/briefs"
-    note "copied briefs/ (gitignored — it does not follow a worktree on its own)"
-  fi
+  # briefs/ is NOT copied, and must not be again (0.44.0). The brief of a ticket
+  # is the `## Brief` section of the ticket itself, which reaches every tree
+  # through git. The copy it replaced ran once per tree, and trees persist since
+  # 0.31.0, so each tree kept the briefs/ of the day it was built: a later brief
+  # never arrived, and a report written there never came back.
   run_setup "$WT" "$LBL"
   log_line SETUP "$LBL" - "$(( $(date +%s) - T0 ))"
 }

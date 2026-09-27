@@ -318,6 +318,18 @@ this was written: flat gave `status -> done` alone, the subfolder gave
 and never an open id. (The underlying containment check is worth narrowing on its
 own; it is a defect of close-out, not of this hat, and it is not fixed here.)
 
+**`brief` wears the planner's hat, and its brief lives in the ticket (0.44.0).**
+In a crew repo `/docs-kit:brief` ends where the planner ends: it reads
+`crew role planner`, cuts Backlog items by that file's rules (fields, split,
+`after_ref`), writes the brief as each item's `## Brief` section, and hands over
+one chip per chain from the planner's templates. Direction work goes to the
+navigator as a report, for the reason above. The brief used to be a file in the
+gitignored `briefs/`, which `crew new` copied into a tree once, when the tree was
+built, and trees persist since 0.31.0. Measured on four repos on 2026-09-27: 8
+trees held such snapshots, one with two files the main tree no longer had and one
+of 78 MB, while 60 of 62 tickets ran with no brief file at all. Crew now copies
+nothing from `briefs/`, because the ticket reaches every tree through git.
+
 **A hat is only worn if the session list shows it.** Every session title reads
 `<repo> · <role> [· <task>]`: the project, then the hat, then what it is working
 on. An executor's task is its ticket (§1); a hat working one ticket takes it as
@@ -993,7 +1005,6 @@ does not exist, so one fault is reported once.
 | `merge=union` gitattributes | audit lines are appended by `docs_close` on the main tree after the merge, serialized by construction; each ticket owns its own Backlog doc, so no two branches append to one ledger |
 | `crew-check` skill | its two checks (orphan worktrees, ticket/tree drift) are deterministic, so they live inside `crew status`, not in a skill that would re-derive them |
 | S/C fields in the validator | `scope_files:` and `execution:` stay optional and unchecked until the calibration log (§6) says what the thresholds should be |
-| `brief` crew section | `brief` has its own measured gates; teaching its delegation prompt to name level, tree and branch deserves its own release |
 | A report the machine writes | `crew report --write` fills the measured section and leaves every judgement section empty. Crew does not author prose about the project, for the reason §6.1 gives: the numbers are checkable and the story is not, so they must come from different hands |
 | A board that fixes the branch | the main-tree line reports and never runs `git checkout`: whether sitting on another branch is deliberate is the one thing the board cannot know, and a status command that moves HEAD under a running session is not a status command |
 | A board that sets `origin/HEAD`, or a key to silence its row | the `default` row names the fix and never runs it: repointing a ref every tool reads is the user's call, and someone who keeps it on prod on purpose pays one line on the board, which is cheaper than a config key that can be set wrong silently (§9) |

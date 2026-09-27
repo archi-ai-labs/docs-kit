@@ -163,7 +163,7 @@ plugin on by default.
 | `/docs-kit:crew-init` | Turn ON the crew execution layer: interview for commands, branches and lockable resources, write the `crew` key, stamp `scripts/crew` + the role commands + the operating docs. One-time per repo; refuses a role no evidence supports. | Yes (asks first) |
 | `/docs-kit:crew-update` | Carry a kit update into a repo that already runs crew. No interview, no config writes. A file the scaffold itself wrote and nobody touched is replaced in place — decided by the sha256 manifest, not a guess — and an edited one lands as `.new` with its diff in front of you. | Yes (kit-owned files) |
 | `/docs-kit:crew-status` | Read-only crew board — executors against tickets, held locks, whether the roadmap still matches the Backlog, and the three pacing signals. | No |
-| `/docs-kit:brief` | Turn settled decisions into a delegation prompt for a coding agent — gates on a decision-freeze check first. In a repo that has `docs/`, also records the work as an Issue and routes it through Layer 2 before writing the prompt. The one skill Claude may invoke on its own. | Yes (`docs/`, only after you confirm) |
+| `/docs-kit:brief` | Turn settled decisions into a delegation prompt for a coding agent — gates on a decision-freeze check first. In a repo that has `docs/`, also records the work as an Issue, routes it through Layer 2, and writes the brief as the Backlog item's `## Brief` section instead of a separate file; with crew, it cuts and hands over tickets the way the planner does. The one skill Claude may invoke on its own. | Yes (`docs/`, only after you confirm) |
 
 **Typical flow:** `docs-init` once → work → `docs-sync` at the end of a session →
 `docs-check` whenever you want the structure verified.
@@ -427,9 +427,10 @@ docs-kit/
 │   └── fixture/ + make-samples.sh
 ├── templates/                   # the full 17-folder docs tree + CLAUDE.md snippet
 │                                #   (a scaffold takes the subset its profile calls for)
-├── briefs/                      # gitignored — where `brief` writes its output, in
-│                                #   every repo. Never committed: CHANGELOG.md is
-│                                #   where reasoning lives once a change lands.
+├── briefs/                      # gitignored — where `brief` writes its output in a
+│                                #   repo without docs/ (with docs/ it goes into the
+│                                #   ticket). Never committed: CHANGELOG.md is where
+│                                #   reasoning lives once a change lands.
 ├── DESIGN-NOTES.md              # reasoning that never became code — known limits,
 │                                #   and why docs are text in git, not a database
 ├── CHANGELOG.md

@@ -53,7 +53,8 @@ cái mũ do người giao chứ không phải thứ model tự đội. Lấy n�
    đóng bằng trailer, `crew done` không tham gia. Trailer của nó rơi thẳng lên
    nhánh dev nên title chỉ sang `finished` khi phiếu đã được đóng sổ, tức là
    `status: done` kèm dòng audit.
-2. Đọc phiếu và brief của nó (`briefs/` đã nằm sẵn trong executor). Làm **trọn phiếu**: code,
+2. Đọc phiếu, gồm mục `## Brief` của nó: phạm vi, ràng buộc, khi gặp, xong khi.
+   Phiếu cũ chưa có mục này thì đọc phần thân như trước. Làm **trọn phiếu**: code,
    test, docs, dòng audit — phần nào của phiếu cũng là của bạn, không chuyển
    tay cho vai khác. Xem giao diện của cây mình trong Browser pane thì làm theo
    mục "Xem trước một cây executor" của `.claude/crew/worktrees.md`: pane chỉ đọc

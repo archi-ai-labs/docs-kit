@@ -5,6 +5,57 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
+## [0.44.0] — 2026-09-27
+
+In a docs-kit repo the brief is no longer a file of its own. It is the `## Brief`
+section of the Backlog item, so it is committed and reaches every executor tree
+through git, and `crew new` stops copying `briefs/` into trees.
+
+### Changed — the brief lives in the ticket
+
+`brief` had not changed since 0.26.0, and EXECUTION §10 listed its crew section as
+deliberately absent. Crew moved on without it: the planner's templates took over
+the hand-off, and one piece of work now left four copies of the same decisions —
+the Issue, the Backlog item, a file in `briefs/`, and the scope lines of the chip's
+prompt. Measured on the four repos running crew, 2026-09-27:
+
+| Measure | Value |
+|---|---|
+| Backlog items, archived included | 62, of which 51 carry crew fields (planner-written) |
+| items with a brief file behind them | 2 of 62, both direction work in one repo |
+| brief files in the main trees | 13, 23.9 KB on average; 11 cite no document id |
+| a Backlog item | median 2.4 KB, p75 4.0 KB |
+| sessions that invoked `brief` | 29; the `Split` dialog was shown 0 times |
+| executor trees holding a copy of `briefs/` | 8; the largest 78 MB, with a `node_modules` inside |
+
+`crew new` copied `briefs/` only into a tree that had none, and trees persist since
+0.31.0, so every tree kept the `briefs/` of the day it was built. One tree held two
+files its main tree no longer had, and none of the main tree's current ones: a
+planner prompt's `Brief : briefs/<file>.md` line pointed at a file the executor
+either could not see or saw in an old version.
+
+| Where | Now |
+|---|---|
+| `skills/brief` Phase 0 | detects `plain`, `docs-kit`, and crew (`scripts/crew role planner` succeeds). With crew it reads the planner's role file and restates none of it |
+| `skills/brief` Phase 1.5 | with crew, the Backlog item is cut by the planner's rules: `scope_files`, `execution`, the split rule, `after_ref` on the later of two dependent items. Direction work (a survey, a roadmap) gets no ticket; it goes to the navigator as a report in `92_audit/reports/` |
+| `skills/brief` Phase 2 | in a docs-kit repo the six sections become the ticket's `## Brief` — `### Phạm vi`, `### Ràng buộc`, `### Khi gặp`, `### Xong khi`; context and source of truth are cited by id, not written. With crew the hand-off is one chip per chain from the planner's templates |
+| planner hat | every ticket it cuts carries the same `## Brief`. The three prompt templates lose the `Brief :` line and the three scope lines, and point at the ticket's section |
+| executor hat, step 2 | reads the ticket's `## Brief`; an older ticket without one is read as before |
+| `crew new` | copies nothing from `briefs/`. `own_files` still skips `briefs`, because trees built earlier keep their copy |
+| `references/issue-capture.md`, EXECUTION §3 and §10, README | say where the brief lives; the §10 row is gone |
+
+**Unchanged on purpose.** A repo without `docs/` gets the six-section file in
+`briefs/` as before, split dialog and Workflow fan-out included; the owner chose
+to keep that block for those repos. The full-lane "hand it over anyway" path also
+still writes a file, because no Backlog item may exist before a Decision does, and
+crew cannot run that work (`crew new` refuses a branch without a ticket).
+
+**Upgrading.** Run `/docs-kit:crew-update` in each crew repo. Copies of `briefs/`
+already sitting in executor trees are not removed by any command: they are
+gitignored, they have no history, and a report an executor wrote there exists
+nowhere else. Move what you need back to the main tree, then remove the rest by
+hand — after the update, or the old `crew new` copies them in again.
+
 ## [0.43.0] — 2026-09-26
 
 A planner can now wait for a ticket to land with a crew command, and learn from
