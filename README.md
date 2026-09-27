@@ -25,7 +25,7 @@ renderer skips with a message and nothing else breaks. Scripts hold a **bash 3.2
 thing here Claude can reach on its own. The other ten load nothing until you
 type them.
 
-**Menu:** [Install](#-install) · [Usage](#-usage) · [The model](#-the-model) · [Generated views](#-generated-views) · [Enforcement](#-enforcement) · [Uninstall](#-uninstall) · [For maintainers](#-for-maintainers) · [Roadmap](#-roadmap)
+**Menu:** [Install](#-install) · [Usage](#-usage) · [Upgrade](#-upgrade-a-repo) · [The model](#-the-model) · [Generated views](#-generated-views) · [Enforcement](#-enforcement) · [Uninstall](#-uninstall) · [For maintainers](#-for-maintainers) · [Roadmap](#-roadmap)
 
 ---
 
@@ -161,7 +161,7 @@ plugin on by default.
 | `/docs-kit:docs-upgrade` | Bring an existing `docs/` up to the current standard, and to its own profile: add folders and seeds it lacks, regenerate the read models, re-run the checks. Also the path when a repo grows — declare a new `owns` token, run this, get the folders it justifies. Adds only — never overwrites, edits, or deletes. | Yes (adds only) |
 | `/docs-kit:explain` | Explain one Layer-2 document or chain — or a mechanism this repo runs on — to the four-gates standard: at least one drawing in either lane, trade-offs with numbers, ids as links, and one to three level-2 check questions to close. | No |
 | `/docs-kit:crew-init` | Turn ON the crew execution layer: interview for commands, branches and lockable resources, write the `crew` key, stamp `scripts/crew` + the role commands + the operating docs. One-time per repo; refuses a role no evidence supports. | Yes (asks first) |
-| `/docs-kit:crew-update` | Carry a kit update into a repo that already runs crew. No interview, no config writes. A file the scaffold itself wrote and nobody touched is replaced in place — decided by the sha256 manifest, not a guess — and an edited one lands as `.new` with its diff in front of you. | Yes (kit-owned files) |
+| `/docs-kit:crew-update` | Carry a kit update into a repo that already runs crew. No interview. A file the scaffold itself wrote and nobody touched is replaced in place — decided by the sha256 manifest, not a guess — and an edited one lands as `.new` with its diff in front of you. Asks before it refreshes the crew block of `CLAUDE.md` or drops a frozen knob. | Yes (kit-owned files; `CLAUDE.md` and `.docs-kit.json` only on yes) |
 | `/docs-kit:crew-status` | Read-only crew board — executors against tickets, held locks, whether the roadmap still matches the Backlog, and the three pacing signals. | No |
 | `/docs-kit:brief` | Turn settled decisions into a delegation prompt for a coding agent — gates on a decision-freeze check first. In a repo that has `docs/`, also records the work as an Issue, routes it through Layer 2, and writes the brief as the Backlog item's `## Brief` section instead of a separate file; with crew, it cuts and hands over tickets the way the planner does. The one skill Claude may invoke on its own. | Yes (`docs/`, only after you confirm) |
 
@@ -175,6 +175,46 @@ $ …work…
 $ /docs-kit:docs-sync
   → flips backlog statuses, appends audit lines, flags undocumented drift
 ```
+
+---
+
+## 🔄 Upgrade a repo
+
+Updating the plugin changes the kit on your machine, not your repos. Each repo
+carries copies the kit stamped into it — seed files in `docs/`, `scripts/crew`,
+the role files, `.claude/crew/`, and two blocks in `CLAUDE.md` — and they stay at
+the version they were stamped with until you carry the new one in. The version a
+repo was last rendered with is printed at the foot of `docs/index.html`.
+
+Pick a moment when no executor holds a ticket (`scripts/crew status` shows every
+executor `idle`). Old and new copies side by side are safe, but an executor in the
+middle of a ticket keeps running the old `scripts/crew` of its own tree.
+
+| # | Do | What it changes | What it may ask |
+|---|---|---|---|
+| 1 | In a terminal, `claude plugin update docs-kit@archi-ai-labs`, then restart Claude Code. A repo that pins the plugin at local scope needs the same command with `--scope local`, run inside that repo | the kit on this machine | — |
+| 2 | `/docs-kit:docs-upgrade` | adds the folders and seed files this version ships, rebuilds `INDEX.md` and `MAP.tsv`; never overwrites | whether to refresh the docs block in `CLAUDE.md` |
+| 3 | `/docs-kit:crew-update` — crew repos only | replaces `scripts/crew`, the role files and `.claude/crew/` wherever nobody edited them, and the crew block of `CLAUDE.md` if you say yes. Its first line is the version about to land: if it is not the new one, step 1 has not taken effect yet | each file someone edited, which lands as `.new` with its diff; `origin/HEAD`; frozen knobs; whether to refresh the crew block |
+| 4 | Commit, then run `scripts/crew status` and `/docs-kit:docs-check` | nothing — this proves the repo runs | — |
+
+**A `.new` file** means someone edited that file after the kit wrote it. Taking
+the `.new` drops the edit; keeping yours drops the kit's change. When both
+matter, see what the kit changed in that file between your version and the new
+one at `github.com/archi-ai-labs/docs-kit/compare/v<old>...v<new>`, apply that to
+your copy, and delete the `.new`. An empty change there means your copy is
+already current.
+
+**One-off actions, by the version you come from:**
+
+| Coming from before | Also do |
+|---|---|
+| 0.44.0 | Remove `briefs/` from every executor tree (`../<repo>-e<k>/briefs`): crew stopped copying it, and the copy only goes stale. Run `diff -rq ../<repo>-e<k>/briefs briefs` first, because a report an executor wrote there exists nowhere else |
+| 0.42.0 | Nothing. Each open crew session is told once, at its next stop, to move to the new title grammar |
+| 0.34.0 | The `navigator` hat arrives switched on. A repo that does not want it adds `"navigator"` to `crew.roles_absent` in `.docs-kit.json` and runs step 3 again |
+| 0.31.0 | There is no executor pool yet, so `crew new` refuses until the planner runs `scripts/crew executor add` |
+
+Everything else a release changes is in [CHANGELOG.md](CHANGELOG.md); its
+**Upgrading** paragraphs are the source of the table above.
 
 ---
 
@@ -308,7 +348,7 @@ your repo and keeps working without it.
 
 ---
 
-## 🛠️ For maintainers
+## 🛠 For maintainers
 
 <details>
 <summary><b>Validate before sharing</b></summary>
@@ -461,7 +501,7 @@ of the same name, so those three never ran. The other two, `brief` and
 
 ---
 
-## 🗺️ Roadmap
+## 🗺 Roadmap
 
 - **Blocking enforcement, once the triggers have earned it.** The hooks warn today
   because the rules are young. The path to blocking runs through false-positive

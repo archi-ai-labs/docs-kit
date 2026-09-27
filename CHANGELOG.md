@@ -5,6 +5,42 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
+## [0.44.1] — 2026-09-27
+
+`crew-update` now offers to refresh the crew block of `CLAUDE.md`, the one stamped
+file nothing ever refreshed, and the README says how to upgrade a repo in four
+steps.
+
+### Fixed — the crew block of `CLAUDE.md` stayed at the version crew-init wrote
+
+crew-init appends `templates/crew/claude-md-crew-snippet.md` between two markers,
+once. crew-update re-stamped `scripts/crew`, the role files and `.claude/crew/`,
+and never read `CLAUDE.md`; docs-upgrade refreshes only the docs block. The crew
+block is loaded into every session of a crew repo, and on 2026-09-27 all four
+crew repos of one machine still carried the block of 0.39.0: a title grammar
+ending in `· crew/executor` and "one ticket, one branch, one session", three
+releases after 0.41.0 and 0.42.0 changed both.
+
+| Where | Now |
+|---|---|
+| `scripts/crew_snippet.py` | reports `SNIPPET current`, `stale <now> <kit>`, `absent` or `broken`; `--apply` replaces the text between the two markers and no other byte. A repo without markers declined the block at crew-init and never gets one; unpaired or repeated markers are left alone |
+| `crew-update`, new step 6 | runs the report and, when the block is stale, asks once; `--apply` on "yes", and the commit is left to the user. The closing report names whether the block was refreshed |
+| EXECUTION §9, `setup.md`, README | crew-update writes user config only on a yes: frozen knobs (0.40.5) and now the crew block |
+
+Six new checks in `crew_test.sh`: a stale block is reported and the report writes
+nothing; `--apply` leaves every byte around the block; the result reads current;
+the kit's own block reads current; a file without markers and a file with two
+blocks are never written.
+
+### Added — "Upgrade a repo" in the README
+
+One section: why updating the plugin does not update a repo, four steps
+(plugin, `docs-upgrade`, `crew-update`, commit and check) with what each may ask,
+and the one-off actions by the version a repo comes from. The menu links to it.
+The same change fixes two menu links that never worked: GitHub keeps the
+variation selector of `🛠️` and `🗺️` in the heading's anchor, so `#-for-maintainers`
+and `#-roadmap` matched nothing; the two headings now use the plain emoji.
+
 ## [0.44.0] — 2026-09-27
 
 In a docs-kit repo the brief is no longer a file of its own. It is the `## Brief`

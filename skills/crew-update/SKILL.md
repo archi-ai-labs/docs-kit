@@ -14,10 +14,11 @@ out of the plugin cache. This skill is that missing half.
 
 **It stamps what the kit owns and nothing else.** It never re-asks the
 interview and never turns a role on or off. Besides the `.new` merges it may
-ask two questions: step 4's about `origin/HEAD`, only when the board shows that
-ref on another branch, and step 5's about frozen knobs, only when the config
-carries one. The second is the only way this skill writes `.docs-kit.json`,
-and only on "yes".
+ask three questions: step 4's about `origin/HEAD`, only when the board shows that
+ref on another branch; step 5's about frozen knobs, only when the config carries
+one; and step 6's about the crew block of `CLAUDE.md`, only when it differs from
+this version's. Step 5 is the only way this skill writes `.docs-kit.json`, step 6
+the only way it writes `CLAUDE.md`, and each only on "yes".
 
 ## Step 0 — Resolve the kit, and say which version is about to land
 
@@ -133,8 +134,39 @@ On "yes", run the same script with `--drop` and relay its lines. Then say that
 python3 "$PLUGIN_ROOT/scripts/crew_knobs.py" --drop .
 ```
 
-Then report four things: the version now stamped, the counts from step 2, any
-`.new` left unapplied by the user's own choice, and the knobs dropped or kept. If `scripts/crew` was among
+## Step 6 — The crew block of CLAUDE.md: offer to refresh it, never unasked
+
+```bash
+python3 "$PLUGIN_ROOT/scripts/crew_snippet.py" .
+```
+
+The block between `<!-- docs-kit:crew:start` and `<!-- docs-kit:crew:end -->` is
+loaded into every session of this repo, and crew-init wrote it once. Before 0.44.1
+nothing refreshed it, so on 2026-09-27 all four crew repos of one machine still
+told every session the title grammar and the one-session-per-ticket rule of
+0.39.0.
+
+`SNIPPET current` → say so in one line. `SNIPPET absent` → the repo declined the
+block at crew-init: add nothing, and name `templates/crew/claude-md-crew-snippet.md`
+for anyone who wants to paste it. `SNIPPET broken` → the markers are unpaired or
+repeated: say which, and touch nothing. `SNIPPET stale <now> <kit>` → ask one
+question (AskUserQuestion; if it fails or comes back empty, ask in plain text and
+**end the turn**): "Refresh the crew block in CLAUDE.md? It is <now> bytes today
+and <kit> in this version." Options: "Yes — replace the block" and "No — leave
+it". Say in the question what the new block changes in behaviour — a rule the
+sessions will follow differently — not a diff of prose.
+
+On "yes", run the script with `--apply` and relay its line. It replaces only the
+text between the two markers, byte for byte. Then say that `CLAUDE.md` changed and
+needs a commit; do not commit it yourself.
+
+```bash
+python3 "$PLUGIN_ROOT/scripts/crew_snippet.py" --apply .
+```
+
+Then report five things: the version now stamped, the counts from step 2, any
+`.new` left unapplied by the user's own choice, the knobs dropped or kept, and
+whether the crew block was refreshed. If `scripts/crew` was among
 the updated files, mention that open executor sessions are still running the old
 copy in their worktrees — the file follows the branch, not the session.
 

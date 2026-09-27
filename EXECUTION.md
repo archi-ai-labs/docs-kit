@@ -977,10 +977,14 @@ user config. Re-stamping after a kit upgrade belongs to `/docs-kit:crew-update`,
 which is a separate skill for a reason measured in 0.26.3: crew-init's own guard
 turns an already-on repo away, `docs-upgrade` only ever touched `docs/`, and the
 two together left a repo stranded on the version it was stamped with. crew-update
-re-stamps and nothing else — no interview, no config write — and it decides what
-it may replace from the sha256 manifest at `.claude/crew/.stamp`, so a file the
-scaffold wrote and nobody touched is updated in place while an edited one still
-lands as `.new`.
+re-stamps without an interview, and it decides what it may replace from the
+sha256 manifest at `.claude/crew/.stamp`, so a file the scaffold wrote and nobody
+touched is updated in place while an edited one still lands as `.new`. It writes
+user config only on a yes: frozen knobs out of `.docs-kit.json` (0.40.5), and the
+crew block of `CLAUDE.md` (0.44.1) through `scripts/crew_snippet.py`, which
+replaces the text between the two markers and no other byte. crew-init wrote
+that block once and nothing refreshed it, so on 2026-09-27 all four crew repos of
+one machine still carried the 0.39.0 block.
 
 **`dev_branch` is also what the tools outside crew should call the default.**
 Claude Code's diff pane and the "Main branch … use this for PRs" line it loads

@@ -115,10 +115,11 @@ claude plugin update docs-kit@archi-ai-labs
 /docs-kit:crew-update
 ```
 
-Lệnh sau chỉ chép tệp, không hỏi lại phần cấu hình. Nó phân biệt được tệp nào
+Lệnh sau chép tệp và không hỏi lại phần cấu hình. Nó phân biệt được tệp nào
 là của chính nó nhờ sổ sha256 ở `.claude/crew/.stamp`: tệp bạn chưa đụng tới
 thì thay thẳng, tệp bạn đã sửa thì đặt bản mới cạnh dưới tên `.new` để bạn tự
-trộn. Không bao giờ ghi đè chỉnh sửa cục bộ.
+trộn. Không bao giờ ghi đè chỉnh sửa cục bộ. Đoạn crew trong `CLAUDE.md` thì nó
+hỏi trước, rồi mới thay phần nằm giữa hai marker.
 
 Repo được stamp trước khi có sổ thì lần chạy đầu vẫn ra `.new` một lượt, và
 chính lần đó sinh ra sổ.

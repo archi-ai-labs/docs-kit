@@ -2647,6 +2647,52 @@ gwexit "$GWP" 10 && RC=0 || RC=$?
   && ok "wait: exits once a ticket opened after the wait began lands" \
   || bad "wait: late-opened ticket (rc=$RC out: $(cat "$GW/w4"))"
 
+# ---------------------------------------------------------------- crew block of CLAUDE.md (0.44.1)
+# crew-update never read CLAUDE.md, so all four real crew repos still carried the
+# pre-0.42.0 block. The known-bad case is that shape: a stale block between the
+# user's own text. --apply must replace the block and leave every other byte.
+SN="$KIT/scripts/crew_snippet.py"
+SD="$TMP/snippet"
+mkdir -p "$SD/stale" "$SD/current" "$SD/absent" "$SD/broken"
+{ printf '# Mine\n\nbefore\n\n'
+  printf '<!-- docs-kit:crew:start (old) -->\n**Title phiên** `<repo> · e1 · b001 · processing · crew/executor`\n<!-- docs-kit:crew:end -->\n'
+  printf '\nafter\n'; } > "$SD/stale/CLAUDE.md"
+{ printf 'top\n\n'; cat "$KIT/templates/crew/claude-md-crew-snippet.md"; printf '\nbottom\n'; } > "$SD/current/CLAUDE.md"
+printf '# no crew block here\n' > "$SD/absent/CLAUDE.md"
+{ cat "$KIT/templates/crew/claude-md-crew-snippet.md"; cat "$KIT/templates/crew/claude-md-crew-snippet.md"; } > "$SD/broken/CLAUDE.md"
+sn() { PYTHONDONTWRITEBYTECODE=1 python3 "$SN" "$@" 2>&1; }
+
+cp "$SD/stale/CLAUDE.md" "$SD/stale.before"
+OUT="$(sn "$SD/stale")"
+has "$OUT" "SNIPPET stale" && cmp -s "$SD/stale/CLAUDE.md" "$SD/stale.before" \
+  && ok "snippet: a stale crew block is reported, and the report writes nothing" \
+  || bad "snippet: stale report (out: $OUT)"
+OUT="$(sn --apply "$SD/stale")"
+python3 - "$SD/stale/CLAUDE.md" "$KIT/templates/crew/claude-md-crew-snippet.md" > "$SD/stale.check" <<'PY'
+import sys
+got = open(sys.argv[1]).read()
+kit = open(sys.argv[2]).read().rstrip("\n")
+want = "# Mine\n\nbefore\n\n" + kit + "\n\nafter\n"
+print("same" if got == want else "differs")
+PY
+has "$OUT" "SNIPPET replaced" && [ "$(cat "$SD/stale.check")" = same ] \
+  && ok "snippet: --apply replaces the block and leaves every byte around it" \
+  || bad "snippet: --apply (out: $OUT, file: $(cat "$SD/stale.check"))"
+[ "$(sn "$SD/stale")" = "SNIPPET current" ] \
+  && ok "snippet: after --apply the block reads current" \
+  || bad "snippet: block not current after --apply"
+[ "$(sn "$SD/current")" = "SNIPPET current" ] \
+  && ok "snippet: the kit's own block reads current" \
+  || bad "snippet: current block misread"
+cp "$SD/absent/CLAUDE.md" "$SD/absent.before"
+[ "$(sn --apply "$SD/absent")" = "SNIPPET absent" ] && cmp -s "$SD/absent/CLAUDE.md" "$SD/absent.before" \
+  && ok "snippet: a repo that declined the block never gets one" \
+  || bad "snippet: absent block was written"
+cp "$SD/broken/CLAUDE.md" "$SD/broken.before"
+[ "$(sn --apply "$SD/broken")" = "SNIPPET broken" ] && cmp -s "$SD/broken/CLAUDE.md" "$SD/broken.before" \
+  && ok "snippet: two blocks are reported broken and left alone" \
+  || bad "snippet: broken markers were touched"
+
 # ---------------------------------------------------------------- summary
 echo ""
 echo "crew_test: $PASS passed, $FAIL failed"
