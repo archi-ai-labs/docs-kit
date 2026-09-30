@@ -4,110 +4,74 @@
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A63D2.svg)](https://docs.claude.com/en/docs/claude-code)
 
-> A **Claude Code plugin** that gives a repo a documentation model with a spine:
-> three layers, one direction of change, and deterministic checks that hold it
-> together — plus an HTML read model generated straight from the markdown.
+> A **Claude Code plugin** that keeps a repo's docs true to its code: three
+> layers, one direction of change, deterministic checks, and an HTML view built
+> from the markdown. An optional crew layer runs the tickets in parallel.
 
-Project docs rot in a specific way: the architecture doc drifts from the code,
-nobody can say which decision caused which change, and the whole thing quietly
-becomes fiction. `docs-kit` fixes the direction of change instead of asking people
-to be disciplined — **Architecture is amended only through a Decision**, every
-change traces back to an Issue, and the audit log is append-only. What a machine
-can check, a script checks; what it cannot, a warn-only hook reminds you about.
+Architecture docs drift from the code until nobody can say which decision caused
+which change. `docs-kit` fixes the direction of change instead of asking for
+discipline: **only a Decision amends Architecture**, every change traces back to
+an Issue, and what a machine can check, a script checks.
 
-**Requirements:** Claude Code — **v2.1.154 or later** to get the opt-in install
-described below; earlier versions install this plugin switched on.
-`/docs-kit:docs-render` additionally wants **Python 3.9+** — if it is missing, the
-renderer skips with a message and nothing else breaks. Scripts hold a **bash 3.2
-/ BSD awk** floor, so they run on a stock macOS shell.
+**Requirements:** Claude Code **v2.1.154+** (older versions install the plugin
+switched on) and **Python 3.9+** for the renderer and the hooks. Without Python
+the hooks stay silent and the renderer skips with a message. Always-on context
+cost: **about 400 tokens**.
 
-**Always-on context cost: about 77 tokens** — one skill description, the only
-thing here Claude can reach on its own. The other ten load nothing until you
-type them.
-
-**Menu:** [Install](#-install) · [Usage](#-usage) · [Upgrade](#-upgrade-a-repo) · [The model](#-the-model) · [Generated views](#-generated-views) · [Enforcement](#-enforcement) · [Uninstall](#-uninstall) · [For maintainers](#-for-maintainers) · [Roadmap](#-roadmap)
+**Menu:** [Install](#-install) · [Usage](#-usage) · [The model](#-the-model) · [Crew](#-crew) · [Generated views](#-generated-views) · [Enforcement](#-enforcement) · [Upgrade](#-upgrade-a-repo) · [Uninstall](#-uninstall) · [For maintainers](#-for-maintainers) · [Roadmap](#-roadmap)
 
 ---
 
 ## 🚀 Install
 
-Two ways to install — a one-line terminal command, or from inside Claude Code.
-**Option 1 is recommended.**
+Two ways to install. **Option 1 is recommended.**
 
 ### Option 1 — One command in your terminal ⭐
-
-Installs globally in your **user** settings (`~/.claude/settings.json`), so it's
-active in every project. Paste this in:
 
 ```bash
 curl -fsSL https://archi-ai-labs.github.io/agent-marketplace/install.sh | bash -s -- --plugins docs-kit
 ```
 
-`--plugins docs-kit` is not optional here: with no arguments the installer
-registers the catalog and enables only `trim-kit`, because `docs-kit` installs
-hooks and nothing should switch hooks on for you unasked. Naming it *is* that
-decision, so this route leaves the plugin **on** — you can skip step 3 below.
-
-Want it in **one project only** instead? Add `--project` — it writes
-`./.claude/settings.json` in the current folder rather than your home config:
-
-```bash
-curl -fsSL https://archi-ai-labs.github.io/agent-marketplace/install.sh | bash -s -- --plugins docs-kit --project
-```
-
-Either way it's safe to re-run: it backs up your existing `settings.json` first and
-aborts without touching it if the JSON is invalid.
+This installs for every project (`~/.claude/settings.json`); add `--project` to
+write `./.claude/settings.json` for the current folder only. It is safe to re-run:
+it backs up `settings.json` first and aborts if the JSON is invalid.
 
 ### Option 2 — Inside Claude Code (Windows / no bash)
-
-No terminal or `bash` needed — run these from a Claude Code session, works everywhere:
 
 ```
 /plugin marketplace add archi-ai-labs/agent-marketplace
 /plugin install docs-kit@archi-ai-labs
 ```
 
-The `/plugin install` step **does not default to global** — it opens a scope picker.
-Choose:
+`/plugin install` **does not default to global** — it asks for a scope:
 
-- **User** — every project (same as Option 1) → **pick this for global**
-- **Project** — this repo, shared with collaborators (`.claude/settings.json`)
+- **User** — every project → **pick this for global**
+- **Project** — this repo, shared (`.claude/settings.json`)
 - **Local** — this repo, just you (`.claude/settings.local.json`)
 
-> Want global with no picker? Run the shell command
-> `claude plugin install docs-kit@archi-ai-labs` — it installs to **User** scope
-> (global) unless you pass `--scope`.
+> The shell form `claude plugin install docs-kit@archi-ai-labs` installs to
+> **User** scope with no picker.
 
-### ▶︎ After installing (either option)
+### ▶︎ After installing
 
-1. **Restart** Claude Code (or run `/reload-plugins`) — it fetches the plugin from GitHub.
-2. If asked to **trust** the `archi-ai-labs` marketplace, approve it once. ✅
-3. **Turn it on if you came via Option 2** — that route installs the plugin
-   *disabled*:
-   ```
-   /plugin enable docs-kit@archi-ai-labs
-   ```
-4. Run **`/docs-kit:docs-init`** in the repo you want documented.
-
-> **Why step 3 exists, and why Option 1 skips it.** `docs-kit` registers two
-> hooks, `PostToolUse` and `Stop`. Hooks run without you asking on that
-> particular occasion, so the plugin ships `defaultEnabled: false` and nothing
-> switches them on for someone who has not decided to have them. Option 1 makes
-> you name `--plugins docs-kit`, which is that decision — the installer writes an
-> explicit `true` into `enabledPlugins`, and an explicit setting outranks the
-> default. Option 2's `/plugin install` does not ask, so it lands disabled.
->
-> **Already using `docs-kit` before v0.9.0? Nothing changes for you.** A choice
-> already recorded in your settings outranks this default at every scope. And on
-> Claude Code older than **v2.1.154** the field is ignored entirely and the
-> plugin installs enabled either way.
+1. Restart Claude Code (or `/reload-plugins`), and trust the `archi-ai-labs`
+   marketplace if asked.
+2. **Option 2 only:** `/plugin enable docs-kit@archi-ai-labs`, because that route
+   installs the plugin switched off.
+3. Run **`/docs-kit:docs-init`** in the repo you want documented.
 
 <details>
-<summary><b>Extras</b> — read the script first · local dev · what the installer writes</summary>
+<summary><b>Extras</b> — why Option 2 lands off · read the script first · local dev · what the installer writes</summary>
+
+### Why Option 2 lands off
+
+`docs-kit` registers five hooks, which run without you asking at that moment, so
+the plugin ships `defaultEnabled: false`. Option 1 makes you name
+`--plugins docs-kit` — without it the installer enables only `trim-kit` — and that
+is the decision: the installer writes an explicit `true` into `enabledPlugins`,
+which outranks the default. A choice already in your settings outranks it too.
 
 ### Prefer to read the script before running it?
-
-Piping `curl` into `bash` runs code sight unseen. To inspect it first:
 
 ```bash
 curl -fsSL https://archi-ai-labs.github.io/agent-marketplace/install.sh -o install.sh
@@ -117,17 +81,14 @@ bash install.sh --plugins docs-kit   # then run
 
 ### Local dev — try it without installing
 
-Fastest loop while editing the plugin — a session-only load, nothing written to
-your settings:
-
 ```bash
-claude --plugin-dir /path/to/docs-kit
+claude --plugin-dir /path/to/docs-kit   # session-only, writes no settings
 ```
 
 ### What the installer actually writes
 
-The install script (Option 1) deep-merges these two keys into the target
-`settings.json` — you can add them by hand instead of running the script:
+The script deep-merges these two keys into the target `settings.json`; you can
+add them by hand instead:
 
 ```json
 {
@@ -142,28 +103,27 @@ The install script (Option 1) deep-merges these two keys into the target
 }
 ```
 
-`extraKnownMarketplaces` pre-registers the marketplace; `enabledPlugins` turns the
-plugin on by default.
-
 </details>
 
 ---
 
 ## 💡 Usage
 
+Every command is typed as `/docs-kit:<name>`.
+
 | Command | What it does | Writes files |
 |---|---|---|
-| `/docs-kit:docs-init` | Detect the stack from the repo's manifests, ask what the repo owns, scaffold the folders that profile calls for (12–17) + templates into `docs/`, read the repo's source to fill Architecture, and optionally wire the rules into `CLAUDE.md`. Refuses to touch an existing `docs/`; asks before every write outside the scaffold. | Yes |
-| `/docs-kit:docs-sync` | End-of-session reconcile: backlog statuses, audit entries, retroactive Issues, pending Architecture amendments, architecture-vs-code drift, and archiving what can no longer change. | Yes |
-| `/docs-kit:docs-archive` | Clean up Layer 2 by chain: a fixed-format preview report — which Issue → Proposal → Decision → Backlog chains are finished, which will never close by themselves and why, which are still in flight — then, on your yes, `git mv` into `_archive/` with every relative link rewritten to follow. Settles a held chain only when you name it. | Yes (asks first) |
-| `/docs-kit:docs-check` | Run the three deterministic checks — the validator, a stale-read-model gate (`INDEX.md` and `MAP.tsv`), and API-contract drift against a generated artifact — and explain each failure. Never fixes. | No |
-| `/docs-kit:docs-render` | Generate/refresh the read models of `docs/` — three HTML pages, `INDEX.md` for agents, and `MAP.tsv` for the hooks. Deterministic; never edits the source markdown. | Yes (generated files only) |
-| `/docs-kit:docs-upgrade` | Bring an existing `docs/` up to the current standard, and to its own profile: add folders and seeds it lacks, regenerate the read models, re-run the checks. Also the path when a repo grows — declare a new `owns` token, run this, get the folders it justifies. Adds only — never overwrites, edits, or deletes. | Yes (adds only) |
-| `/docs-kit:explain` | Explain one Layer-2 document or chain — or a mechanism this repo runs on — to the four-gates standard: at least one drawing in either lane, trade-offs with numbers, ids as links, and one to three level-2 check questions to close. | No |
-| `/docs-kit:crew-init` | Turn ON the crew execution layer: interview for commands, branches and lockable resources, write the `crew` key, stamp `scripts/crew` + the role commands + the operating docs. One-time per repo; refuses a role no evidence supports. | Yes (asks first) |
-| `/docs-kit:crew-update` | Carry a kit update into a repo that already runs crew. No interview. A file the scaffold itself wrote and nobody touched is replaced in place — decided by the sha256 manifest, not a guess — and an edited one lands as `.new` with its diff in front of you. Asks before it refreshes the crew block of `CLAUDE.md` or drops a frozen knob. | Yes (kit-owned files; `CLAUDE.md` and `.docs-kit.json` only on yes) |
-| `/docs-kit:crew-status` | Read-only crew board — executors against tickets, held locks, whether the roadmap still matches the Backlog, and the three pacing signals. | No |
-| `/docs-kit:brief` | Turn settled decisions into a delegation prompt for a coding agent — gates on a decision-freeze check first. In a repo that has `docs/`, also records the work as an Issue, routes it through Layer 2, and writes the brief as the Backlog item's `## Brief` section instead of a separate file; with crew, it cuts and hands over tickets the way the planner does. The one skill Claude may invoke on its own. | Yes (`docs/`, only after you confirm) |
+| `docs-init` | Start here: scaffold `docs/`, fill Architecture from the code | Yes |
+| `docs-sync` | End of session: statuses, audit lines, drift | Yes |
+| `docs-check` | Validate, and explain each failure; never fixes | No |
+| `docs-render` | Rebuild the HTML views, `INDEX.md` and `MAP.tsv` | Generated only |
+| `docs-upgrade` | Bring `docs/` up to this version | Adds only |
+| `docs-archive` | Move finished chains into `_archive/` | On your yes |
+| `brief` | Turn settled decisions into a prompt for another agent | On your yes |
+| `explain` | Explain an Issue, a Decision or a mechanism, with a drawing | No |
+| `crew-init` | Turn on [crew](#-crew) for this repo | On your yes |
+| `crew-status` | Read-only board: executors, tickets, locks | No |
+| `crew-update` | Carry a new kit version into a crew repo | Kit files |
 
 **Typical flow:** `docs-init` once → work → `docs-sync` at the end of a session →
 `docs-check` whenever you want the structure verified.
@@ -171,180 +131,108 @@ plugin on by default.
 ```text
 $ /docs-kit:docs-init
   → scaffolds docs/, reads the source, renders the HTML views
-$ …work…
 $ /docs-kit:docs-sync
   → flips backlog statuses, appends audit lines, flags undocumented drift
 ```
 
 ---
 
-## 🔄 Upgrade a repo
-
-Updating the plugin changes the kit on your machine, not your repos. Each repo
-carries copies the kit stamped into it — seed files in `docs/`, `scripts/crew`,
-the role files, `.claude/crew/`, and two blocks in `CLAUDE.md` — and they stay at
-the version they were stamped with until you carry the new one in. The version a
-repo was last rendered with is printed at the foot of `docs/index.html`.
-
-Pick a moment when no executor holds a ticket (`scripts/crew status` shows every
-executor `idle`). Old and new copies side by side are safe, but an executor in the
-middle of a ticket keeps running the old `scripts/crew` of its own tree.
-
-| # | Do | What it changes | What it may ask |
-|---|---|---|---|
-| 1 | In a terminal, `claude plugin update docs-kit@archi-ai-labs`, then restart Claude Code. A repo that pins the plugin at local scope needs the same command with `--scope local`, run inside that repo | the kit on this machine | — |
-| 2 | `/docs-kit:docs-upgrade` | adds the folders and seed files this version ships, rebuilds `INDEX.md` and `MAP.tsv`; never overwrites | whether to refresh the docs block in `CLAUDE.md` |
-| 3 | `/docs-kit:crew-update` — crew repos only | replaces `scripts/crew`, the role files and `.claude/crew/` wherever nobody edited them, and the crew block of `CLAUDE.md` if you say yes. Its first line is the version about to land: if it is not the new one, step 1 has not taken effect yet | each file someone edited, which lands as `.new` with its diff; `origin/HEAD`; frozen knobs; whether to refresh the crew block |
-| 4 | Commit, then run `scripts/crew status` and `/docs-kit:docs-check` | nothing — this proves the repo runs | — |
-
-**A `.new` file** means someone edited that file after the kit wrote it. Taking
-the `.new` drops the edit; keeping yours drops the kit's change. When both
-matter, see what the kit changed in that file between your version and the new
-one at `github.com/archi-ai-labs/docs-kit/compare/v<old>...v<new>`, apply that to
-your copy, and delete the `.new`. An empty change there means your copy is
-already current.
-
-**One-off actions, by the version you come from:**
-
-| Coming from before | Also do |
-|---|---|
-| 0.44.0 | Remove `briefs/` from every executor tree (`../<repo>-e<k>/briefs`): crew stopped copying it, and the copy only goes stale. Run `diff -rq ../<repo>-e<k>/briefs briefs` first, because a report an executor wrote there exists nowhere else |
-| 0.42.0 | Nothing. Each open crew session is told once, at its next stop, to move to the new title grammar |
-| 0.34.0 | The `navigator` hat arrives switched on. A repo that does not want it adds `"navigator"` to `crew.roles_absent` in `.docs-kit.json` and runs step 3 again |
-| 0.31.0 | There is no executor pool yet, so `crew new` refuses until the planner runs `scripts/crew executor add` |
-
-Everything else a release changes is in [CHANGELOG.md](CHANGELOG.md); its
-**Upgrading** paragraphs are the source of the table above.
-
----
-
 ## 🧭 The model
 
 ```
-LAYER 1 — FOUNDATION   Products → Roadmap → Architecture → API (state; only Decisions amend)
-LAYER 2 — CHANGE       Issue → [Proposal → Decision] → Backlog (process; traceable)
-                       terminal records move to _archive/ — still validated, no longer read
-LAYER 3 — REFERENCE    Conventions/Services/Runbooks/Deploy/FE/QA (edit directly)
-OVERSIGHT              92_audit — append-only audit log
-                       99_feedback — problems with the kit itself, one prompt per file
+LAYER 1  FOUNDATION  Products → Roadmap → Architecture → API
+LAYER 2  CHANGE      Issue → [Proposal → Decision] → Backlog
+LAYER 3  REFERENCE   Conventions, services, runbooks, deploy, QA
+OVERSIGHT            audit log (append-only) · kit feedback
 ```
 
-Two lanes run through Layer 2. The **fast lane** goes `Issue → Backlog` directly;
-the **full lane** requires a Proposal and a Decision. The test is three questions:
-does it modify the Architecture doc, would reverting it take more than a day, and
-is there an irreversible side effect — deleted data, an outside publish, a one-way
-flag? Any yes puts the change in the full lane, and the third question outranks
-the first two.
+Layer 1 changes only through a Decision, and Layer 3 is edited directly. A change
+that modifies Architecture, takes over a day to revert, or has an irreversible
+side effect goes through a Proposal and a Decision; anything else goes straight
+from Issue to Backlog. The full model is in [STANDARD.md](STANDARD.md), and its
+known limits are in [DESIGN-NOTES.md](DESIGN-NOTES.md).
 
-The full model lives in **[STANDARD.md](STANDARD.md)** — the source of truth every
-skill, hook, script, and template conforms to. Frontmatter contracts (§4), the
-validator contract (§7), the generated views and figure standard (§10), and the
-language split (§11) are specified there, not left to habit.
+---
 
-What the model deliberately **cannot** do is written down too, in
-**[DESIGN-NOTES.md](DESIGN-NOTES.md)** — eight known limitations, and the reasoning
-behind keeping documentation as text in git rather than moving it into a database.
+## 👥 Crew
+
+Optional, and off until `/docs-kit:crew-init`. Crew runs approved Backlog items in
+parallel: a planner cuts tickets, each executor works one ticket on its own branch
+in its own git worktree, and `scripts/crew done` tests, merges and closes it.
+Shared resources are locks, so two executors never hold the same one. The process
+is in [EXECUTION.md](EXECUTION.md).
 
 ---
 
 ## 🖼 Generated views
 
-`/docs-kit:docs-render` builds a small read-only site from the markdown — same
-input, same output bytes, no LLM and no network:
-
-| Page | Content |
-|---|---|
-| `docs/index.html` | Menu beside README: system map, sheet cards, Layer-3 listing, the one hard rule |
-| `docs/current.html` | Layer 1 — product cards, roadmap board, component cards, data-flow graph, ERD, class diagram, API contract tables, business-flow sequences, decision flowcharts, state machines, revision block. A section the repo has nothing for is omitted, and the rest renumber |
-| `docs/changes.html` | Layer 2 — issue/backlog boards, proposal & decision tables, trace chains, audit table |
-| `docs/INDEX.md` | The read model for **agents** — one line per document: id, status, refs, file, description |
-
-The three pages are for people; `INDEX.md` is for the agent, and it exists to
-delete a habit. Answering "what is already settled?" by reading every Decision costs
-one whole file per decision and grows forever, to produce an answer that does not.
-Skills read the index and open only the ids they need. A repo with four hundred
-decisions then costs the same at this step as a repo with four.
-
-Which makes a stale index worse than a missing one — the agent trusts it. So it is
-the one generated file with a gate; put this in CI beside the validator:
-
-```bash
-docs_render.sh --check .
-```
-
-It writes nothing, and rebuilds the index through the same code path a real render
-uses, so it cannot disagree with one. Exit `0` current · `1` missing or stale.
-
-Real output is committed under [`design/`](design/) as the reference for what the
-renderer produces — [`sample-current.html`](design/sample-current.html) is the most
-representative. The samples are regenerated from a fixture, never hand-edited, and
-CI fails if they drift.
-
-Two rules worth knowing before you write a flow. **A figure is never shrunk to
-fit** — one wider than the column scrolls instead, because text scaled down to
-make a diagram fit is a diagram nobody reads. And **`data_flow` is always a
-graph**: a cycle is not a drawing problem but a callback or a cache read-back, so
-those edges are lifted out for layering and drawn back in on return lanes below
-the rows. Past the density budget (20 nodes · 32 edges · 10 per column) the graph
-is still drawn in full — it just scrolls, and a note suggests splitting the flow
-across Architecture docs. The complete edge table sits under every figure. See
-STANDARD §10.
+`docs-render` writes three HTML pages for people, `INDEX.md` for agents and
+`MAP.tsv` for the hooks: same input, same bytes, no LLM. Agents trust `INDEX.md`,
+so gate it in CI with `docs_render.sh --check .`. See a
+[real sample](design/sample-current.html).
 
 ---
 
 ## 🔒 Enforcement
 
-Two hooks for the docs layer, both **deterministic, warn-only, and silent in repos
-without a `docs/` skeleton**. No LLM runs inside a hook. The crew layer adds three
-of its own, silent in a repo with no `scripts/crew` — see EXECUTION §8.
+Five deterministic, warn-only hooks, silent in a repo that has not opted in. Two
+watch the docs: an edit to Architecture, and code that moved past the document
+describing it. Three watch crew: a shared resource used without its lock, a
+question asked before any drawing, and a session title that git no longer agrees
+with. They warn rather than block, because a hook that blocks on a false positive
+gets switched off ([STANDARD §8](STANDARD.md), [EXECUTION §8](EXECUTION.md)).
 
-- **PostToolUse** (Edit/Write) — editing `docs/02_architecture/`,
-  `docs/03_business-logic/` or `docs/04_api/` prints a reminder that layer 1 is
-  amended only via the Decision workflow. `templates/docs/` is exempt, so the plugin's own tree is quiet.
-- **Stop** — looks up every file the session or any of its sub-agents edited in
-  `docs/MAP.tsv` and reports **by document**: which documents describe code that
-  moved past their `verified_at`, and files added beside documented ones that
-  nothing claims. A file no document describes produces silence, however
-  sensitive its path looks. A document the session also edited is never reported.
+---
 
-  Until 0.25.0 this matched path globs instead. On a real monorepo whose service
-  directory is named `apps/api/`, `**/api/**` matched 57 of 57 edited files — every
-  test, every changelog — and fired in 15 of 36 sessions with no way to silence it.
-  *A directory called api* and *an API boundary* are not the same thing, and no
-  pattern can tell them apart; a path a document claims is a fact the repo states.
+## 🔄 Upgrade a repo
 
-Both hooks now require the repo to **declare** itself: a `.docs-kit.json` or a
-`docs/22_decisions/` folder. A bare `docs/README.md` is not a declaration.
+Updating the plugin does not update your repos. While every executor is `idle`:
 
-Warn-only by design: these rules have not been battle-tested across enough real
-projects, and a false positive that *blocks* teaches people to disable hooks
-entirely — which loses all enforcement. Promote to blocking only after the
-triggers have been tuned in practice.
+1. `claude plugin update docs-kit@archi-ai-labs` in a terminal, then restart.
+2. `/docs-kit:docs-upgrade`
+3. `/docs-kit:crew-update`, in crew repos only.
+4. Commit, then `/docs-kit:docs-check`.
+
+<details>
+<summary><b>Details</b> — local scope, <code>.new</code> files, one-off steps by version</summary>
+
+**Local scope.** A repo that pins the plugin at local scope needs step 1 again
+with `--scope local`, run inside that repo. `crew-update` names the version about
+to land on its first line; if it is not the new one, step 1 has not taken effect.
+
+**A `.new` file** means someone edited that file after the kit wrote it. Taking
+the `.new` drops the edit; keeping yours drops the kit's change. When both
+matter, apply what `github.com/archi-ai-labs/docs-kit/compare/v<old>...v<new>`
+shows for that file to your copy, and delete the `.new`.
+
+**One-off actions, by the version you come from:**
+
+| Coming from before | Also do |
+|---|---|
+| 0.44.0 | Remove `briefs/` from every executor tree (`../<repo>-e<k>/briefs`), after `diff -rq ../<repo>-e<k>/briefs briefs`: a report an executor wrote there exists nowhere else |
+| 0.42.0 | Nothing. Each open crew session is told once to move to the new title grammar |
+| 0.34.0 | The `navigator` hat arrives on. To opt out, add `"navigator"` to `crew.roles_absent` in `.docs-kit.json` and run step 3 again |
+| 0.31.0 | `crew new` refuses until the planner runs `scripts/crew executor add` |
+
+The **Upgrading** paragraphs of [CHANGELOG.md](CHANGELOG.md) are the source of
+this table.
+
+</details>
 
 ---
 
 ## 🧹 Uninstall
 
-From inside Claude Code:
-
 ```
 /plugin uninstall docs-kit@archi-ai-labs     # remove the plugin
-/plugin marketplace remove archi-ai-labs     # also drop the catalog (optional)
+/plugin disable docs-kit@archi-ai-labs       # or only turn it off
+/plugin marketplace remove archi-ai-labs     # drops the catalog AND every plugin from it
 ```
 
-- **Just turn it off** without removing: `/plugin disable docs-kit@archi-ai-labs`
-- Run `/reload-plugins` (or restart Claude Code) to apply.
-
-> Removing the marketplace uninstalls every plugin you installed from it — so if
-> `docs-kit` was your only one, `marketplace remove` alone is enough.
-
-**Installed with the script (Option 1)?** You can instead undo it by deleting the
-two keys the installer added — `extraKnownMarketplaces["archi-ai-labs"]` and
-`enabledPlugins["docs-kit@archi-ai-labs"]` — from your `settings.json`. The
-installer left a timestamped `.bak` copy next to it to restore from.
-
-Uninstalling removes the plugin, not your docs — `docs/` is ordinary markdown in
-your repo and keeps working without it.
+Run `/reload-plugins` to apply. A script install can also be undone by deleting
+`extraKnownMarketplaces["archi-ai-labs"]` and `enabledPlugins["docs-kit@archi-ai-labs"]`
+from `settings.json`, or by restoring the `.bak` the installer left beside it.
+Your `docs/` is plain markdown and keeps working without the plugin.
 
 ---
 
@@ -357,19 +245,13 @@ your repo and keeps working without it.
 claude plugin validate .    # manifest + skill frontmatter
 ```
 
-That, and the full test recipe, run automatically on every push and PR via
-[`.github/workflows/validate.yml`](.github/workflows/validate.yml) — 32 steps:
-tag-vs-version, manifest JSON, script syntax on python 3.9 (the portability
-floor), a fresh scaffold validating clean, every profile branch producing exactly
-its folder set, an unknown `owns` token being refused, `--sync` growing a tree and
-never shrinking one, `INDEX.md` being complete and byte-deterministic, both
-`--check` gates catching drift in both directions, the validator still rejecting a
-dangling ref and a moved path, both hooks, `docs_feedback.sh` allocating ids and
-refusing a repo that predates `99_feedback/`, every frontmatter value staying out of
-an accidental YAML mapping, and `design/sample-*.html` matching a fresh render.
-
-Most of those are **mutation tests** — they break something on purpose and assert
-the check fails. A gate that has only ever been seen passing is not a gate.
+That and the full test recipe run on every push and PR via
+[`.github/workflows/validate.yml`](.github/workflows/validate.yml): manifest and
+script syntax on the Python 3.9 floor, a fresh scaffold for every profile, the
+validator, both `--check` gates, every hook, the crew end-to-end suite, and
+`design/sample-*.html` against a fresh render. Most steps are **mutation tests**
+— they break something on purpose and assert the check fails. A gate that has
+only ever been seen passing is not a gate.
 
 </details>
 
@@ -402,16 +284,10 @@ bash scripts/docs_feedback.sh show FEEDBACK-001 "$work"
 bash design/make-samples.sh && git diff --stat -- design/
 ```
 
-Mutating an enum, an audit line, or a duplicated `id:` must turn the validator's `OK`
-into `FAIL` lines, and mutating a ref, an `amended_by` entry, or a path named in
-`components` must produce `NOTE` lines that become `FAIL` under `--strict`. A
-validator that only ever passes is not a test.
-
-That split is the validator's contract since 0.28.0: **a wrong name fails, a wrong
-link warns** (STANDARD §7). A duplicate id makes every reference to it ambiguous and
-none of them look wrong, so nothing downstream can recover; a dangling ref is one
-broken edge, visible to the first person who follows it. `--strict` restores the old
-behaviour for CI.
+Mutating an enum, an audit line or a duplicated `id:` must turn the validator's
+`OK` into `FAIL` lines. Mutating a ref, an `amended_by` entry or a path named in
+`components` must produce `NOTE` lines, which become `FAIL` under `--strict`: a
+wrong name fails, a wrong link warns (STANDARD §7).
 
 </details>
 
@@ -429,8 +305,8 @@ never drifts. The renderer reads it and stamps it into every generated page.
 > CI enforces this: pushing a tag `v<x.y.z>` fails the build unless it matches
 > `version` in `plugin.json`, so steps 1 and 4 cannot silently drift apart.
 
-Subscribers pick up the new version on their next `/plugin marketplace update`
-(or a session restart).
+Installs do not follow `main` on their own; each user picks the new version up
+with step 1 of [Upgrade a repo](#-upgrade-a-repo).
 
 </details>
 
@@ -446,51 +322,35 @@ repo — so there is no `marketplace.json` here, only a `plugin.json`.
 docs-kit/
 ├── .claude-plugin/plugin.json   # the plugin manifest (single source of version)
 ├── .github/workflows/validate.yml
-├── STANDARD.md                  # source of truth for the model
-├── skills/                      # every command: docs-init (entry point), docs-sync,
-│                                #   docs-archive, docs-check, docs-render, docs-upgrade,
-│                                #   brief, explain, crew-init, crew-status, crew-update
+├── STANDARD.md                  # source of truth for the docs model
+├── EXECUTION.md                 # source of truth for the crew layer
+├── DESIGN-NOTES.md              # known limits, and why docs are text in git
+├── skills/                      # one folder per command in Usage
 ├── references/                  # mechanics shared by more than one skill
-│   └── issue-capture.md         #   creating an Issue — read by brief + docs-sync
-├── hooks/hooks.json             # 2 deterministic warn-only hooks
-├── scripts/                     # docs_validate.sh, docs_scaffold.sh, docs_render.{sh,py},
-│                                #   docs_close.{sh,py} (Closes: trailers → status + audit
-│                                #   line; archiving + link rewrite), docs_archive.py
-│                                #   (chain report + --settle), docs_profile.sh (which
-│                                #   folders belong here — sourced by both scaffold and
-│                                #   validator),
-│                                #   docs_feedback.sh (file a problem with the kit itself),
-│                                #   docs_detect.py (read-only stack report), hook workers
-├── design/                      # "change-control print" design system + generated samples
-│   ├── design-system.html       #   the design contract
-│   ├── sample-*.html            #   real renderer output — regenerate, never hand-edit
-│   └── fixture/ + make-samples.sh
-├── templates/                   # the full 17-folder docs tree + CLAUDE.md snippet
-│                                #   (a scaffold takes the subset its profile calls for)
-├── briefs/                      # gitignored — where `brief` writes its output in a
-│                                #   repo without docs/ (with docs/ it goes into the
-│                                #   ticket). Never committed: CHANGELOG.md is where
-│                                #   reasoning lives once a change lands.
-├── DESIGN-NOTES.md              # reasoning that never became code — known limits,
-│                                #   and why docs are text in git, not a database
+├── hooks/hooks.json             # 5 deterministic warn-only hooks
+├── scripts/
+│   ├── docs_*                   #   validate, scaffold, render, close, archive,
+│   │                            #   profile, detect, feedback
+│   ├── crew_*                   #   crew scaffold, knobs, CLAUDE.md snippet, crew_test.sh
+│   └── hook_*                   #   one .sh wrapper + one .py worker per hook
+├── templates/
+│   ├── docs/                    #   the full 17-folder tree; a profile takes a subset
+│   ├── crew/                    #   scripts/crew, role commands, operating docs
+│   └── claude-md-snippet.md     #   the docs block for CLAUDE.md
+├── design/                      # design system + generated samples — never hand-edit
+├── briefs/                      # gitignored: brief output in a repo without docs/
 ├── CHANGELOG.md
 ├── LICENSE
 └── README.md
 ```
 
-`commands/` is gone as of v0.9.0. Three of its five files were six-line wrappers
-that only said *"invoke the same-named skill"* — and a skill outranks a command
-of the same name, so those three never ran. The other two, `brief` and
-`docs-render`, held real content and became skills. Nothing about typing
-`/docs-kit:<name>` changed.
-
 **Invariants** — do not "fix" these away:
 
 - The three-layer order is fixed, and only a Decision amends Architecture.
-- Exactly one skill is reachable by Claude on its own (`brief`); the rest carry
-  `disable-model-invocation: true`. The number in **Requirements** is the budget
-  that buys.
-- Hooks stay deterministic and warn-only; the rationale comments in
+- Exactly two skills are reachable by Claude on its own (`brief` and `explain`);
+  the rest carry `disable-model-invocation: true`. The number in **Requirements**
+  is the budget that buys.
+- Hooks stay deterministic and warn-only by default; the rationale comments in
   `scripts/hook_*` are load-bearing.
 - Writes to user config (`CLAUDE.md`) happen only after an explicit yes.
 - Templates stay project-agnostic — never inject a project name into them.
@@ -503,17 +363,10 @@ of the same name, so those three never ran. The other two, `brief` and
 
 ## 🗺 Roadmap
 
-- **Blocking enforcement, once the triggers have earned it.** The hooks warn today
-  because the rules are young. The path to blocking runs through false-positive
-  data from real projects, not through confidence.
-- **A cross-repo view.** Every figure today is scoped to one repo, and per-service
-  architecture made that scoping sharper. In a system spread across many repos the
-  whole is now never visible in one picture — the one requirement the current model
-  provably does not meet ([DESIGN-NOTES §2.8](DESIGN-NOTES.md)).
-- **Evidence for the profile branch.** `owns` decides the folder set as of 0.23.0,
-  on one real repo's worth of evidence. Two more repos where `NOTE [profile]` never
-  cries wolf is what would turn that from a decision into a tested one.
-- **Beyond Claude Code.** The three-layer model, the lane test and the validator
-  are plain markdown and POSIX scripts — none of that is Claude-specific. Only the
-  packaging (skills, commands, hooks) is, so another agent would need a new
-  wrapper around the same `scripts/` and `templates/`.
+- **Blocking hooks**, once real projects show the triggers rarely misfire.
+- **A cross-repo view**: every figure is scoped to one repo today
+  ([DESIGN-NOTES §2.8](DESIGN-NOTES.md)).
+- **More evidence for `owns` profiles**: two more repos where `NOTE [profile]`
+  never cries wolf.
+- **Beyond Claude Code**: the model and the scripts are agent-neutral, and only
+  the packaging is not.
