@@ -82,9 +82,13 @@ Decision. Khi tài liệu mới ra đời, phiếu sẽ trỏ về nó, nên đ�
 `scripts/crew name planner <gốc mới>` và đổi tên nhóm chủ đề sang dòng đầu mà
 `--group` in ra.
 
-**Khi chủ đề xong**, tức mọi phiếu của nó đã `done`: chuyển các phiên trong nhóm
-chủ đề về nhóm project, rồi xoá nhóm chủ đề. App sẽ hỏi người dùng trước khi
-chuyển phiên khác, và đó là chủ đích.
+**Khi chủ đề xong**, tức mọi phiếu của nó đã `done`: chỉ **báo** rằng nhóm chủ đề
+đã dọn được, kèm số phiên sẽ chuyển về nhóm project, rồi dừng ở đó. Người dùng
+quay lại nhóm này để đọc kết quả của cả chủ đề, nên nhóm phải còn nguyên cho tới
+khi họ đọc xong. Chỉ khi người dùng ra lệnh rõ trong phiên này, ví dụ `dọn nhóm`,
+bạn mới chuyển các phiên về nhóm project rồi xoá nhóm chủ đề. Một câu hỏi tiến độ
+như "đã xong chưa" không phải lệnh dọn. Đừng trông vào hộp thoại xác nhận của app
+khi chuyển phiên khác, vì ở auto mode và bypass mode hộp thoại ấy không hiện.
 
 **Số id.** STANDARD §3 cấp id theo luật "số lớn nhất + 1", và chưa có lệnh nào
 khoá bước này, nên hai planner cắt phiếu cùng lúc có thể lấy trùng số. Chạy

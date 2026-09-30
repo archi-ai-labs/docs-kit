@@ -5,6 +5,29 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
+## [0.44.2] — 2026-09-30
+
+A subject planner no longer tears down its sidebar group on its own when the last
+ticket closes; it reports that the group can go and waits for the user to say so.
+
+### Fixed — the subject group vanished before the user read the result (FEEDBACK-003)
+
+`planner.md` "Khi chủ đề xong" told the planner to move the group's sessions back
+to the project group and delete the subject group as soon as every ticket was
+`done`, and leaned on the app's confirmation dialog to give the user a say. In a
+real run on 2026-09-30 the user only asked "Đã xong chưa", and the planner moved
+two sessions and deleted the group in the same answer. The session ran in auto
+mode, where that dialog never appears, and bypass mode behaves the same, so the
+safety net was missing in exactly the long-running sessions. Nothing was lost,
+but the group is where the user goes back to read the whole subject, and it took
+two more turns to learn the app had not done it.
+
+The rule now says: when the subject is done, report that the group can be
+cleaned up with the number of sessions that would move, and stop. The move and
+the delete run only on an explicit order in the planner session, for example
+`dọn nhóm`; a progress question is not one. `roles.md` gains one line saying the
+same. Stamped repos pick it up through `crew-update`.
+
 ## [0.44.1] — 2026-09-27
 
 `crew-update` now offers to refresh the crew block of `CLAUDE.md`, the one stamped

@@ -146,6 +146,7 @@ việc này do chính phiên làm, theo đúng các bước sau:
 4. Phiên đang được ghim thì để nguyên, vì chuyển vào nhóm sẽ làm nó mất ghim.
 
 Chỉ planner chủ đề được tạo nhóm, và chỉ khi nhóm project đã có (`planner.md`).
+Việc xoá nhóm chủ đề thì chờ lệnh của người dùng, kể cả khi mọi phiếu đã `done`.
 Ngoài app, ví dụ trong terminal, không có công cụ nào cho việc này, nên bỏ qua
 toàn bộ mục này. Title và `crew status` vẫn là nguồn sự thật; nhóm chỉ là cách
 hiển thị.
