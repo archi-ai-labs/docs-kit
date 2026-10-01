@@ -87,9 +87,10 @@ tree gets it through git, and it closes and archives with its chain. Context is
 cited by id (`source_ref` and the ids the section names), never restated. In a
 repo with crew switched on, the item also carries `scope_files:`, `execution:` and,
 when it edits what an earlier item builds, `after_ref:` on the later one, and the
-work is split by the planner's rule (`S > 6`, `C ≥ 3`, or more than one technical
-layer) — the same shape the planner cuts, so an executor never has to know which
-of the two wrote its ticket.
+work is split by the planner's difficulty rule (easy work stays one item per repo
+however many files it touches; only hard work is cut into slices, see
+`tickets.md` «Chẻ phiếu theo độ khó») — the same shape the planner cuts, so an
+executor never has to know which of the two wrote its ticket.
 
 **Why the forward path writes no audit line:** `92_audit/` records events that
 happened. Work that is about to start has not happened. `docs-sync` appends the

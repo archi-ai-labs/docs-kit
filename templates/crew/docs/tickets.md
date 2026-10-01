@@ -1,4 +1,4 @@
-# tickets — token, ba mức thi hành, và ngưỡng chẻ phiếu
+# tickets — token, ba mức thi hành, và luật chẻ phiếu
 
 ## Một token cho một phiếu
 
@@ -65,8 +65,8 @@ execution: fast     # fast-pair | fast | full
 ```
 
 `crew done` ghi lại S khai so với số tệp thật (`git diff --stat`) vào
-`../<repo>-crew/log.tsv` — đó là cách ngưỡng dưới đây hết dựa trên một điểm
-dữ liệu.
+`../<repo>-crew/log.tsv`. Hai số này cho biết planner ước lượng đúng tới đâu,
+còn việc có chẻ phiếu hay không thì theo mục «Chẻ phiếu theo độ khó» bên dưới.
 
 ## Chuỗi phiếu — `after_ref:`
 
@@ -126,16 +126,69 @@ Từ 0.41.1, `crew done` tự commit phần đóng sổ (`status: done` và dòn
 nhánh dev trước khi push. Vì vậy chuỗi chạy liền từ phiếu này sang phiếu kế mà
 không ai phải commit tay ở cây chính.
 
-## Chẻ nếu
+## Chẻ phiếu theo độ khó
 
-- `S > 6` (⚠️ số 6 dựa trên đúng một điểm dữ liệu ở repo gốc: trung vị 2–3,
-  lớn nhất 10 — coi là chỗ bắt đầu chỉnh, không phải hằng số), **hoặc**
-- `C ≥ 3` — đếm số câu "có": đụng schema/API contract/ranh giới component?
-  cần tài nguyên khan hiếm? phụ thuộc phiếu khác chưa done? chạm nhiều hơn
-  một tầng?, **hoặc**
-- chạm nhiều hơn **một tầng kỹ thuật** — câu này đứng riêng vì nó chính là thứ
-  cả mô hình tồn tại để tránh: phiếu hai tầng tự kéo hai người vào, dù S nhỏ.
+Một phiếu ôm trọn một yêu cầu. Planner chỉ chẻ khi việc khó, và không bao giờ
+chẻ chỉ vì phiếu chạm nhiều tệp.
 
-Số đo sinh ra luật chẻ-theo-yêu-cầu: một yêu cầu duy nhất cắt theo tầng đi qua
-4 vai mất **15h32** tổng với **~87 phút** có commit; hai phiếu đầu tiên chạy
-theo mô hình một-phiếu-một-cây xong trong **15 và 41 phút**.
+Số đo đứng sau luật này lấy từ 421 phiếu của một repo crew có bốn kho con, đo
+tháng 9/2026. Điểm chuẩn là **18 trên 100 phiếu gặp trục trặc**, tức phải làm
+lại sau khi đã báo xong, bị dừng giữa chừng để hỏi, hoặc phải mở phiếu khác để
+sửa tiếp. Phiếu ≤ 6 tệp gặp trục trặc 19 và phiếu > 6 tệp gặp 17, nên số tệp
+không báo trước được gì; luật cũ «`S > 6` thì chẻ» vì vậy đã bị bỏ.
+
+### Chấm điểm lúc cắt
+
+Planner trả lời bốn câu trước khi viết phiếu. Cả bốn đều biết được trước khi
+làm, và đều không phụ thuộc repo làm gì.
+
+| Câu hỏi | Điểm |
+|---|---|
+| Phiếu chạm thêm bao nhiêu tầng kỹ thuật ngoài tầng đầu tiên (giao diện, API, worker, phần cứng… theo cách repo chia)? | 1 mỗi tầng thêm, tối đa 2 |
+| Phiếu có đổi hợp đồng không: API, schema CSDL, kiểu dữ liệu mà nhiều thành phần cùng dùng? | 1 |
+| Phiếu có cần Decision không (`execution: full`)? | 1 |
+| Phiếu có cần khoá một tài nguyên khai trong `crew.resources` không? | 1 |
+
+Planner ghi điểm vào thân phiếu thành một dòng như `Độ khó: 2 (tầng +1, hợp
+đồng)`, để lần đo sau đối chiếu được điểm đoán với kết quả thật.
+
+### Chia theo mức
+
+| Điểm | Mức | Cách chia | Trục trặc / 100 (chuẩn 18) |
+|---|---|---|---|
+| 0–1 | Dễ | Mỗi kho một phiếu cho một yêu cầu, bao nhiêu tệp cũng được. Việc cơ học lặp lại như dời tệp, cắt chú thích hay đổi chữ cũng giữ một phiếu mỗi kho. | 13 |
+| 2 | Vừa | Một yêu cầu là một phiếu. Chỉ tách theo kho khi kho sau phải chờ kho trước phát hành gói, và khi đó phiếu sau khai `after_ref`. | 22 |
+| ≥ 3 | Khó | Tách những lát tách được: lát đổi hợp đồng đứng trước lát dùng nó, lần chạy trên tài nguyên thật là một lát riêng, việc dời dữ liệu đi theo thứ tự mở rộng → dời → thu hẹp (expand → migrate → contract). Mỗi lát có «Xong khi» riêng và nối bằng `after_ref`. Không tách được thì ghi lý do vào phiếu. | 34 |
+
+Việc dễ bị chẻ nhỏ là chỗ tốn nhất đã đo được. Trong repo đo, 28 việc chủ yếu
+dễ bị chẻ thành 187 phiếu và 188 PR, trong khi mỗi kho một phiếu chỉ cần 48.
+Cùng một việc dọn chú thích, kho làm một phiếu xong 69 tệp trong 0,9 giờ với một
+lượt gộp, còn kho bị chẻ mười một phiếu mất 11,1 giờ cho 315 tệp và bảy lượt gộp.
+
+Chủ repo có thể ra lệnh chẻ để chạy song song cho nhanh, và lệnh đó thắng luật
+này. Khi ấy planner chép nguyên văn lệnh vào phiếu, và câu kiểm 3 bên dưới vẫn
+áp dụng.
+
+### Năm câu kiểm trước khi cắt từ hai phiếu trở lên
+
+1. **Ranh giới.** Mỗi phiếu là một lát của yêu cầu, không phải một tầng hay
+   một nhóm tệp.
+2. **Độc lập.** Phiếu nào cần phiếu khác gộp trước thì khai `after_ref`. Dòng
+   chữ «chờ phiếu kia» trong thân phiếu không có lệnh nào đọc: repo đo có 145
+   cặp phụ thuộc mà chỉ 1 cặp được khai.
+3. **Chồng tệp.** Hai phiếu cùng kho sửa chung một tệp mã thì gộp làm một hoặc
+   nối chuỗi. Hai phiếu cùng kho chạm một dòng mà PR nào cũng sửa (hằng số đếm
+   test, số phiên bản schema, snapshot) thì gộp tuần tự, không mở PR song song.
+4. **Kiểm được.** Mỗi phiếu có «Xong khi» chạy được khi chỉ riêng phiếu đó đã
+   gộp.
+5. **Cân đối.** Phiếu ≤ 2 tệp hoặc ≤ 10 dòng thì nhập vào phiếu anh em, trừ
+   `fast-pair`.
+
+Va chạm khi gộp thì gỡ ngay trong PR gộp sau, không cắt phiếu mới chỉ để gỡ va.
+
+Luật một-phiếu-một-yêu-cầu còn có số đo gốc: một yêu cầu duy nhất cắt theo tầng
+đi qua 4 vai mất **15h32** tổng với **~87 phút** có commit, trong khi hai phiếu
+đầu tiên chạy theo mô hình một-phiếu-một-cây xong trong **15 và 41 phút**.
+
+Các mốc 0–1 · 2 · ≥ 3 được đo trên một repo. Repo khác đo lại sau một tháng
+chạy, và chỉ dời mốc khi chủ repo duyệt kèm số đo đó.

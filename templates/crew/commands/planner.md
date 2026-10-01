@@ -38,9 +38,11 @@ cùng đối số và cờ `--group`. Planner chủ đề có thêm quyền tạ
    Bối cảnh thì trích id chứ không chép lại. `/docs-kit:brief` viết đúng khuôn
    này, nên executor luôn tìm phạm vi ở cùng một chỗ. Brief nằm trong phiếu vì
    phiếu tới mọi cây qua git, còn `briefs/` đã gitignore thì không.
-3. **Chẻ phiếu** nếu `S > 6`, `C ≥ 3`, hoặc phiếu chạm nhiều hơn một tầng kỹ
-   thuật — phiếu ôm trọn một YÊU CẦU thì tốt hơn hai phiếu mỗi bên một nửa
-   theo tầng.
+3. **Chẻ phiếu theo độ khó, không theo số tệp.** Chấm bốn câu lúc cắt (tầng
+   thêm, đổi hợp đồng, cần Decision, cần khoá tài nguyên) rồi chia theo mục
+   «Chẻ phiếu theo độ khó» của `.claude/crew/tickets.md`. Việc dễ thì mỗi kho
+   một phiếu, dù chạm bao nhiêu tệp, vì phiếu ôm trọn một YÊU CẦU tốt hơn
+   nhiều phiếu mỗi phiếu một mảnh.
 4. **Đọc cột `## Next`** trong `docs/00_roadmap/roadmap.md` từ trên xuống trước
    khi chọn phiếu tiếp theo — đó là thứ tự navigator đã xếp. Cắt một phiếu ngoài
    cột ấy là chuyện bình thường (bug khẩn có thật), nhưng nói ra trong thân

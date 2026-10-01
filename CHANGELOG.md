@@ -5,6 +5,63 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions live in `.claude-plugin/plugin.json` (the single source of truth
 for the plugin version — the renderer stamps it into every generated page).
 
+## [0.45.0] — 2026-10-01
+
+The planner splits tickets by how hard the work is, not by how many files it
+touches. Easy work stays one ticket per repo however large it is; only hard work
+is cut into slices, and a cut of two or more tickets must chain them with
+`after_ref`.
+
+### Changed — the split rule (`S > 6`, `C ≥ 3`, more than one layer)
+
+The old rule rested on one data point from the origin repo. It was measured on
+421 tickets that one crew repo with four nested repos cut in September 2026.
+The baseline is 18 tickets in 100 that hit trouble: redone after reporting done,
+stopped mid-way to ask, or followed by a fix ticket.
+
+| Grouping | Trouble per 100 |
+|---|---|
+| Declared S ≤ 6 / S > 6 | 19 / 17 |
+| Real files 0–6 / 7–12 / 13–25 / ≥ 26 | 19 / 17 / 20 / 16 |
+| Cut-time score 0–1 / 2 / ≥ 3 | 13 / 22 / 34 |
+
+File count predicts nothing, and the planners there had already stopped using it:
+0 of 148 splits cited `S > 6`, while 194 tickets declared more than 6 files and
+stayed whole. The cut-time score is the old `C` questions with one swap: one
+point per extra technical layer (max 2), one for a contract change, one for
+needing a Decision (in place of "depends on an unfinished ticket", which is what
+`after_ref` is for), one for needing a `crew.resources` lock.
+
+The measured cost ran the other way from what the old rule guarded against.
+Twenty-eight mostly-easy jobs were cut into 187 tickets and 188 PRs where one
+ticket per repo needed 48. In one comment clean-up, the repo done as a single
+ticket finished 69 files in 0.9 h with one merge round, and the repo cut into
+eleven tickets took 11.1 h and seven merge rounds for 315 files. Quality gave no
+reason for the cutting: easy tickets inside those over-cut groups hit trouble 4
+times in 100.
+
+`templates/crew/docs/tickets.md` replaces «Chẻ nếu» with «Chẻ phiếu theo độ khó»:
+the four questions, a table that maps 0–1 / 2 / ≥ 3 to one ticket per repo / one
+ticket per request / slices chained by `after_ref`, and five checks before any
+cut of two or more tickets: the boundary is a slice of the request; every
+dependency carries `after_ref` (1 of 145 did); no two parallel tickets touch the
+same file or the same shared counter line; each «Xong khi» runs alone; no ticket
+is ≤ 2 files or ≤ 10 lines. An explicit order from the repo owner to split for speed still wins, and
+the planner copies it into the ticket.
+
+The same rule now reads the same in `commands/planner.md` step 3, `setup.md`, the
+brief skill's FAST row, `references/issue-capture.md` and EXECUTION §6. The
+cut-points move only when the repo owner approves them with a month of numbers,
+so `commands/steward.md` drops the split threshold from the knobs the steward
+tunes from `log.tsv`. The `SIZE` line in `crew done` is unchanged; its comment
+now says it measures the estimate only. EXECUTION §10 closes two gaps carried
+from the origin repo: the threshold on one data point, and the missing data on
+tickets that span two layers (48 of 421 scored 23 per 100 against 17 for one
+layer — one point of difficulty, not a split on its own).
+
+Stamped repos pick it up through `crew-update`. A repo that had already edited
+its own split section will see `review :` for `tickets.md` and `planner.md`.
+
 ## [0.44.2] — 2026-09-30
 
 A subject planner no longer tears down its sidebar group on its own when the last

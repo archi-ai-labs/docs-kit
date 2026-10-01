@@ -31,8 +31,9 @@ Trong app desktop, vào nhóm sidebar theo mục "Nhóm sidebar" của
 2. **Ghi luật**: khi một phiên vấp một lỗ chưa có luật, viết bổ sung vào tệp
    tương ứng trong `.claude/crew/`, kèm con số của ca đã vấp — luật không có
    số thì đọc như ý kiến.
-3. **Chỉnh ngưỡng theo số đo** (`.claude/crew/setup.md`): `wait_budget_min`,
-   `reader_cap`, và ngưỡng chẻ phiếu, tất cả từ `../<repo>-crew/log.tsv`.
+3. **Chỉnh ngưỡng theo số đo** (`.claude/crew/setup.md`): `wait_budget_min` và
+   `reader_cap`, cả hai từ `../<repo>-crew/log.tsv`. Mốc độ khó của luật chẻ
+   phiếu không thuộc việc này, vì nó chỉ dời khi chủ repo duyệt.
 
 ## Điều bạn KHÔNG làm
 

@@ -1070,7 +1070,7 @@ cmd_done() {
   fi
 
   # Size calibration: declared S (planner's estimate) vs files actually touched.
-  # This log is how the split threshold S > 6 stops resting on one data point.
+  # It measures the estimate only; splitting follows difficulty, not file count.
   F="$(ticket_file "$N")"
   DECLARED="-"
   [ -n "$F" ] && DECLARED="$(front "$F" scope_files)" && [ -n "$DECLARED" ] || DECLARED="-"

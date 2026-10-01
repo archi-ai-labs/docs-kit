@@ -102,8 +102,10 @@ nên chỉ thêm khi có số đo đòi.
   `../<repo>-crew/log.tsv` — cột cuối của các dòng `ACQUIRE` là số giây từng
   phiếu phải chờ. Ngưỡng đúng là mức bạn thấy xót thời gian.
 - `reader_cap` (mặc định 4): đổi theo số người thật sự đọc kết quả.
-- Ngưỡng chẻ phiếu `S > 6`: các dòng `SIZE` trong log ghi `declared=` với
-  `actual=` — khi hai cột này lệch nhau đều đặn, số 6 cần dời.
+- Luật chẻ phiếu không có ngưỡng số tệp. Các mốc độ khó 0–1 · 2 · ≥ 3 ở mục
+  «Chẻ phiếu theo độ khó» của `tickets.md` chỉ dời khi chủ repo duyệt kèm số đo
+  của ít nhất một tháng. Các dòng `SIZE` trong log (`declared=` với `actual=`)
+  chỉ cho biết planner ước lượng số tệp đúng tới đâu.
 
 ## Nâng cấp
 

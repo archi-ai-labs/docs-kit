@@ -202,7 +202,7 @@ and why the forward path appends no audit line, are in
 
 | Lane | What happens |
 |---|---|
-| FAST | Create the Backlog item (`source_ref` = the Issue), flip the Issue to `promoted`, continue to Phase 2. With crew, cut it the planner's way: split when `S > 6`, `C ≥ 3` or the work spans more than one technical layer, write `scope_files` and `execution`, and put `after_ref` on an item that edits what an earlier one builds. |
+| FAST | Create the Backlog item (`source_ref` = the Issue), flip the Issue to `promoted`, continue to Phase 2. With crew, cut it the planner's way: score difficulty (extra layers, contract change, Decision, resource lock), keep easy work (0–1) as one item per repo however many files it touches, split only hard work (≥ 3) into slices, write `scope_files` and `execution`, and put `after_ref` on an item that edits what an earlier one builds. |
 | FULL | Leave the Issue at `open`. **Stop and ask** — see below. |
 
 ### Direction work is not a ticket (crew)

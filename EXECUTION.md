@@ -765,10 +765,24 @@ during the wait, so the gate bought nothing and widened every branch↔dev gap.
 
 `crew done` also records declared-vs-actual size: if the Backlog item carries
 optional `scope_files:` (the planner's S estimate), the actual
-`git diff --stat` file count is logged next to it in `log.tsv`. The split
-threshold (S > 6, complexity ≥ 3, or more-than-one-layer) rests on **one data
-point** in the origin repo (median 2–3 files, max 10); this log is how the 6
-stops being folklore.
+`git diff --stat` file count is logged next to it in `log.tsv`. That pair
+measures the estimate, nothing more: since 0.45.0 no file count triggers a
+split.
+
+**Splitting follows difficulty, not size.** The old threshold (S > 6, complexity
+≥ 3, or more than one layer) was measured in 0.45.0 on 421 tickets of one crew
+repo with four nested repos. Against a baseline of 18 tickets in 100 that hit
+trouble (redone after reporting done, stopped mid-way to ask, or followed by a
+fix ticket), tickets of ≤ 6 files scored 19 and tickets of > 6 files scored 17,
+so size predicts nothing. A cut-time score does: one point per extra technical
+layer (max 2), one for a contract change, one for needing a Decision, one for
+needing a `crew.resources` lock. Score 0–1 scored 13, 2 scored 22, ≥ 3 scored
+34. The rule (templates/crew/docs/tickets.md) keeps easy work as one ticket per
+repo however many files it touches, splits only hard work into slices chained
+by `after_ref`, and runs five checks before any multi-ticket cut. The costliest
+measured failure was the opposite of the one the old rule guarded against: 28
+mostly-easy jobs cut into 187 tickets and 188 PRs where one ticket per repo
+needed 48.
 
 ### 6.1 `crew report` — the numbers are a command, the judgement is not
 
@@ -1027,9 +1041,12 @@ does not exist, so one fault is reported once.
 | Node implementation | the origin repo's `lock.mjs` and hooks assumed Node on every machine; the port floor here is bash 3.2 + python 3.9 (STANDARD's own), so everything shipped is bash/py |
 
 Open gaps carried from the origin repo, still open: executor-mix `p`
-unmeasured (§5); split threshold on one data point (§6); no data yet on a
-ticket spanning two technical layers — the model's central claim; template
-command detection tuned on Node manifests.
+unmeasured (§5); the difficulty cut-points measured on one repo only (§6);
+template command detection tuned on Node manifests. Closed in 0.45.0: the split
+threshold no longer rests on one data point, and tickets spanning two or more
+technical layers now have data — 48 of 421, 23 in 100 hit trouble against 17 for
+single-layer tickets, enough to count a layer as one point of difficulty but not
+to split on it alone.
 
 ## 11. Origin evidence
 
